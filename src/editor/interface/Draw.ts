@@ -1,5 +1,6 @@
 import { ImageDisplay } from '../dataset/enum/Common'
 import { EditorMode, EditorZone } from '../dataset/enum/Editor'
+import { TdTextDirection } from '../dataset/enum/table/Table'
 import { IElement, IElementPosition } from './Element'
 import { IRow } from './Row'
 
@@ -39,6 +40,7 @@ export interface IDrawRowPayload {
   isDrawLineBreak?: boolean
   isDrawWhiteSpace?: boolean
   isDrawRange?: boolean
+  textDirection?: TdTextDirection
 }
 
 export interface IDrawFloatPayload {
@@ -84,4 +86,5 @@ export interface IComputeRowListPayload {
   isPagingMode?: boolean
   pageHeight?: number
   surroundElementList?: IElement[]
+  textDirection?: TdTextDirection
 }

@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>模板管理中心</title>
+  <!-- Element UI 2.15.14 CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15.14/lib/theme-chalk/index.css">
+  <!-- Vue 2.7.16 -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.js"></script>
+  <!-- Element UI 2.15.14 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15.14/lib/index.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      background-color: #f0f2f5;
+      font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      color: #303133;
+    }
+    #app {
+      padding: 16px;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* 搜索过滤卡片 */
+    .search-card {
+      background: #fff;
+      border-radius: 6px;
+      border: 1px solid #ebeef5;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      padding: 18px 20px 0 20px;
+    }
+    .search-card .el-form-item { margin-bottom: 18px; }
+
+    /* 主内容表格卡片 */
+    .table-card {
+      flex: 1;
+      background: #fff;
+      border-radius: 6px;
+      border: 1px solid #ebeef5;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      display: flex;
+      flex-direction: column;
+    }
+    .table-card-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid #ebeef5;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fafafa;
+    }
+    .table-card-header .title-box {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 15px; font-weight: 600; color: #303133;
+    }
+    .table-body {
+      flex: 1;
+      padding: 16px 20px;
+      overflow: hidden;
+    }
+
+    /* 编码徽章 */
+    .code-badge {
+      font-family: Monaco, Menlo, Consolas, monospace;
+      font-size: 12px;
+      color: #409eff;
+      background: #ecf5ff;
+      padding: 2px 6px;
+      border-radius: 3px;
+      border: 1px solid #d9ecff;
+    }
+
+    /* 系统标签 */
+    .system-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 4px;
+      border: 1px solid;
+      line-height: 1.4;
+      max-width: 100%;
+      box-sizing: border-box;
+      letter-spacing: 0.2px;
+    }
+
+    /* 底部分页 */
+    .pagination-container {
+      padding: 12px 20px;
+      border-top: 1px solid #ebeef5;
+      display: flex;
+      justify-content: flex-end;
+      background: #fff;
+    }
+
+    /* 操作列按钮组 */
+    .table-action-btns {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: nowrap;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .table-action-btns .el-button--text {
+      padding: 2px 4px;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1;
+    }
+    .table-action-btns .el-button--text [class^="el-icon-"] {
+      margin-right: 2px;
+    }
+    .table-action-btns .action-divider {
+      width: 1px;
+      height: 12px;
+      background: #e4e7ed;
+      display: inline-block;
+      flex-shrink: 0;
+      margin: 0 1px;
+    }
+
+    /* 新增/编辑弹窗 */
+    .spacious-dialog .el-dialog__body {
+      padding: 20px 28px 10px 28px;
+    }
+
+    /* 修复日期范围选择器 "至" 换行与截断 */
+    .el-date-editor--daterange.el-input__inner {
+      width: 270px;
+    }
+    .el-date-editor .el-range-separator {
+      padding: 0 4px !important;
+      line-height: 28px !important;
+      width: 24px !important;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="search-card">
+      <el-form :inline="true" :model="searchForm" size="small" @submit.native.prevent="handleSearch">
+        <el-form-item label="所属系统">
+          <el-select v-model="searchForm.system" placeholder="全部系统" clearable filterable style="width: 200px;">
+            <el-option v-for="item in systemOptions" :key="item.value" :label="item.label" :value="item.value"></el-option>
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="模板名称">
+          <el-input
+            v-model="searchForm.templateName"
+            placeholder="请输入模板名称"
+            clearable
+            style="width: 180px;"
+            @keyup.enter.native="handleSearch"
+          ></el-input>
+        </el-form-item>
+
+        <el-form-item label="模板编码">
+          <el-input
+            v-model="searchForm.templateCode"
+            placeholder="请输入模板编码"
+            clearable
+            style="width: 180px;"
+            @keyup.enter.native="handleSearch"
+          ></el-input>
+        </el-form-item>
+
+        <el-form-item label="修改时间">
+          <el-date-picker
+            v-model="searchForm.updateTimeRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            value-format="yyyy-MM-dd"
+            style="width: 270px;"
+          ></el-date-picker>
+        </el-form-item>
+
+        <el-form-item label="状态">
+          <el-select v-model="searchForm.status" placeholder="全部状态" clearable style="width: 120px;">
+            <el-option label="已发布" value="published"></el-option>
+            <el-option label="草稿中" value="draft"></el-option>
+            <el-option label="已停用" value="disabled"></el-option>
+          </el-select>
+        </el-form-item>
+
+        <el-form-item>
+          <el-button type="primary" icon="el-icon-search" :loading="loading" @click="handleSearch">查询</el-button>
+          <el-button icon="el-icon-refresh" @click="handleResetSearch">重置</el-button>
+        </el-form-item>
+      </el-form>
+    </div>
+
+    <!-- 模板列表卡片 -->
+    <div class="table-card">
+      <div class="table-card-header">
+        <div class="title-box">
+          <i class="el-icon-tickets" style="color:#409eff;"></i>
+          <span>模板清单</span>
+          <el-tag size="small" type="info">共 {{ total }} 条记录</el-tag>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <el-button
+            type="danger"
+            size="small"
+            icon="el-icon-delete"
+            :disabled="!selectedRows.length"
+            @click="handleBatchDelete"
+          >批量删除</el-button>
+          <el-button
+            type="primary"
+            size="small"
+            icon="el-icon-plus"
+            @click="handleOpenAddModal"
+          >新建模板</el-button>
+        </div>
+      </div>
+
+      <div class="table-body">
+        <el-table
+          v-loading="loading"
+          :data="templateList"
+          border
+          stripe
+          size="small"
+          style="width:100%;"
+          max-height="580"
+          :header-cell-style="{ background: '#f5f7fa', color: '#606266', fontWeight: 'bold' }"
+          @selection-change="handleSelectionChange"
+        >
+          <el-table-column type="selection" width="45" align="center"></el-table-column>
+          <el-table-column type="index" label="序号" width="55" align="center">
+            <template slot-scope="scope">
+              {{ (pageNum - 1) * pageSize + scope.$index + 1 }}
+            </template>
+          </el-table-column>
+
+          <!-- 所属系统 -->
+          <el-table-column prop="system" label="所属系统" min-width="180" header-align="center" align="left">
+            <template slot-scope="scope">
+              <span
+                class="system-badge"
+                :style="getSystemStyle(scope.row.system || scope.row.appId || scope.row.systemName)"
+              >
+                <i class="el-icon-monitor" style="font-size: 13px; opacity: 0.85;"></i>
+                <span>{{ scope.row.systemName || scope.row.system || '-' }}</span>
+              </span>
+            </template>
+          </el-table-column>
+
+          <!-- 模板名称 -->
+          <el-table-column label="模板名称" min-width="200" show-overflow-tooltip>
+            <template slot-scope="scope">
+              <span style="font-weight:600;color:#303133;">{{ scope.row.templateName || '-' }}</span>
+            </template>
+          </el-table-column>
+
+          <!-- 模板编码 -->
+          <el-table-column label="模板编码" min-width="160" show-overflow-tooltip>
+            <template slot-scope="scope">
+              <span v-if="scope.row.templateCode" class="code-badge">{{ scope.row.templateCode }}</span>
+              <span v-else style="color: #c0c4cc; font-style: italic; font-size: 12px;">未设置</span>
+            </template>
+          </el-table-column>
+
+          <!-- 状态 -->
+          <el-table-column prop="status" label="状态" width="90" align="center">
+            <template slot-scope="scope">
+              <el-tag
+                :type="scope.row.status === 'published' ? 'success' : scope.row.status === 'draft' ? 'warning' : scope.row.status === 'disabled' ? 'info' : 'info'"
+                size="small"
+              >
+                {{ scope.row.status === 'published' ? '已发布' : scope.row.status === 'draft' ? '草稿中' : scope.row.status === 'disabled' ? '已停用' : (scope.row.status || '-') }}
+              </el-tag>
+            </template>
+          </el-table-column>
+
+          <!-- 创建时间 -->
+          <el-table-column prop="createTime" label="创建时间" width="160" align="center">
+            <template slot-scope="scope">
+              <span style="color:#909399;font-size:12px;">{{ scope.row.createTime || '-' }}</span>
+            </template>
+          </el-table-column>
+
+          <!-- 更新时间 -->
+          <el-table-column prop="updateTime" label="更新时间" width="160" align="center">
+            <template slot-scope="scope">
+              <span style="color:#909399;font-size:12px;">{{ scope.row.updateTime || '-' }}</span>
+            </template>
+          </el-table-column>
+
+          <!-- 操作列 -->
+          <el-table-column label="操作" width="220" align="center" fixed="right">
+            <template slot-scope="scope">
+              <div class="table-action-btns">
+                <el-button
+                  type="text"
+                  icon="el-icon-brush"
+                  style="color: #409eff;"
+                  @click="handleOpenDesignEditor(scope.row)"
+                >设计</el-button>
+
+                <span class="action-divider"></span>
+
+                <el-button
+                  type="text"
+                  icon="el-icon-edit"
+                  style="color: #606266;"
+                  @click="handleOpenEditModal(scope.row)"
+                >编辑</el-button>
+
+                <span class="action-divider"></span>
+
+                <el-button
+                  type="text"
+                  icon="el-icon-delete"
+                  style="color: #f56c6c;"
+                  @click="handleConfirmDelete(scope.row)"
+                >删除</el-button>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <!-- 分页 -->
+      <div class="pagination-container">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next, jumper"
+          :current-page.sync="pageNum"
+          :page-size.sync="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+        ></el-pagination>
+      </div>
+    </div>
+
+    <!-- 弹窗：新建 / 编辑 模板基本信息 -->
+    <el-dialog
+      :title="dialogMode === 'add' ? '新建模板' : '编辑模板'"
+      :visible.sync="editDialogVisible"
+      width="780px"
+      custom-class="spacious-dialog"
+      :close-on-click-modal="false"
+      @close="handleDialogClosed"
+      @closed="handleDialogClosed"
+    >
+      <el-form ref="templateFormRef" :model="templateForm" :rules="templateRules" label-width="90px" size="small">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="模板名称" prop="templateName">
+              <el-input v-model="templateForm.templateName" placeholder="如: 门急诊病历记录单"></el-input>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="模板编码" prop="templateCode">
+              <el-input v-model="templateForm.templateCode" placeholder="如: EMR_OUTPATIENT_V1"></el-input>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="所属系统" prop="appId">
+              <el-select v-model="templateForm.appId" placeholder="请选择系统" clearable filterable style="width:100%;">
+                <el-option v-for="item in systemOptions" :key="item.value" :label="item.label" :value="item.value"></el-option>
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="状态" prop="status">
+              <el-radio-group v-model="templateForm.status" style="display: flex; align-items: center; height: 32px; white-space: nowrap;">
+                <el-radio label="published">已发布</el-radio>
+                <el-radio label="draft">草稿中</el-radio>
+                <el-radio label="disabled">已停用</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="模板说明" prop="remark">
+          <el-input type="textarea" :rows="3" v-model="templateForm.remark" placeholder="请输入模板的应用场景及临床规范说明"></el-input>
+        </el-form-item>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button size="small" @click="editDialogVisible = false">取消</el-button>
+        <el-button size="small" type="primary" :loading="saveLoading" @click="handleSaveTemplate">保存</el-button>
+      </div>
+    </el-dialog>
+  </div>
+
+  <script>
+    // -------------------------------------------------------------
+    // REST API 客户端
+    // -------------------------------------------------------------
+    const API_BASE = window.API_BASE_URL || '';
+
+    function getAuthToken() {
+      const match = document.cookie.match(/(^|;\s*)Admin-Token=([^;]*)/);
+      return (match && match[2]) ? decodeURIComponent(match[2]) : '';
+    }
+
+    function showErrorMessage(msg) {
+      const displayMsg = typeof msg === 'object' ? JSON.stringify(msg) : String(msg);
+      if (window.ELEMENT && window.ELEMENT.Message) {
+        window.ELEMENT.Message.error(displayMsg);
+      } else if (typeof Vue !== 'undefined' && Vue.prototype && Vue.prototype.$message) {
+        Vue.prototype.$message.error(displayMsg);
+      } else {
+        console.error('[API 错误]', displayMsg);
+      }
+    }
+
+    async function apiRequest(url, options = {}) {
+      const method = options.method || 'GET';
+      let fullUrl = API_BASE + url;
+      const token = getAuthToken();
+      const fetchOptions = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': 'Bearer ' + token } : {}),
+          ...(options.headers || {})
+        }
+      };
+      if (options.params) {
+        const query = new URLSearchParams(options.params).toString();
+        if (query) fullUrl += (fullUrl.includes('?') ? '&' : '?') + query;
+      }
+      if (options.data && (method === 'POST' || method === 'PUT')) {
+        fetchOptions.body = JSON.stringify(options.data);
+      }
+
+      let response;
+      try {
+        response = await fetch(fullUrl, fetchOptions);
+      } catch (netErr) {
+        const errMsg = `网络连接异常或接口未启动: ${netErr.message || netErr}`;
+        showErrorMessage(errMsg);
+        throw netErr;
+      }
+
+      let resData;
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        try {
+          resData = await response.json();
+        } catch (e) {
+          resData = null;
+        }
+      } else {
+        resData = await response.text();
+      }
+
+      if (!response.ok) {
+        const errorMsg =
+          (resData && typeof resData === 'object' && (resData.msg || resData.message || resData.res)) ||
+          (typeof resData === 'string' && resData) ||
+          `HTTP ${response.status} ${response.statusText}`;
+        const displayMsg = typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : String(errorMsg);
+        showErrorMessage(displayMsg);
+        throw new Error(displayMsg);
+      }
+
+      if (resData && typeof resData === 'object' && resData.code !== undefined && resData.code !== 200) {
+        const errorMsg =
+          resData.msg ||
+          resData.message ||
+          resData.res ||
+          (typeof resData === 'string' ? resData : JSON.stringify(resData));
+        const displayMsg = typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : String(errorMsg);
+        showErrorMessage(displayMsg);
+        throw new Error(displayMsg);
+      }
+
+      return resData;
+    }
+
+    // 模板管理 API 服务
+    const templateApi = {
+      listSystem: (query) => apiRequest('/system/system/list', { method: 'GET', params: { pageNum: 1, pageSize: 1000, ...(query || {}) } }),
+      listTemplate: (query) => apiRequest('/system/report-template/list', { method: 'GET', params: query }),
+      getTemplate: (id) => apiRequest(`/system/report-template/${id}`, { method: 'GET' }),
+      addTemplate: (data) => apiRequest('/system/report-template', { method: 'POST', data }),
+      updateTemplate: (data) => apiRequest('/system/report-template', { method: 'PUT', data }),
+      delTemplate: (ids) => apiRequest(`/system/report-template/${ids}`, { method: 'DELETE' })
+    };
+
+    new Vue({
+      el: '#app',
+      data() {
+        return {
+          systemOptions: [],
+
+          searchForm: {
+            templateName: '',
+            templateCode: '',
+            updateTimeRange: null,
+            system: '',
+            status: ''
+          },
+
+          templateList: [],
+          selectedRows: [],
+          pageNum: 1,
+          pageSize: 10,
+          total: 0,
+          loading: false,
+          saveLoading: false,
+
+          // 新增/编辑弹窗
+          editDialogVisible: false,
+          dialogMode: 'add',
+          templateForm: {
+            id: undefined,
+            appId: '',
+            systemName: '',
+            templateName: '',
+            templateCode: '',
+            status: 'draft',
+            remark: ''
+          },
+          templateRules: {
+            templateName: [{ required: true, message: '请输入模板名称', trigger: 'blur' }],
+            appId: [{ required: true, message: '请选择所属系统', trigger: 'change' }]
+          }
+        };
+      },
+
+      created() {
+        this.fetchSystemOptions();
+        this.getList();
+      },
+
+      methods: {
+        /* 获取系统标签样式 */
+        getSystemStyle(sys) {
+          const colorList = [
+            { color: '#1d4ed8', background: '#eff6ff', borderColor: '#bfdbfe' },
+            { color: '#047857', background: '#ecfdf5', borderColor: '#a7f3d0' },
+            { color: '#6d28d9', background: '#f5f3ff', borderColor: '#ddd6fe' },
+            { color: '#b45309', background: '#fffbeb', borderColor: '#fde68a' },
+            { color: '#0e7490', background: '#ecfeff', borderColor: '#a5f3fc' },
+            { color: '#334155', background: '#f1f5f9', borderColor: '#cbd5e1' }
+          ];
+          const str = String(sys || 'sys');
+          let hash = 0;
+          for (let i = 0; i < str.length; i++) {
+            hash = (hash << 5) - hash + str.charCodeAt(i);
+          }
+          const s = colorList[Math.abs(hash) % colorList.length];
+          return { color: s.color, background: s.background, borderColor: s.borderColor };
+        },
+
+        /* 加载所属系统选项 */
+        async fetchSystemOptions() {
+          try {
+            const res = await templateApi.listSystem();
+            const rows = res?.rows || res?.data?.rows || res?.data || (Array.isArray(res) ? res : []);
+            if (Array.isArray(rows)) {
+              this.systemOptions = rows.map(item => ({
+                label: item.systemName || item.appId || '',
+                value: item.appId || item.systemName || '',
+                systemName: item.systemName || '',
+                appId: item.appId || ''
+              }));
+            }
+          } catch (e) {
+            console.warn('[fetchSystemOptions] 获取系统列表失败:', e);
+          }
+        },
+
+        /* 纯接口驱动：加载模板列表 */
+        async getList() {
+          this.loading = true;
+          const query = {
+            pageNum: this.pageNum,
+            pageSize: this.pageSize
+          };
+
+          if (this.searchForm.templateName && this.searchForm.templateName.trim()) {
+            query.templateName = this.searchForm.templateName.trim();
+          }
+          if (this.searchForm.templateCode && this.searchForm.templateCode.trim()) {
+            query.templateCode = this.searchForm.templateCode.trim();
+          }
+          if (this.searchForm.system) {
+            query.appId = this.searchForm.system;
+          }
+          if (this.searchForm.status) {
+            query.status = this.searchForm.status;
+          }
+          if (this.searchForm.updateTimeRange && this.searchForm.updateTimeRange.length === 2) {
+            query['params[beginTime]'] = this.searchForm.updateTimeRange[0];
+            query['params[endTime]'] = this.searchForm.updateTimeRange[1];
+          }
+
+          try {
+            const res = await templateApi.listTemplate(query);
+            const list = res?.rows || res?.data?.rows || res?.data || (Array.isArray(res) ? res : []);
+            this.templateList = Array.isArray(list) ? list : [];
+            this.total = res?.total !== undefined ? res.total : (res?.data?.total || this.templateList.length);
+          } catch (err) {
+            console.warn('[template-management] 获取模板列表失败:', err);
+            this.templateList = [];
+            this.total = 0;
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        /* 查询/重置 (走接口) */
+        handleSearch() {
+          this.pageNum = 1;
+          this.getList();
+        },
+        handleResetSearch() {
+          this.searchForm = {
+            templateName: '',
+            templateCode: '',
+            updateTimeRange: null,
+            system: '',
+            status: ''
+          };
+          this.pageNum = 1;
+          this.getList();
+        },
+
+        /* 表格多选/分页 */
+        handleSelectionChange(rows) {
+          this.selectedRows = rows;
+        },
+        handleSizeChange(val) {
+          this.pageSize = val;
+          this.pageNum = 1;
+          this.getList();
+        },
+        handleCurrentChange(val) {
+          this.pageNum = val;
+          this.getList();
+        },
+
+        /* 对话框关闭清理 */
+        handleDialogClosed() {
+          this.templateForm = {
+            id: undefined,
+            appId: '',
+            systemName: '',
+            templateName: '',
+            templateCode: '',
+            status: 'draft',
+            remark: ''
+          };
+          if (this.$refs.templateFormRef) {
+            this.$refs.templateFormRef.resetFields();
+            this.$refs.templateFormRef.clearValidate();
+          }
+        },
+
+        /* 打开新建 */
+        handleOpenAddModal() {
+          this.dialogMode = 'add';
+          const defaultSys = this.systemOptions.length > 0 ? this.systemOptions[0] : null;
+          this.templateForm = {
+            id: undefined,
+            appId: defaultSys ? defaultSys.value : '',
+            systemName: defaultSys ? defaultSys.label : '',
+            templateName: '',
+            templateCode: '',
+            status: 'draft',
+            remark: ''
+          };
+          this.editDialogVisible = true;
+          this.$nextTick(() => {
+            if (this.$refs.templateFormRef) this.$refs.templateFormRef.clearValidate();
+          });
+        },
+
+        /* 打开编辑 */
+        handleOpenEditModal(row) {
+          this.dialogMode = 'edit';
+          const matchedSys = this.systemOptions.find(s => s.value === row.appId);
+          this.templateForm = {
+            id: row.id,
+            appId: row.appId || '',
+            systemName: matchedSys ? matchedSys.label : (row.systemName || ''),
+            templateName: row.templateName || '',
+            templateCode: row.templateCode || '',
+            status: row.status || 'draft',
+            remark: row.remark || ''
+          };
+          this.editDialogVisible = true;
+          this.$nextTick(() => {
+            if (this.$refs.templateFormRef) this.$refs.templateFormRef.clearValidate();
+          });
+        },
+
+        /* 保存 (走接口) */
+        async handleSaveTemplate() {
+          this.$refs.templateFormRef.validate(async valid => {
+            if (!valid) return;
+            this.saveLoading = true;
+            const selectedSys = this.systemOptions.find(s => s.value === this.templateForm.appId);
+            const payload = {
+              ...(this.dialogMode === 'edit' && this.templateForm.id ? { id: this.templateForm.id } : {}),
+              appId: this.templateForm.appId || (selectedSys ? selectedSys.value : null),
+              systemName: selectedSys ? selectedSys.label : (this.templateForm.systemName || null),
+              templateName: this.templateForm.templateName || null,
+              templateCode: this.templateForm.templateCode ? this.templateForm.templateCode.trim() : null,
+              status: this.templateForm.status || 'draft',
+              remark: this.templateForm.remark ? this.templateForm.remark.trim() : null
+            };
+
+            try {
+              if (this.dialogMode === 'add') {
+                const res = await templateApi.addTemplate(payload);
+                if (res && res.code === 200) {
+                  this.$message.success(res.msg || res.message || '新建模板成功');
+                  this.editDialogVisible = false;
+                  await this.getList();
+                }
+              } else {
+                const res = await templateApi.updateTemplate(payload);
+                if (res && res.code === 200) {
+                  this.$message.success(res.msg || res.message || '修改模板成功');
+                  this.editDialogVisible = false;
+                  await this.getList();
+                }
+              }
+            } catch (err) {
+              console.warn('[handleSaveTemplate] 保存失败:', err);
+            } finally {
+              this.saveLoading = false;
+            }
+          });
+        },
+
+        /* 单项确认删除 (走接口) */
+        handleConfirmDelete(row) {
+          const name = row.templateName || '';
+          this.$confirm(`确定要删除模板【${name}】吗？删除后不可恢复。`, '操作确认', {
+            confirmButtonText: '确定删除',
+            cancelButtonText: '取消',
+            type: 'warning',
+            confirmButtonClass: 'el-button--danger'
+          }).then(async () => {
+            try {
+              const res = await templateApi.delTemplate(row.id);
+              if (res && res.code === 200) {
+                this.$message.success(res.msg || res.message || '删除模板成功');
+                await this.getList();
+              }
+            } catch (err) {
+              console.warn('[handleConfirmDelete] 删除失败:', err);
+            }
+          }).catch(() => {});
+        },
+
+        /* 批量删除 (走接口) */
+        handleBatchDelete() {
+          if (!this.selectedRows.length) return;
+          const ids = this.selectedRows.map(r => r.id).join(',');
+          this.$confirm(`确定要批量删除选中的 ${this.selectedRows.length} 项模板吗？`, '批量删除确认', {
+            confirmButtonText: '确定删除',
+            cancelButtonText: '取消',
+            type: 'warning',
+            confirmButtonClass: 'el-button--danger'
+          }).then(async () => {
+            try {
+              const res = await templateApi.delTemplate(ids);
+              if (res && res.code === 200) {
+                this.$message.success(res.msg || res.message || '批量删除成功');
+                await this.getList();
+              }
+            } catch (err) {
+              console.warn('[handleBatchDelete] 批量删除失败:', err);
+            }
+          }).catch(() => {});
+        },
+
+        /* 打开设计器 (新开窗口) */
+        handleOpenDesignEditor(row) {
+          const id = row.id || '';
+          const code = row.templateCode || '';
+          const name = encodeURIComponent(row.templateName || '');
+          const url = `./iframe-design.html?templateId=${id}&templateCode=${code}&templateName=${name}`;
+          window.open(url, '_blank');
+        }
+      }
+    });
+  </script>
+</body>
+</html>

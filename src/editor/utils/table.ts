@@ -1,7 +1,8 @@
 import { IColgroup } from '../interface/table/Colgroup'
 
-export function getColgroupWidth(colgroup: IColgroup[]): number {
-  return colgroup.reduce((pre, cur) => pre + cur.width, 0)
+export function getColgroupWidth(colgroup?: IColgroup[]): number {
+  if (!Array.isArray(colgroup) || !colgroup.length) return 0
+  return colgroup.reduce((pre, cur) => pre + (cur?.width || 0), 0)
 }
 
 // 等比例压缩表格列宽至目标宽度内
@@ -12,6 +13,7 @@ export function shrinkColgroupToWidth(
   maxWidth: number,
   minWidth: number
 ) {
+  if (!Array.isArray(colgroup) || !colgroup.length) return
   let totalWidth = getColgroupWidth(colgroup)
   while (totalWidth > maxWidth) {
     // 仍可压缩的列（大于最小宽度）
@@ -41,6 +43,7 @@ export function scaleColgroupToWidth(
   colgroup: IColgroup[],
   targetWidth: number
 ) {
+  if (!Array.isArray(colgroup) || !colgroup.length) return
   const totalWidth = getColgroupWidth(colgroup)
   if (!totalWidth || totalWidth === targetWidth) return
   const ratio = targetWidth / totalWidth

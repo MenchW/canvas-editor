@@ -389,6 +389,7 @@ export class RangeManager {
     if (!~startIndex && !~endIndex) return false
     const elementList = this.draw.getElementList()
     const startElement = elementList[startIndex]
+    if (!startElement) return true
     if (startIndex === endIndex) {
       return (
         (startElement.controlComponent !== ControlComponent.PRE_TEXT ||
@@ -398,6 +399,7 @@ export class RangeManager {
       )
     }
     const endElement = elementList[endIndex]
+    if (!endElement) return true
     // 选区前后不是控件 || 选区前不是控件或是后缀&&选区后不是控件或是后缀 || 选区在控件内
     return (
       (!startElement.controlId && !endElement.controlId) ||
@@ -441,10 +443,10 @@ export class RangeManager {
       this.range.startTrIndex = startTrIndex
       this.range.endTrIndex = endTrIndex
       this.range.isCrossRowCol = !!(
-        startTdIndex ||
-        endTdIndex ||
-        startTrIndex ||
-        endTrIndex
+        tableId &&
+        startTdIndex !== undefined &&
+        endTdIndex !== undefined &&
+        (startTdIndex !== endTdIndex || startTrIndex !== endTrIndex)
       )
       this.setDefaultStyle(null)
     }
@@ -523,7 +525,25 @@ export class RangeManager {
     const strikeout = !~curElementList.findIndex(el => !el.strikeout)
     const color = curElement.color || null
     const highlight = curElement.highlight || null
-    const rowFlex = curElement.rowFlex || null
+    let rowFlex = curElement.rowFlex || null
+    const checkElementList = isCrossRowCol
+      ? this.getSelectionElementList() || [curElement]
+      : curElementList
+    const validElements = checkElementList.filter(
+      el => el.value !== ZERO || checkElementList.length === 1
+    )
+    const targetElementList = validElements.length
+      ? validElements
+      : checkElementList
+    if (targetElementList.length) {
+      const firstRowFlex = targetElementList[0].rowFlex || null
+      const isAllSameRowFlex = !targetElementList.some(
+        el => (el.rowFlex || null) !== firstRowFlex
+      )
+      if (isAllSameRowFlex) {
+        rowFlex = firstRowFlex
+      }
+    }
     const rowMargin = curElement.rowMargin ?? this.options.defaultRowMargin
     const dashArray = curElement.dashArray || []
     const level = curElement.level || null
@@ -680,14 +700,14 @@ export class RangeManager {
       }
       // 向左查找到第一个Value
       if (endElement.controlComponent !== ControlComponent.VALUE) {
-        let index = startIndex - 1
+        let index = endIndex - 1
         while (index > 0) {
           const preElement = elementList[index]
           if (
             preElement.controlId !== startElement.controlId ||
             preElement.controlComponent === ControlComponent.VALUE
           ) {
-            range.startIndex = index
+            range.endIndex = index
             break
           } else if (
             preElement.controlComponent === ControlComponent.PLACEHOLDER

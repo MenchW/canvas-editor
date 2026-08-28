@@ -1,3 +1,4 @@
+import { EditorMode } from '../../../../dataset/enum/Editor'
 import { CanvasEvent } from '../../CanvasEvent'
 
 // 删除光标后隐藏元素，跳过留痕删除元素（痕迹不可移除）
@@ -110,33 +111,54 @@ export function del(evt: KeyboardEvent, host: CanvasEvent) {
     if (curIndex) {
       control.emitControlContentChange()
     }
-  } else if (isCollapsed && elementList[endIndex + 1]?.controlId) {
+  } else if (
+    !draw.isReadonly() &&
+    draw.getMode() !== EditorMode.PREVIEW_EDIT &&
+    isCollapsed &&
+    elementList[endIndex + 1]?.controlId
+  ) {
     // 光标在控件前
     curIndex = control.removeControl(endIndex + 1)
   } else {
     // 普通元素
+    const isPreviewEdit = draw.getMode() === EditorMode.PREVIEW_EDIT
     const position = draw.getPosition()
     const cursorPosition = position.getCursorPosition()
     if (!cursorPosition) return
     const { index } = cursorPosition
-    // 命中图片直接删除
+    // 命中图片或控件直接删除
     const positionContext = position.getPositionContext()
     if (positionContext.isDirectHit && positionContext.isImage) {
-      draw.deleteElementList(elementList, index, 1)
-      curIndex = index - 1
+      if (!isPreviewEdit && elementList[index]?.controlId) {
+        curIndex = control.removeControl(index)
+      } else {
+        draw.deleteElementList(elementList, index, 1)
+        curIndex = index - 1
+      }
     } else {
       const isCollapsed = rangeManager.getIsCollapsed()
       if (!isCollapsed) {
-        draw.deleteElementList(
-          elementList,
-          startIndex + 1,
-          endIndex - startIndex
-        )
+        const startElement = elementList[startIndex]
+        if (!isPreviewEdit && startElement?.controlId) {
+          curIndex = control.removeControl(startIndex)
+        } else {
+          draw.deleteElementList(
+            elementList,
+            startIndex + 1,
+            endIndex - startIndex
+          )
+          curIndex = startIndex
+        }
       } else {
         if (!elementList[index + 1]) return
-        draw.deleteElementList(elementList, index + 1, 1)
+        const nextElement = elementList[index + 1]
+        if (!isPreviewEdit && nextElement.controlId) {
+          curIndex = control.removeControl(index + 1)
+        } else {
+          draw.deleteElementList(elementList, index + 1, 1)
+          curIndex = index
+        }
       }
-      curIndex = isCollapsed ? index : startIndex
     }
   }
   draw.getGlobalEvent().setCanvasEventAbility()

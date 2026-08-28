@@ -22,8 +22,9 @@ export class PageBreakParticle {
     y: number
   ) {
     const {
-      pageBreak: { font, fontSize, lineDash }
+      pageBreak: { font, fontSize, lineDash, disabled }
     } = this.options
+    if (disabled) return
     const displayName = this.i18n.t('pageBreak.displayName')
     const { scale, defaultRowMargin } = this.options
     const size = fontSize * scale

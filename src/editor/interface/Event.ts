@@ -13,6 +13,8 @@ export interface ITableInfoByEvent {
 
 export interface IPositionContextByEventResult {
   pageNo: number
+  index?: number
+  tdValueIndex?: number
   element: IElement | null
   rangeRect: RangeRect | null
   tableInfo: ITableInfoByEvent | null

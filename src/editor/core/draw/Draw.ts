@@ -123,7 +123,7 @@ import { WhiteSpaceParticle } from './particle/WhiteSpaceParticle'
 import { MouseObserver } from '../observer/MouseObserver'
 import { LineNumber } from './frame/LineNumber'
 import { PageBorder } from './frame/PageBorder'
-import { ITd } from '../../interface/table/Td'
+import { ITd, TdTextDirection } from '../../interface/table/Td'
 import { Actuator } from '../actuator/Actuator'
 import { TableOperate } from './particle/table/TableOperate'
 import { Area } from './interactive/Area'
@@ -1425,6 +1425,11 @@ export class Draw {
     this.cascadeManager.executeAll()
   }
 
+  public recoveryHistory() {
+    this.historyManager.recovery()
+    this.submitHistory(undefined)
+  }
+
   public setEditorData(payload: Partial<Omit<IEditorData, 'graffiti'>>) {
     const { header, main, footer } = payload
     if (header) {
@@ -1484,7 +1489,7 @@ export class Draw {
 
   private _initPageContext(ctx: CanvasRenderingContext2D) {
     const dpr = this.getPagePixelRatio()
-    ctx.scale(dpr, dpr)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     // 重置以下属性是因部分浏览器(chrome)会应用css样式
     ctx.letterSpacing = '0px'
     ctx.wordSpacing = '0px'
@@ -1536,7 +1541,8 @@ export class Draw {
       startX = 0,
       startY = 0,
       pageHeight = 0,
-      surroundElementList = []
+      surroundElementList = [],
+      textDirection
     } = payload
     const {
       defaultSize,
@@ -1592,10 +1598,25 @@ export class Draw {
     let controlRealWidth = 0
     // 分栏游标
     let currentColumn = 0
+    const isVertical = textDirection === TdTextDirection.VERTICAL
     for (let i = 0; i < elementList.length; i++) {
       const curRow: IRow = rowList[rowList.length - 1]
       const element = elementList[i]
-      const rowMargin = this.getElementRowMargin(element)
+      // 竖排单元格特殊优化：
+      // 1. 垂直方向保持舒适工整的字距与上下边距（首行与末行保留 6px 安全边距，避免拖拽行高至最低时文字紧贴边框）
+      // 2. 水平方向响应段落行高（rowMargin）设置，在文字左侧增加宽度（与 Word 竖排一致）
+      const rawRowMargin = this.getElementRowMargin(element)
+      const compactRowMargin = 2 * scale
+      const isFirstRow = curRow.rowIndex === 0 && (curRow.elementList.length === 0 || curRow.elementList.every(el => el.value === ZERO))
+      const isLastRow = i === elementList.length - 1
+      const safePadding = 6 * scale
+      const topRowMargin = isVertical
+        ? (isFirstRow ? safePadding : compactRowMargin)
+        : rawRowMargin
+      const bottomRowMargin = isVertical
+        ? (isLastRow ? safePadding : compactRowMargin)
+        : rawRowMargin
+      const rowMargin = rawRowMargin
       const metrics: IElementMetrics = {
         width: 0,
         height: 0,
@@ -1603,14 +1624,29 @@ export class Draw {
         boundingBoxDescent: 0
       }
       // 实际可用宽度
+      // 首行缩进(段落首元素带 textIndent)并入行偏移,使该行可用宽度同步减少
+      const paragraphIndent =
+        curRow.elementList.length === 0 && element.textIndent
+          ? element.textIndent * scale
+          : 0
+      // 竖排模式下行高设置生效：统一在整行 offsetX 上向右偏移，文字左侧留出对应宽度且保持同一列上下严格对齐
+      const verticalLineHeightOffsetX =
+        isVertical && element.rowMargin
+          ? (element.rowMargin - 1) * defaultBasicRowMarginHeight * scale
+          : 0
+      if (verticalLineHeightOffsetX && !curRow.offsetX) {
+        curRow.offsetX = verticalLineHeightOffsetX
+      }
       const offsetX =
-        curRow.offsetX ||
-        (element.listId &&
-          (listStyleMap.get(element.listId) || 0) +
-            (element.listLevel
-              ? this.listParticle.LIST_INDENT_WIDTH * element.listLevel * scale
-              : 0)) ||
-        0
+        (curRow.offsetX ||
+          (element.listId &&
+            (listStyleMap.get(element.listId) || 0) +
+              (element.listLevel
+                ? this.listParticle.LIST_INDENT_WIDTH *
+                  element.listLevel *
+                  scale
+                : 0)) ||
+          0) + paragraphIndent
       const rowMaxWidth = isColumnEnabled && layout ? layout.width : innerWidth
       const availableWidth = rowMaxWidth - offsetX
       // 增加起始位置坐标偏移量
@@ -1621,7 +1657,13 @@ export class Draw {
         (element.hide ||
           element.control?.hide ||
           (element.area?.hide && !this.isAreaHideDisabled()) ||
-          this.traceParticle.isTraceHidden(element)) &&
+          this.traceParticle.isTraceHidden(element) ||
+          // PREVIEW_EDIT 无痕编辑：PREFIX/POSTFIX/PLACEHOLDER 不占视觉空间（width=0）
+          // 但仍参与 position 映射，保证光标定位准确
+          (this.mode === EditorMode.PREVIEW_EDIT &&
+            (element.controlComponent === ControlComponent.PREFIX ||
+              element.controlComponent === ControlComponent.POSTFIX ||
+              element.controlComponent === ControlComponent.PLACEHOLDER))) &&
         !this.isDesignMode()
       ) {
         const preElement = curRow.elementList[curRow.elementList.length - 1]
@@ -1701,7 +1743,8 @@ export class Draw {
               innerWidth: (td.width! - tdPaddingWidth) * scale,
               elementList: td.value,
               isFromTable: true,
-              isPagingMode
+              isPagingMode,
+              textDirection: td.textDirection
             })
             const rowHeight = rowList.reduce((pre, cur) => pre + cur.height, 0)
             td.rowList = rowList
@@ -1794,7 +1837,7 @@ export class Draw {
       } else if (element.type === ElementType.PAGE_BREAK) {
         element.width = availableWidth / scale
         metrics.width = availableWidth
-        metrics.height = defaultSize
+        metrics.height = this.options.pageBreak.disabled ? 0 : defaultSize
       } else if (
         element.type === ElementType.RADIO ||
         element.controlComponent === ControlComponent.RADIO
@@ -1889,13 +1932,13 @@ export class Draw {
         ((element.imgDisplay !== ImageDisplay.INLINE &&
           element.type === ElementType.IMAGE) ||
           element.type === ElementType.LATEX)
-          ? metrics.height + rowMargin
-          : metrics.boundingBoxAscent + rowMargin
+          ? metrics.height + topRowMargin
+          : metrics.boundingBoxAscent + topRowMargin
       const height =
-        rowMargin +
+        topRowMargin +
         metrics.boundingBoxAscent +
         metrics.boundingBoxDescent +
-        rowMargin
+        bottomRowMargin
       const rowElement: IRowElement = Object.assign(element, {
         metrics,
         left: 0,
@@ -2023,7 +2066,10 @@ export class Draw {
           preElement?.controlComponent === ControlComponent.VALUE) ||
         (i !== 0 &&
           element.value === ZERO &&
-          !(element.area?.hide && !this.isAreaHideDisabled()))
+          !(element.area?.hide && !this.isAreaHideDisabled())) ||
+        (i !== 0 &&
+          textDirection === TdTextDirection.VERTICAL &&
+          preElement?.value !== ZERO)
       // 是否宽度不足导致换行
       const isWidthNotEnough = curRowWidth > availableWidth
       const isWrap = isForceBreak || isWidthNotEnough
@@ -2038,6 +2084,7 @@ export class Draw {
           rowIndex: curRow.rowIndex + 1,
           rowFlex: elementList[i]?.rowFlex || elementList[i + 1]?.rowFlex,
           isPageBreak: element.type === ElementType.PAGE_BREAK,
+          ...(verticalLineHeightOffsetX ? { offsetX: verticalLineHeightOffsetX } : {}),
           ...(isColumnEnabled ? { columnIndex: currentColumn } : {})
         }
         // 控件缩进
@@ -2113,6 +2160,44 @@ export class Draw {
             )
           if (isAllHidden) {
             curRow.height = 0
+          }
+        }
+        // 段落级行距/段距(挂段落首元素,Word 导入保留)
+        if (curRow.height > 0 && !isFromTable) {
+          const paragraphEl = curRow.elementList.find(
+            el =>
+              el.textIndent !== undefined ||
+              el.lineHeight !== undefined ||
+              el.spaceBefore !== undefined ||
+              el.spaceAfter !== undefined
+          )
+          if (paragraphEl) {
+            // 段前间距
+            if (paragraphEl.spaceBefore) {
+              curRow.height += paragraphEl.spaceBefore
+            }
+            // 行距:auto 为倍数,exact/atLeast 为固定 px
+            if (paragraphEl.lineHeight !== undefined) {
+              if (
+                paragraphEl.lineHeightRule === 'exact' ||
+                paragraphEl.lineHeightRule === 'atLeast'
+              ) {
+                curRow.height = Math.max(
+                  paragraphEl.lineHeight,
+                  curRow.height
+                )
+              } else {
+                curRow.height = Math.round(
+                  curRow.height * paragraphEl.lineHeight
+                )
+              }
+            }
+            // 段后间距(仅段末行:行尾元素为换行符)
+            const lastEl =
+              curRow.elementList[curRow.elementList.length - 1]
+            if (lastEl?.value === '\n' && paragraphEl.spaceAfter) {
+              curRow.height += paragraphEl.spaceAfter
+            }
           }
         }
         // 换行原因：宽度不足
@@ -2305,21 +2390,21 @@ export class Draw {
             this.highlight.render(ctx)
           }
           // 当前元素位置信息记录（表格跨页片段行优先使用片段位置）
-          const {
-            coordinate: {
-              leftTop: [x, y]
-            }
-          } = curRow.fragmentPosition || positionList[curRow.startIndex + j]
-          // 元素向左偏移量
-          const offsetX = element.left || 0
-          this.highlight.recordFillInfo(
-            ctx,
-            x - offsetX,
-            y + marginHeight - highlightMarginHeight, // 先减去行margin，再加上高亮margin
-            element.metrics.width + offsetX,
-            curRow.height - 2 * marginHeight + 2 * highlightMarginHeight,
-            highlight
-          )
+          const targetPos =
+            curRow.fragmentPosition || positionList[curRow.startIndex + j]
+          if (targetPos?.coordinate?.leftTop) {
+            const [x, y] = targetPos.coordinate.leftTop
+            // 元素向左偏移量
+            const offsetX = element.left || 0
+            this.highlight.recordFillInfo(
+              ctx,
+              x - offsetX,
+              y + marginHeight - highlightMarginHeight, // 先减去行margin，再加上高亮margin
+              element.metrics.width + offsetX,
+              curRow.height - 2 * marginHeight + 2 * highlightMarginHeight,
+              highlight
+            )
+          }
         } else if (preElement?.highlight) {
           // 之前是高亮元素，当前不是需立即绘制
           this.highlight.render(ctx)
@@ -2374,19 +2459,23 @@ export class Draw {
         }
         const metrics = element.metrics
         // 当前元素位置信息（表格跨页片段行优先使用片段位置）
-        const {
-          ascent: offsetY,
-          coordinate: {
-            leftTop: [x, y]
-          }
-        } = curRow.fragmentPosition || positionList[curRow.startIndex + j]
+        const elemPos =
+          curRow.fragmentPosition || positionList[curRow.startIndex + j]
+        if (!elemPos || !elemPos.coordinate?.leftTop) continue
+        const offsetY = elemPos.ascent || 0
+        const [x, y] = elemPos.coordinate.leftTop
         const preElement = curRow.elementList[j - 1]
         // 元素绘制
         if (
           (element.hide ||
             element.control?.hide ||
             (element.area?.hide && !this.isAreaHideDisabled()) ||
-            this.traceParticle.isTraceHidden(element)) &&
+            this.traceParticle.isTraceHidden(element) ||
+            // PREVIEW_EDIT 无痕编辑：PREFIX/POSTFIX/PLACEHOLDER 不绘制
+            (this.mode === EditorMode.PREVIEW_EDIT &&
+              (element.controlComponent === ControlComponent.PREFIX ||
+                element.controlComponent === ControlComponent.POSTFIX ||
+                element.controlComponent === ControlComponent.PLACEHOLDER))) &&
           !this.isDesignMode()
         ) {
           // 控件隐藏时不绘制
@@ -2706,6 +2795,9 @@ export class Draw {
                 startIndex = visible.startIndex
               }
             }
+            const positionContext = this.position.getPositionContext()
+            const isTdDrawRange =
+              positionContext.isTable && positionContext.tdId === td.id
             this.drawRow(ctx, {
               elementList: td.value,
               positionList: td.positionList!,
@@ -2714,7 +2806,9 @@ export class Draw {
               startIndex,
               innerWidth: (td.width! - tdPaddingWidth) * scale,
               zone,
-              isDrawLineBreak
+              isDrawLineBreak,
+              isDrawRange: isTdDrawRange,
+              textDirection: td.textDirection
             })
           }
         }
@@ -2748,18 +2842,18 @@ export class Draw {
           tableRangeElement &&
           tableRangeElement.id === tableId
         ) {
-          const {
-            coordinate: {
-              leftTop: [x, y]
-            }
-          } = curRow.fragmentPosition || positionList[curRow.startIndex]
-          this.tableParticle.drawRange(
-            ctx,
-            tableRangeElement,
-            x,
-            y,
-            curRow.tableFragment
-          )
+          const targetPos =
+            curRow.fragmentPosition || positionList[curRow.startIndex]
+          if (targetPos?.coordinate?.leftTop) {
+            const [x, y] = targetPos.coordinate.leftTop
+            this.tableParticle.drawRange(
+              ctx,
+              tableRangeElement,
+              x,
+              y,
+              curRow.tableFragment
+            )
+          }
         }
       }
     }

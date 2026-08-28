@@ -6,7 +6,7 @@ export const defaultRadioOption: Readonly<Required<IRadioOption>> = {
   height: 14,
   gap: 5,
   lineWidth: 1,
-  fillStyle: '#5175f4',
+  fillStyle: '#000000', // 选中填充色（Word 风格纯黑）
   strokeStyle: '#000000',
   verticalAlign: VerticalAlign.BOTTOM
 }

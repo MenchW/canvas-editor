@@ -4,30 +4,32 @@ The control's properties in document data (`IElement.control`), organized by con
 
 ## Common Properties (all types)
 
-| Property        | Type                                                                | Description                                                        |
-| --------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `type`          | `'text' \| 'select' \| 'checkbox' \| 'radio' \| 'date' \| 'number'` | Control type                                                       |
-| `value`         | `IElement[] \| null`                                                | Control value                                                      |
-| `placeholder`   | `string`                                                            | Placeholder                                                        |
-| `conceptId`     | `string`                                                            | Concept id (shared by multiple controls; used by cascade/getValue) |
-| `groupId`       | `string`                                                            | Group id                                                           |
-| `prefix`        | `string`                                                            | Prefix character                                                   |
-| `postfix`       | `string`                                                            | Postfix character                                                  |
-| `preText`       | `string`                                                            | Pre text                                                           |
-| `postText`      | `string`                                                            | Post text                                                          |
-| `minWidth`      | `number`                                                            | Minimum width                                                      |
-| `underline`     | `boolean`                                                           | Underline                                                          |
-| `border`        | `boolean`                                                           | Border                                                             |
-| `extension`     | `unknown`                                                           | Extension data                                                     |
-| `indentation`   | `ControlIndentation`                                                | Indentation                                                        |
-| `rowFlex`       | `RowFlex`                                                           | Row alignment                                                      |
-| `deletable`     | `boolean`                                                           | Deletable. Default: true                                           |
-| `disabled`      | `boolean`                                                           | Disabled (not editable)                                            |
-| `pasteDisabled` | `boolean`                                                           | Paste disabled                                                     |
-| `hide`          | `boolean`                                                           | Hidden                                                             |
-| `required`      | `boolean`                                                           | Required (used in validation, can be toggled by cascades)          |
-| `cascade`       | `IControlCascadeRule[]`                                             | Cascade rules, see: Control-Cascade                                |
-| `validation`    | `IControlValidation`                                                | Validation rules, see: Control-Validation                          |
+| Property        | Type                                                                          | Description                                                        |
+| --------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `type`          | `'text' \| 'select' \| 'checkbox' \| 'radio' \| 'date' \| 'number' \| 'image'` | Control type                                                       |
+| `listType`      | `'text' \| 'checkbox' \| 'radio' \| 'image'`                                  | List control type (segmented text/option groups/multi-image)       |
+| `value`         | `IElement[] \| null`                                                          | Control value                                                      |
+| `placeholder`   | `string`                                                                      | Placeholder                                                        |
+| `conceptId`     | `string`                                                                      | Concept id (shared by multiple controls; used by cascade/getValue) |
+| `groupId`       | `string`                                                                      | Group id                                                           |
+| `prefix`        | `string`                                                                      | Prefix character                                                   |
+| `postfix`       | `string`                                                                      | Postfix character                                                  |
+| `preText`       | `string`                                                                      | Pre text                                                           |
+| `postText`      | `string`                                                                      | Post text                                                          |
+| `minWidth`      | `number`                                                                      | Minimum width                                                      |
+| `underline`     | `boolean`                                                                     | Underline                                                          |
+| `border`        | `boolean`                                                                     | Border                                                             |
+| `extension`     | `unknown`                                                                     | Extension data                                                     |
+| `indentation`   | `ControlIndentation`                                                          | Indentation                                                        |
+| `rowFlex`       | `RowFlex`                                                                     | Row alignment                                                      |
+| `deletable`     | `boolean`                                                                     | Deletable. Default: true                                           |
+| `disabled`      | `boolean`                                                                     | Disabled (not editable)                                            |
+| `pasteDisabled` | `boolean`                                                                     | Paste disabled                                                     |
+| `hide`          | `boolean`                                                                     | Hidden                                                             |
+| `when`          | `string`                                                                      | Conditional rendering expression (like `v-if`, auto-hidden when false) |
+| `required`      | `boolean`                                                                     | Required (used in validation, can be toggled by cascades)          |
+| `cascade`       | `IControlCascadeRule[]`                                                       | Cascade rules, see: Control-Cascade                                |
+| `validation`    | `IControlValidation`                                                          | Validation rules, see: Control-Validation                          |
 | `compute`       | `string`                                                            | Compute expression, see: Control-Cascade                           |
 | `font`          | `string`                                                            | Value font                                                         |
 | `size`          | `number`                                                            | Value size                                                         |
@@ -39,7 +41,7 @@ The control's properties in document data (`IElement.control`), organized by con
 
 ## TEXT Control
 
-Common properties only.
+Common properties only. When `listType: 'text'`, incoming array data will be automatically expanded and formatted as multi-line paragraph items.
 
 ## SELECT Control
 
@@ -90,3 +92,14 @@ Common properties, plus:
 | Property                 | Type                               | Description        |
 | ------------------------ | ---------------------------------- | ------------------ |
 | `numberExclusiveOptions` | `{ calculatorDisabled?: boolean }` | Disable calculator |
+
+## IMAGE Control
+
+Common properties, plus (supports single image and multi-image grid layout):
+
+| Property   | Type                                          | Description                                                        |
+| ---------- | --------------------------------------------- | ------------------------------------------------------------------ |
+| `width`    | `number`                                      | Render width (px). Default: 100                                    |
+| `height`   | `number`                                      | Render height (px). Default: 80                                   |
+| `layout`   | `'horizontal' \| 'vertical' \| 'grid'`        | Multi-image layout mode (horizontal, vertical, or multi-column grid)|
+| `gridCols` | `number`                                      | Grid columns (effective when `layout: 'grid'`)                     |

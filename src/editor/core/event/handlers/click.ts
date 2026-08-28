@@ -122,8 +122,8 @@ function dblclick(host: CanvasEvent, evt: MouseEvent) {
         element: curElement
       })
     }
-    // 图片预览
-    if (curElement.imgPreviewDisabled) return
+    // 图片预览(占位符等禁预览元素直接跳过)
+    if (!curElement || curElement.imgPreviewDisabled) return
     draw.getPreviewer().render()
     return
   }

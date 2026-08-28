@@ -7,6 +7,7 @@ export default tseslint.config(
     ignores: [
       'node_modules/**',
       'dist/**',
+      'dist1/**',
       'index.html',
       'docs/.vitepress/cache/**',
       'docs/.vitepress/dist/**'

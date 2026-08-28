@@ -1,222 +1,284 @@
 <h1 align="center">Canvas Editor</h1>
 
-<p align="center">
-  <strong>A Canvas/SVG-based rich text editor.</strong>
-</p>
+## 目录
 
-<p align="center">
-  <a href="https://trendshift.io/repositories/8401" target="_blank">
-    <img src="https://trendshift.io/api/badge/repositories/8401" alt="Hufe921%2Fcanvas-editor | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
-  </a>
-</p>
-
-<p align="center">
-<a href="https://www.npmjs.com/package/@hufe921/canvas-editor" target="_blank"><img src="https://img.shields.io/npm/v/@hufe921/canvas-editor.svg?sanitize=true" alt="Version"></a>
- <a href="https://github.com/hufe921/canvas-editor/actions" target="_blank">
-  <img alt="Cypress Passing" src="https://github.com/hufe921/canvas-editor/workflows/cypress/badge.svg" />
-</a>
-<a href="https://github.com/hufe921/canvas-editor/graphs/contributors" target="_blank">
-  <img alt="GitHub Contributors" src="https://img.shields.io/github/contributors/hufe921/canvas-editor" />
-</a>
-<a href="https://www.npmjs.com/package/@hufe921/canvas-editor" target="_blank"><img src="https://img.shields.io/npm/l/@hufe921/canvas-editor.svg?sanitize=true" alt="License"></a>
-<a href="https://github.com/Hufe921/canvas-editor/issues/new/choose" target="_blank"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs"></a>
-<a href="https://zread.ai/Hufe921/canvas-editor" target="_blank"><img src="https://img.shields.io/badge/Ask_Zread-_.svg?style=flat&color=00b0aa&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff" alt="zread"/></a>
-<a href="https://deepwiki.com/Hufe921/canvas-editor" target="_blank"><img src="https://img.shields.io/badge/Ask_DeepWiki-_.svg?style=flat&color=0094de&labelColor=000000&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGNsYXNzPSJzaXplLTQgdHJhbnNmb3JtIHRyYW5zaXRpb24tdHJhbnNmb3JtIGR1cmF0aW9uLTcwMCBncm91cC1ob3Zlcjpyb3RhdGUtMTgwIFsmYW1wO19wYXRoXTpzdHJva2UtMCIgdmlld0JveD0iMTEwIDExMCA0NjAgNTAwIj48cGF0aCBkPSJNNDE5IDMzMnExNi03IDMyIDBsMjUgMTUgMyAxIDMgMSAzLTEgMy0xIDUxLTI5cTYtMyA2LTExdi01OHEwLTgtNi0xMWwtNTEtMjlxLTYtMy0xMiAwbC01MSAyOXYxbC0yIDEtMiAydjFsLTEgMnYxbC0xIDN2MjlhMzIgMzIgMCAwIDEtNDggMjhsLTI1LTE1LTMtMS0zLTEtMyAxLTMgMS01MSAyOXEtNSAzLTYgMTF2NThxMSA4IDYgMTFsNTEgMjkgMyAxIDMgMSAzLTEgMy0xIDI1LTE1YTMyIDMyIDAgMCAxIDQ4IDI4djI5bDEgM3YxbDEgMnYxbDIgMiAyIDIgNTEgMjkgNiAyIDYtMiA1MS0yOXE2LTMgNi0xMXYtNThxMC04LTYtMTFsLTUxLTI5LTMtMS0zLTEtMyAxLTMgMS0yNSAxNWEzMiAzMiAwIDAgMS00OC0yOHExLTE4IDE2LTI4IiBzdHlsZT0iZmlsbDojMjFjMTlhIi8+PHBhdGggZD0ibTE0MSAzMTggNTEgMjkgNiAyIDYtMiA1MS0yOXYtMWwyLTEgMi0ydi0xbDEtMnYtMWwxLTN2LTI5YTMyIDMyIDAgMCAxIDQ4LTI4bDI1IDE1IDMgMSAzIDEgMy0xIDMtMSA1MS0yOXE2LTMgNi0xMXYtNThxMC04LTYtMTFsLTUxLTI5cS02LTMtMTIgMGwtNTEgMjktMiAyaC0xbC0xIDJ2MWwtMSAydjFsLTEgM3YyOWEzMiAzMiAwIDAgMS00OCAyOGwtMjUtMTUtMy0xLTMtMS0zIDEtMyAxLTUxIDI5cS02IDMtNiAxMXY1OHEwIDggNiAxMSIgc3R5bGU9ImZpbGw6IzM5NjljYSIvPjxwYXRoIGQ9Im0zOTcgNDg0LTUxLTI5LTMtMS0zLTEtMyAxLTMgMS0yNSAxNWEzMiAzMiAwIDAgMS00OC0yOHYtMjlsLTEtM3YtMWwtMS0ydi0xbC0yLTItMi0xdi0xbC01MS0yOXEtNi0zLTEyIDBsLTUxIDI5cS02IDMtNiAxMXY1OHEwIDggNiAxMWw1MSAyOSAzIDEgMyAxIDMtMSAzLTEgMjUtMTVhMzIgMzIgMCAwIDEgNDggMjh2MjlsMSAzdjFsMSAydjFsMiAyIDIgMiA1MSAyOSA2IDIgNi0yIDUxLTI5cTYtMyA2LTExdi01OHEwLTgtNi0xMSIgc3R5bGU9ImZpbGw6IzAyOTRkZSIvPjwvc3ZnPg==&logoColor=ffffff" alt="DeepWiki"/></a>
-</p>
-
-<p align="center">
-  <a href="https://hufe.club/canvas-editor" target="_blank"><strong>Live Demo</strong></a> ·
-  <a href="https://hufe.club/canvas-editor-docs" target="_blank"><strong>Documentation</strong></a> ·
-  <a href="https://github.com/Hufe921/canvas-editor/issues/new?assignees=&labels=&projects=&template=bug_report.yml" target="_blank">Report Bug</a> ·
-  <a href="https://github.com/Hufe921/canvas-editor/issues/new?assignees=&labels=%3Asparkles%3A+feature+request&projects=&template=feature_request.yml" target="_blank">Request Feature</a> ·
-  <a href="https://github.com/Hufe921/canvas-editor/discussions" target="_blank">Discussions</a>
-</p>
-
-<p align="center">
-  English · <a href="https://hufe.club/canvas-editor-docs">中文文档</a>
-</p>
+- [一、项目概述](#一项目概述)
+- [二、功能特性](#二功能特性)
+- [三、为什么选择 Canvas Editor？](#三为什么选择-canvas-editor)
+- [四、项目目录结构](#四项目目录结构)
+- [五、快速上手与启动指南](#五快速上手与启动指南)
+- [六、二次开发指南与示例](#六二次开发指南与示例)
+- [七、开发规范与注意事项](#七开发规范与注意事项)
+- [八、生态系统](#八生态系统)
+- [九、贡献与开源协议](#九贡献与开源协议)
 
 ---
 
-## Overview
+## 一、项目概述
 
-**Canvas Editor** is a feature-rich, WYSIWYG document editor built on top of the HTML `<canvas>` API. It is designed for use cases that demand pixel-perfect rendering, advanced typography, complex layouts, and Word-like document experiences in the browser — including EMR (Electronic Medical Records), legal contracts, reports, and other document-centric applications.
+**Canvas Editor** 是一款基于 **TypeScript + HTML5 Canvas/SVG** 渲染架构的高性能、所见即所得（WYSIWYG）文档编辑器。专为对像素级渲染精度、高级排版、复杂布局以及 Word 式文档体验有极高要求的场景而设计 — 包括电子病历（EMR）、法律合同、专业报告等以文档为核心的企业级应用。
 
-Unlike traditional `contenteditable`-based editors, Canvas Editor takes full control of the rendering pipeline, providing consistent typography across browsers, precise pagination, and a uniform export experience.
+与传统的基于 DOM (`contenteditable`) 的编辑器不同，Canvas Editor 完全掌控了整个渲染流水线，使用 Canvas 结合矢量 SVG 绘制文本、表格、控件与水印，从而在不同浏览器间提供高度一致的排版效果、精准的文档分页以及统一的高保真打印导出体验。
 
-## Features
+如需获取完整的 API 文档，请参阅[官方文档](https://hufe.club/canvas-editor-docs)。
 
-- **Rich Text** — Undo / Redo, Font, Size, Bold, Italic, Underline, Strikeout, Superscript, Alignment, Headings, Lists, and more
-- **Insertable Elements** — Tables, Images, Hyperlinks, Code Blocks, Page Breaks, Math Formulas (LaTeX), Date Pickers, Block elements
-- **Form Controls** — Select, Text, Date, Radio, Checkbox controls
-- **Pagination** — Native pagination with headers, footers, and page numbers
-- **Page Layout** — Configurable page margins, watermarks, backgrounds
-- **Document Structure** — Catalog (TOC) generation, comments, group annotations
-- **Print & Export** — Print-ready output via canvas-to-image / PDF rendering
-- **Interaction** — Custom context menus, customizable shortcut keys, drag-and-drop for text, elements, and controls
-- **Extensibility** — Plugin system for adding custom functionality
-- **Performance** — Web Workers for word counting, catalog generation, and async value retrieval
+### 技术栈
 
-## Why Canvas Editor?
+- **核心语言**：TypeScript (严格类型检查)
+- **构建工具**：Vite (提供极速的 HMR 开发体验与 ES Module / UMD 库打包)
+- **代码规范**：ESLint + Prettier + Simple Git Hooks (自动化预提交校验)
+- **测试框架**：Vitest (单元测试) + Cypress (E2E 端到端测试)
+- **文档工具**：VitePress
 
-|                         | Canvas Editor                    | contenteditable Editors     |
-| ----------------------- | -------------------------------- | --------------------------- |
-| Cross-browser rendering | Pixel-perfect, identical         | Varies by browser           |
-| Pagination              | Native, document-style           | Manual / unsupported        |
-| Print fidelity          | Matches on-screen output         | Often diverges              |
-| Typography control      | Full control                     | Limited by the browser      |
-| Document features       | TOC, headers/footers, watermarks | Requires heavy custom logic |
+---
 
-## Installation
+## 二、功能特性
+
+- **富文本能力** — 撤销 / 重做、字体、字号、加粗、斜体、下划线、删除线、上标/下标、对齐方式、标题样式、列表（有序/无序/任务列表）等
+- **可插入元素** — 表格、图片、超链接、代码块、分页符、数学公式（LaTeX）、日期选择器、Block 块级元素
+- **表单控件** — 下拉选择控件、文本输入控件、日期控件、单选控件、复选控件
+- **分页机制** — 原生文档流分页，支持页眉、页脚及页码
+- **页面布局** — 可配置页边距、水印、背景颜色与图片
+- **文档结构** — 自动生成目录（TOC）、批注评论、分组标注
+- **打印与导出** — 支持 Canvas 转图片、PDF 导出以及高保真原生打印
+- **交互体验** — 自定义右键菜单、可配置快捷键、文本/元素/控件拖拽（Drag & Drop）
+- **扩展性** — 灵活的插件系统，支持自建功能拓展
+- **高性能** — 使用 Web Workers 处理字数统计、目录计算与异步数据检索
+
+---
+
+## 三、为什么选择 Canvas Editor？
+
+| 维度         | Canvas Editor                 | contenteditable 编辑器            |
+| ------------ | ----------------------------- | --------------------------------- |
+| 跨浏览器渲染 | 像素级精准，完全一致          | 依赖各浏览器 DOM 实现，存在差异   |
+| 分页机制     | 原生 Word 式文档流分页        | 需手动计算 / 不支持自然分页       |
+| 打印保真度   | 严格与屏幕渲染保持一致        | 经常发生排版错乱或偏移            |
+| 排版掌控力   | 100% 自研渲染流水线全控       | 受限于浏览器 DOM 盒模型限制       |
+| 高级文档特性 | 目录、页眉/页脚、水印原生支持 | 依赖大量极其复杂的自定义 DOM 逻辑 |
+
+---
+
+## 四、项目目录结构
+
+项目整体采用清晰的模块化架构，核心编辑器源码与示例运行环境相互解耦：
+
+```
+canvas-editor/
+├── .github/                   # GitHub Actions 自动化工作流与 CI/CD 配置
+├── .vscode/                   # VSCode 项目开发配置与推荐扩展
+├── cypress/                   # Cypress E2E 端到端测试套件
+├── docs/                      # VitePress 项目在线文档与说明源码
+├── scripts/                   # 构建工具脚本 (commit 验证、发布前检查等)
+├── src/                       # 核心源码与示例目录
+│   ├── assets/                # 示例组件用到的样式与静态资源
+│   ├── components/            # 编辑器弹窗 (Dialog)、签名 (Signature) 等辅助 UI 模块
+│   ├── editor/                # 🌟 核心编辑器库源码
+│   │   ├── index.ts           # 编辑器入口：导出 Editor 主类、类型及工具
+│   │   ├── assets/            # 编辑器内部 CSS-in-JS 样式与图标
+│   │   ├── core/              # 核心绘制逻辑与指令系统
+│   │   │   ├── command/       # 命令模式实现 (文本样式、对齐、表格、插入元素等)
+│   │   │   ├── draw/          # Canvas 画布绘制引擎 (光标、选区、背景、页眉页脚等)
+│   │   │   ├── event/         # 鼠标、键盘、输入法等事件拦截与处理
+│   │   │   ├── listener/      # 状态监听与变更广播系统
+│   │   │   ├── position/      # 坐标计算、选区与定位管理
+│   │   │   ├── register/      # 快捷键与右键菜单注册机制
+│   │   │   ├── shortcut/      # 快捷键映射
+│   │   │   └── zone/          # 编辑区域管理 (页眉、正文、页脚)
+│   │   ├── dataset/           # 全局常量、默认配置与 TypeScript Enum 定义
+│   │   │   ├── constant/      # 默认字体、字号、边距等硬编码常量
+│   │   │   └── enum/          # 控件类型、元素类型、对齐方式等枚举定义
+│   │   ├── interface/         # TypeScript 接口声明 (Element, Control, Watermark 等)
+│   │   ├── types/             # 扩展类型定义
+│   │   └── utils/             # 编辑器内部专属工具函数 (Canvas 绘图辅助、解析工具)
+│   ├── plugins/               # 官方插件扩展目录
+│   ├── utils/                 # 通用防抖、DOM 辅助与 Prism 代码高亮工具
+│   ├── main.ts                # 示例项目的启动逻辑，绑定 DOM 交互事件与编辑器命令
+│   ├── mock.ts                # 示例用初始文档数据、控件模拟数据及水印配置
+│   ├── style.css              # 示例界面的工具栏与整体布局 CSS 样式
+│   └── vite-env.d.ts          # Vite 环境变量声明
+├── index.html                 # 示例项目 HTML 入口（包含完整的顶部工具栏与底部状态栏）
+├── eslint.config.js           # ESLint 校验规则配置
+├── package.json               # 项目依赖、指令集及 npm 导出配置
+├── tsconfig.json              # TypeScript 编译选项配置
+└── vite.config.ts             # Vite 打包构建配置 (同时配置 Dev / App / Lib 模式)
+```
+
+---
+
+## 五、快速上手与启动指南
+
+### 1. 安装依赖
 
 ```bash
-# npm
-npm install @hufe921/canvas-editor
-
-# pnpm
-pnpm add @hufe921/canvas-editor
-
-# yarn
-yarn add @hufe921/canvas-editor
-```
-
-## Quick Start
-
-```html
-<div class="canvas-editor"></div>
-```
-
-```javascript
-import Editor from '@hufe921/canvas-editor'
-
-const container = document.querySelector('.canvas-editor')
-
-const editor = new Editor(container, {
-  main: [
-    {
-      value: 'Hello, Canvas Editor!'
-    }
-  ]
-})
-```
-
-For complete API documentation, see the [official docs](https://hufe.club/canvas-editor-docs).
-
-## Ecosystem
-
-| Project                                                                    | Description                             |
-| -------------------------------------------------------------------------- | --------------------------------------- |
-| [canvas-editor-plugin](https://github.com/Hufe921/canvas-editor-plugin)    | Official plugin collection              |
-| [feature/svg](https://github.com/Hufe921/canvas-editor/tree/feature/svg)   | SVG render layer (in development)       |
-| [feature/pdf](https://github.com/Hufe921/canvas-editor/tree/feature/pdf)   | PDF export feature                      |
-| [feature/ai](https://github.com/Hufe921/canvas-editor/tree/feature/ai)     | AI-powered text processing demo         |
-| [feature/CRDT](https://github.com/Hufe921/canvas-editor/tree/feature/CRDT) | CRDT-based collaboration (experimental) |
-
-## Development
-
-### Prerequisites
-
-- Node.js `>= 24.13.1`
-- pnpm (recommended)
-
-### Setup
-
-```bash
-# Install dependencies
+# pnpm (推荐)
 pnpm install
 
-# Start the development server
+# npm
+npm install
+```
+
+### 2. 本地启动开发服务
+
+```bash
+# 启动 Vite 本地开发服务器 (热更新)
 npm run dev
 ```
 
-### Build
+启动成功后在浏览器打开 `http://localhost:3000/` 即可预览完整编辑器 demo。
 
-```bash
-# Build the application (demo)
-npm run build
+### 3. 常用构建与测试指令列表
 
-# Build the library (publishable package)
-npm run lib
+| 指令                   | 说明                                                        |
+| :--------------------- | :---------------------------------------------------------- |
+| `npm run dev`          | 启动本地 Vite 开发服务器（支持热更新）                      |
+| `npm run build`        | 打包示例 Application 模式，用于预览部署 Demo                |
+| `npm run lib`          | 构建打包发布给第三方引用的 Lib 库（输出 ESM 和 UMD Bundle） |
+| `npm run serve`        | 本地预览 `npm run build` 产出的静态文件                     |
+| `npm run lint`         | 执行 ESLint 语法检查与格式校验                              |
+| `npm run type:check`   | 单独执行 TypeScript 类型校验                                |
+| `npm run test:unit`    | 使用 Vitest 运行单元测试                                    |
+| `npm run cypress:open` | 打开 Cypress 交互式 E2E 端到端测试面板                      |
+| `npm run docs:dev`     | 本地启动 VitePress 在线文档开发服务                         |
+
+---
+
+## 六、二次开发指南与示例
+
+通过修改 `index.html` 和 `src/main.ts` 可以轻松自定义菜单按钮、接入接口指令，以及扩展初始数据。
+
+### 示例 1：添加一个自定义菜单按钮并调用 API
+
+#### 步骤 1：在 `index.html` 中添加 HTML 节点
+
+```html
+<!-- index.html 中的工具栏模块内 -->
+<div class="menu-item__custom-btn" title="插入提示文本">
+  <button
+    style="border:none; background:#4e6ef2; color:white; padding:4px 8px; border-radius:4px; cursor:pointer;"
+  >
+    插入提示
+  </button>
+</div>
 ```
 
-### Quality Checks
+#### 步骤 2：在 `src/main.ts` 中绑定点击事件并调用编辑器指令
 
-```bash
-# Lint
-npm run lint
+```typescript
+// src/main.ts
 
-# Type check
-npm run type:check
+// 1. 获取按钮 DOM 节点
+const customBtnDom = document.querySelector<HTMLButtonElement>(
+  '.menu-item__custom-btn button'
+)!
 
-# Unit tests (Vitest)
-npm run test:unit
-
-# E2E tests (Cypress)
-npm run cypress:open    # interactive
-npm run cypress:run     # headless
+// 2. 绑定点击事件，调用编辑器命令插入数据
+customBtnDom.onclick = function () {
+  instance.command.executeInsertElementList([
+    {
+      value: '【提示】：',
+      bold: true,
+      color: '#ff4d4f'
+    },
+    {
+      value: '这是一段通过自定义按钮插入的带样式的提示文字。\n',
+      color: '#1890ff',
+      italic: true
+    }
+  ])
+}
 ```
 
-### Documentation
+### 示例 2：修改默认初始内容与排版配置
 
-```bash
-npm run docs:dev        # Start VitePress docs locally
-npm run docs:build      # Build the documentation site
+```typescript
+import Editor, { RowFlex } from './editor'
+import { options } from './mock'
+
+const container = document.querySelector<HTMLDivElement>('.editor')!
+const instance = new Editor(
+  container,
+  {
+    // 自定义页眉
+    header: [
+      {
+        value: '我的自定义公司页眉',
+        size: 14,
+        rowFlex: RowFlex.CENTER
+      }
+    ],
+    // 自定义正文元素
+    main: [
+      {
+        value: '欢迎使用 Canvas Editor 二次开发！\n',
+        size: 24,
+        bold: true
+      }
+    ],
+    // 自定义页脚
+    footer: [
+      {
+        value: 'Page 1',
+        size: 10,
+        rowFlex: RowFlex.RIGHT
+      }
+    ]
+  },
+  {
+    ...options,
+    // 自定义编辑器默认配置
+    pageNumber: {
+      format: '{pageNo}/{pageCount}'
+    },
+    watermark: {
+      data: '内部保密文档',
+      color: '#e8e8e8',
+      size: 80
+    }
+  }
+)
 ```
 
-## Project Structure
+---
 
-```
-src/editor/
-├── core/
-│   ├── draw/           # Rendering engine (canvas drawing)
-│   │   ├── particle/   # Element renderers (text, image, table, latex, ...)
-│   │   ├── control/    # Form control rendering
-│   │   ├── frame/      # Frame elements (margin, background, borders)
-│   │   ├── richtext/   # Decorations (underline, highlight)
-│   │   └── interactive/# Interactive features (search, graffiti)
-│   ├── command/        # Command pattern (executeBold, executeUndo, ...)
-│   ├── event/          # Canvas and global event handling
-│   ├── observer/       # Mouse, selection, image observers
-│   ├── worker/         # Web Workers for async operations
-│   └── plugin/         # Plugin system
-├── interface/          # TypeScript interfaces
-├── dataset/            # Enums and constants
-└── utils/              # Utility helpers
-```
+## 七、开发规范与注意事项
 
-## Contributing
+### 1. 代码风格与 Lint 约束
 
-Contributions are what make the open-source community such an amazing place. **Any contributions you make are greatly appreciated** — bug reports, feature requests, documentation improvements, or pull requests.
+本项目配置了严格的 ESLint 与 Prettier 规则：
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feat/amazing-feature`)
-3. Commit your changes following [Conventional Commits](https://www.conventionalcommits.org/) (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feat/amazing-feature`)
-5. Open a Pull Request
+- **无分号**（`semi: [1, "never"]`）
+- **单引号**（`quotes: [1, "single"]`）
+- **2 空格缩进**（不使用 Tab）
+- **80 字符单行上限**（`printWidth: 80`）
+- **无末尾逗号**（`trailingComma: "none"`）
+- **LF 换行符**（`endOfLine: "lf"`）
 
-> Pre-commit hooks automatically run `lint` and `type:check`. Commit messages must follow Conventional Commits format (`feat:`, `fix:`, `docs:`, `refactor:`, ...).
+在提交代码前，请主动运行 `npm run lint` 保证代码格式合规。
 
-### Contributors
+### 2. Git Commit 提交规范
 
-Thanks to all the people who have contributed to Canvas Editor!
+项目集成了 `simple-git-hooks`，会在执行 `git commit` 时自动进行预提交校验 (`npm run lint && npm run type:check`)。
 
-<a href="https://github.com/Hufe921/canvas-editor/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Hufe921/canvas-editor" />
-</a>
+Commit Message 须遵守 **Conventional Commits** 规范：
 
-## Community & Support
+- `feat:` 新功能
+- `fix:` 修复 Bug
+- `docs:` 文档修改
+- `style:` 代码格式变更
+- `refactor:` 代码重构
+- `test:` 测试用例修改
 
-- **Documentation** — [hufe.club/canvas-editor-docs](https://hufe.club/canvas-editor-docs)
-- **Discussions** — [GitHub Discussions](https://github.com/Hufe921/canvas-editor/discussions)
-- **Bug Reports** — [GitHub Issues](https://github.com/Hufe921/canvas-editor/issues)
-- **AI-Assisted Q&A** — [Zread](https://zread.ai/Hufe921/canvas-editor) · [DeepWiki](https://deepwiki.com/Hufe921/canvas-editor)
+---
 
-## Sponsors
+## 八、生态系统
 
-If you find this project useful, please consider [sponsoring](https://hufe.club/donate.jpg) to support its continued development.
+| 项目                                                                       | 描述                               |
+| :------------------------------------------------------------------------- | :--------------------------------- |
+| [canvas-editor-plugin](https://github.com/Hufe921/canvas-editor-plugin)    | 官方插件集合库                     |
+| [feature/svg](https://github.com/Hufe921/canvas-editor/tree/feature/svg)   | SVG 渲染层分支（开发中）           |
+| [feature/pdf](https://github.com/Hufe921/canvas-editor/tree/feature/pdf)   | PDF 导出功能分支                   |
+| [feature/ai](https://github.com/Hufe921/canvas-editor/tree/feature/ai)     | AI 辅助文本处理 Demo 分支          |
+| [feature/CRDT](https://github.com/Hufe921/canvas-editor/tree/feature/CRDT) | 基于 CRDT 的协同编辑分支（实验性） |
 
-## License
-
-This project is licensed under the [MIT License](./LICENSE).
-
-Copyright © 2022–present, [Hufe921](https://github.com/Hufe921).
+---

@@ -22,6 +22,7 @@ export function keydown(evt: KeyboardEvent, host: CanvasEvent) {
   } else if (evt.key === KeyMap.Delete) {
     del(evt, host)
   } else if (evt.key === KeyMap.Enter) {
+    if (isMod(evt)) return
     enter(evt, host)
   } else if (evt.key === KeyMap.Left) {
     // Mac: Cmd+Left = Home

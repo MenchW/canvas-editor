@@ -6,7 +6,7 @@
   height: 100%;
   opacity: .5;
   background: #000000;
-  z-index: 99;
+  z-index: 9998;
 }
 
 .dialog-container {
@@ -16,7 +16,7 @@
   bottom: 0;
   left: 0;
   overflow: auto;
-  z-index: 999;
+  z-index: 9999;
   margin: 0;
   display: flex;
   justify-content: center;
@@ -53,8 +53,30 @@
 .dialog-option__item {
   margin-bottom: 18px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+}
+
+.dialog-option__field {
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog-option__item-tips {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-top: 3px;
+  line-height: 1.2;
+  width: 276px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.2s;
+}
+
+.dialog-option__item-tips.active {
+  color: #4991f2;
+  font-weight: 500;
 }
 
 .dialog-option__item span {
@@ -62,6 +84,34 @@
   font-size: 14px;
   color: #3d4757;
   position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.dialog-option__tip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e2e6ed;
+  color: #606266;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: bold;
+  margin-right: 5px;
+  cursor: help;
+  transition: all 0.2s;
+}
+
+.dialog-option__tip-icon::before {
+  content: '?';
+}
+
+.dialog-option__tip-icon:hover {
+  background: #4991f2;
+  color: #ffffff;
 }
 
 .dialog-option__item input,

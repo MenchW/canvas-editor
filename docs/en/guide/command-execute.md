@@ -180,6 +180,16 @@ Usage:
 instance.command.executeRedo()
 ```
 
+## executeRecoveryHistory
+
+Feature: Reset history baseline (clears undo/redo stack and sets current document state as initial baseline)
+
+Usage:
+
+```javascript
+instance.command.executeRecoveryHistory()
+```
+
 ## executePainter
 
 Feature: Format Brush - Copy style
@@ -1108,4 +1118,214 @@ Usage:
 
 ```javascript
 instance.command.executeClearGraffiti()
+```
+
+## executeSetImageCaption
+
+Feature: Set or update image caption text for selected image
+
+Usage:
+
+```javascript
+instance.command.executeSetImageCaption(payload: IImageCaption)
+```
+
+## executeConvertControlToText
+
+Feature: Unwrap all controls in the document into native plain text elements, discarding all prefixes, postfixes and placeholders
+
+Usage:
+
+```javascript
+instance.command.executeConvertControlToText()
+```
+
+## executeRemoveControl
+
+Feature: Remove control at active selection or specified control ID
+
+Usage:
+
+```javascript
+instance.command.executeRemoveControl(payload?: IRemoveControlOption)
+```
+
+## executeSetControlValue
+
+Feature: Set value of a single specified control
+
+Usage:
+
+```javascript
+instance.command.executeSetControlValue(payload: ISetControlValueOption)
+```
+
+## executeSetControlValueList
+
+Feature: Batch set values of multiple controls
+
+Usage:
+
+```javascript
+instance.command.executeSetControlValueList(payload: ISetControlValueOption[])
+```
+
+## executeSetControlExtension
+
+Feature: Set extension data payload of a single control
+
+Usage:
+
+```javascript
+instance.command.executeSetControlExtension(payload: ISetControlExtensionOption)
+```
+
+## executeSetControlExtensionList
+
+Feature: Batch set extension data payloads of multiple controls
+
+Usage:
+
+```javascript
+instance.command.executeSetControlExtensionList(payload: ISetControlExtensionOption[])
+```
+
+## executeSetControlProperties
+
+Feature: Set basic properties of a single control (e.g. placeholder, prefix, postfix, etc.)
+
+Usage:
+
+```javascript
+instance.command.executeSetControlProperties(payload: ISetControlProperties)
+```
+
+## executeSetControlPropertiesList
+
+Feature: Batch set basic properties of multiple controls
+
+Usage:
+
+```javascript
+instance.command.executeSetControlPropertiesList(payload: ISetControlProperties[])
+```
+
+## executeSetControlHighlight
+
+Feature: Highlight specified controls matching search keywords
+
+Usage:
+
+```javascript
+instance.command.executeSetControlHighlight(payload: ISetControlHighlightOption)
+```
+
+## executeValidate
+
+Feature: Trigger rule validation for all controls in document
+
+Usage:
+
+```javascript
+const errors = instance.command.executeValidate()
+```
+
+## executeClearValidate
+
+Feature: Clear all form validation error highlights for controls in document
+
+Usage:
+
+```javascript
+instance.command.executeClearValidate()
+```
+
+## executeLocationControl
+
+Feature: Locate and focus jump to specified control
+
+Usage:
+
+```javascript
+instance.command.executeLocationControl(controlId: string, options?: ILocationControlOption)
+```
+
+## executeInsertControl
+
+Feature: Insert a control element at current cursor position
+
+Usage:
+
+```javascript
+instance.command.executeInsertControl(payload: IElement)
+```
+
+## executeJumpControl
+
+Feature: Jump sequentially to previous or next control
+
+Usage:
+
+```javascript
+instance.command.executeJumpControl(payload?: { direction?: MoveDirection })
+```
+
+## executeTranslate
+
+Feature: Get and return translated string for internationalization Key
+
+Usage:
+
+```javascript
+const text = instance.command.executeTranslate(path: string)
+```
+
+## executeComputeElementListHeight
+
+Feature: Offscreen compute total layout height of element list under current canvas parameters
+
+Usage:
+
+```javascript
+const height = instance.command.executeComputeElementListHeight(elementList: IElement[])
+```
+
+## executeConvertControlToText
+
+Feature: Convert all controls in the document to plain text elements (unwrapping prefix, postfix and empty placeholders, preserving the final rendered text content)
+
+Usage:
+
+```javascript
+instance.command.executeConvertControlToText()
+```
+
+## executeRecoveryHistory
+
+Feature: Reset and re-anchor the unique initial history baseline after asynchronous data hydration or document loading (clears current Undo/Redo stack, preventing users from undoing back into the unpopulated template state)
+
+Usage:
+
+```javascript
+instance.command.executeRecoveryHistory()
+```
+
+## executeWordTool
+
+Feature: Parse and import local `.docx` Word documents, faithfully translating Word layouts, multi-level headings, vertical text, and complex tables into native Canvas Editor elements
+
+Usage:
+
+```javascript
+instance.command.executeWordTool()
+```
+
+## executePrint
+
+Feature: Trigger native browser high-fidelity pagination print dialog
+
+Usage:
+
+```javascript
+instance.command.executePrint()
 ```

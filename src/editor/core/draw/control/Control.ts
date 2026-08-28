@@ -35,8 +35,6 @@ import { EventBusMap } from '../../../interface/EventBus'
 import { IRange } from '../../../interface/Range'
 import {
   deepClone,
-  isArray,
-  isString,
   omitObject,
   pickObject,
   splitText
@@ -57,6 +55,11 @@ import { RangeManager } from '../../range/RangeManager'
 import { Draw } from '../Draw'
 import { CheckboxControl } from './checkbox/CheckboxControl'
 import { RadioControl } from './radio/RadioControl'
+import { ImageControl } from './image/ImageControl'
+import { ListRadioControl } from './list/ListRadioControl'
+import { ListCheckboxControl } from './list/ListCheckboxControl'
+import { ListTextControl } from './list/ListTextControl'
+import { ListImageControl } from './list/ListImageControl'
 import { ControlSearch } from './interactive/ControlSearch'
 import { ControlBorder } from './richtext/Border'
 import { SelectControl } from './select/SelectControl'
@@ -205,6 +208,10 @@ export class Control {
   // 是否属于控件可以捕获事件的选区
   public getIsRangeCanCaptureEvent(): boolean {
     if (!this.activeControl) return false
+    // 无痕编辑模式 (PREVIEW_EDIT) 下解包控件，允许光标自由在文字间编辑，按键不捕获为控件级整体操作
+    if (this.draw.getMode() === EditorMode.PREVIEW_EDIT) {
+      return false
+    }
     const { startIndex, endIndex } = this.getRange()
     if (!~startIndex && !~endIndex) return false
     const elementList = this.getElementList()
@@ -573,16 +580,27 @@ export class Control {
     const isReadonly = this.draw.isReadonly()
     if (isReadonly) return
     const control = element.control!
+    const isList = !!control.listType
     if (control.type === ControlType.TEXT) {
-      this.activeControl = new TextControl(element, this)
+      this.activeControl = isList
+        ? new ListTextControl(element, this)
+        : new TextControl(element, this)
     } else if (control.type === ControlType.SELECT) {
       const selectControl = new SelectControl(element, this)
       this.activeControl = selectControl
       selectControl.awake()
     } else if (control.type === ControlType.CHECKBOX) {
-      this.activeControl = new CheckboxControl(element, this)
+      this.activeControl = isList
+        ? new ListCheckboxControl(element, this)
+        : new CheckboxControl(element, this)
     } else if (control.type === ControlType.RADIO) {
-      this.activeControl = new RadioControl(element, this)
+      this.activeControl = isList
+        ? new ListRadioControl(element, this)
+        : new RadioControl(element, this)
+    } else if (control.type === ControlType.IMAGE) {
+      this.activeControl = isList
+        ? new ListImageControl(element, this)
+        : new ImageControl(element, this)
     } else if (control.type === ControlType.DATE) {
       const dateControl = new DateControl(element, this)
       this.activeControl = dateControl
@@ -1085,7 +1103,8 @@ export class Control {
   public addPlaceholder(startIndex: number, context: IControlContext = {}) {
     const elementList = context.elementList || this.getElementList()
     const startElement = elementList[startIndex]
-    const control = startElement.control!
+    if (!startElement?.control) return
+    const control = startElement.control
     if (!control.placeholder) return
     const placeholderStrList = splitText(control.placeholder)
     // 优先使用默认控件样式
@@ -1296,12 +1315,60 @@ export class Control {
     if (!payload.length) return
     let isExistSet = false
     let isExistSubmitHistory = false
-    // 设置值
+
+    // 构建 Payload 快速索引 Map，实现 O(1) 检索
+    const idMap = new Map<string, ISetControlValueOption>()
+    const conceptIdMap = new Map<string, ISetControlValueOption>()
+    const areaIdMap = new Map<string, ISetControlValueOption>()
+    for (const p of payload) {
+      if (p.id) idMap.set(p.id, p)
+      if (p.areaId) areaIdMap.set(p.areaId, p)
+      if (p.conceptId) {
+        conceptIdMap.set(p.conceptId, p)
+        conceptIdMap.set(p.conceptId.replace(/\./g, '_'), p)
+        if (p.conceptId.includes('.')) {
+          conceptIdMap.set(p.conceptId.split('.').pop()!, p)
+        }
+      }
+    }
+
+    const findPayloadItem = (
+      element: IElement
+    ): ISetControlValueOption | undefined => {
+      const cId = element.controlId
+      if (cId && idMap.has(cId)) {
+        const item = idMap.get(cId)!
+        if (!item.groupId || item.groupId === element.control?.groupId) {
+          return item
+        }
+      }
+      const aId = element.areaId
+      if (aId && areaIdMap.has(aId)) {
+        const item = areaIdMap.get(aId)!
+        if (!item.groupId || item.groupId === element.control?.groupId) {
+          return item
+        }
+      }
+      const conceptId = element.control?.conceptId
+      if (conceptId) {
+        const item =
+          conceptIdMap.get(conceptId) ||
+          conceptIdMap.get(conceptId.replace(/\./g, '_')) ||
+          (conceptId.includes('.')
+            ? conceptIdMap.get(conceptId.split('.').pop()!)
+            : undefined)
+        if (item && (!item.groupId || item.groupId === element.control?.groupId)) {
+          return item
+        }
+      }
+      return undefined
+    }
+
+    const processedControlIds = new Set<string>()
     const setValue = (elementList: IElement[]) => {
       let i = 0
       while (i < elementList.length) {
         const element = elementList[i]
-        i++
         // 表格下钻处理
         if (element.type === ElementType.TABLE) {
           const trList = element.trList!
@@ -1312,24 +1379,32 @@ export class Control {
               setValue(td.value)
             }
           }
+          i++
+          continue
         }
-        if (!element.control) continue
-        // 获取设置值优先id、conceptId、areaId并于groupId组合设置
-        const payloadItem = payload.find(
-          p =>
-            (!p.groupId || p.groupId === element.control?.groupId) &&
-            ((p.id && element.controlId === p.id) ||
-              (p.conceptId && element.control!.conceptId === p.conceptId) ||
-              (p.areaId && element.areaId === p.areaId))
-        )
-        if (!payloadItem) continue
-        const { value, isSubmitHistory = true } = payloadItem
-        // 只要存在一次保存历史均记录
+        if (
+          !element.control ||
+          !element.controlId ||
+          processedControlIds.has(element.controlId)
+        ) {
+          i++
+          continue
+        }
+
+        const payloadItem = findPayloadItem(element)
+        if (!payloadItem) {
+          i++
+          continue
+        }
+        processedControlIds.add(element.controlId)
+
+        const value = payloadItem.value
+        const isSubmitHistory = payloadItem.isSubmitHistory ?? true
         isExistSet = true
         if (isSubmitHistory) {
           isExistSubmitHistory = true
         }
-        const { type } = element.control!
+
         // 当前控件结束索引
         let currentEndIndex = i
         while (currentEndIndex < elementList.length) {
@@ -1337,10 +1412,10 @@ export class Control {
           if (nextElement.controlId !== element.controlId) break
           currentEndIndex++
         }
-        // 模拟光标选区上下文
+        // 模拟光标选区上下文（涵盖当前控件全范围）
         const fakeRange = {
-          startIndex: i - 1,
-          endIndex: currentEndIndex - 2
+          startIndex: i,
+          endIndex: currentEndIndex - 1
         }
         const controlContext: IControlContext = {
           range: fakeRange,
@@ -1350,121 +1425,163 @@ export class Control {
           isIgnoreDisabledRule: true,
           isIgnoreDeletedRule: true
         }
-        if (type === ControlType.TEXT) {
-          const formatValue = Array.isArray(value)
-            ? value
-            : value
-              ? [{ value }]
-              : []
-          if (formatValue.length) {
-            formatElementList(formatValue, {
-              isHandleFirstElement: false,
-              editorOptions: this.options
-            })
-          }
-          const text = new TextControl(element, this)
-          this.activeControl = text
-          if (formatValue.length) {
-            text.setValue(formatValue, controlContext, controlRule)
-          } else {
-            text.clearValue(controlContext, controlRule)
-          }
-        } else if (type === ControlType.SELECT) {
-          if (Array.isArray(value)) continue
-          const select = new SelectControl(element, this)
-          this.activeControl = select
-          if (value) {
-            select.setSelect(value, controlContext, controlRule)
-          } else {
-            select.clearSelect(controlContext, controlRule)
-          }
-        } else if (type === ControlType.CHECKBOX) {
-          if (Array.isArray(value)) continue
-          const checkbox = new CheckboxControl(element, this)
-          this.activeControl = checkbox
-          const codes = value ? value.split(',') : []
-          checkbox.setSelect(codes, controlContext, controlRule)
-        } else if (type === ControlType.RADIO) {
-          if (Array.isArray(value)) continue
-          const radio = new RadioControl(element, this)
-          this.activeControl = radio
-          const codes = value ? [value] : []
-          radio.setSelect(codes, controlContext, controlRule)
-        } else if (type === ControlType.DATE) {
-          const date = new DateControl(element, this)
-          this.activeControl = date
-          if (isArray(value)) {
-            if (value.length) {
-              formatElementList(value, {
-                isHandleFirstElement: false,
-                editorOptions: this.options
-              })
-            }
-            date.setValue(value, controlContext, controlRule)
-          } else if (isString(value)) {
-            date.setSelect(value, controlContext, controlRule)
-          } else {
-            date.clearSelect(controlContext, controlRule)
-          }
-        } else if (type === ControlType.NUMBER) {
-          const formatValue = Array.isArray(value)
-            ? value
-            : value
-              ? [{ value }]
-              : []
-          if (formatValue.length) {
-            formatElementList(formatValue, {
-              isHandleFirstElement: false,
-              editorOptions: this.options
-            })
-          }
-          const text = new NumberControl(element, this)
-          this.activeControl = text
-          if (formatValue.length) {
-            text.setValue(formatValue, controlContext, controlRule)
-          } else {
-            text.clearValue(controlContext, controlRule)
-          }
-        }
+
+        this.dispatchSetControlValue(
+          element,
+          value,
+          controlContext,
+          controlRule
+        )
+
         // 控件值变更事件
         this.emitControlContentChange({
           context: controlContext
         })
         // 模拟控件激活后销毁
         this.activeControl = null
-        // 修改后控件结束索引
-        let newEndIndex = i
-        while (newEndIndex < elementList.length) {
-          const nextElement = elementList[newEndIndex]
-          if (nextElement.controlId !== element.controlId) break
-          newEndIndex++
-        }
-        i = newEndIndex
+        i = currentEndIndex
       }
     }
-    // 销毁旧控件
-    this.destroyControl({
-      isEmitEvent: false
-    })
-    // 页眉、内容区、页脚同时处理
     const data = [
-      this.draw.getHeaderElementList(),
-      this.draw.getOriginalMainElementList(),
-      this.draw.getFooterElementList()
+      {
+        zone: EditorZone.HEADER,
+        elementList: this.draw.getHeaderElementList()
+      },
+      {
+        zone: EditorZone.MAIN,
+        elementList: this.draw.getOriginalMainElementList()
+      },
+      {
+        zone: EditorZone.FOOTER,
+        elementList: this.draw.getFooterElementList()
+      }
     ]
-    for (const elementList of data) {
+    for (const { elementList } of data) {
       setValue(elementList)
     }
     if (isExistSet) {
-      // 不保存历史时需清空之前记录，避免还原
-      if (!isExistSubmitHistory) {
-        this.draw.getHistoryManager().recovery()
-      }
       this.draw.render({
-        isSubmitHistory: isExistSubmitHistory,
-        isSetCursor: false
+        isSetCursor: false,
+        isSubmitHistory: isExistSubmitHistory
       })
     }
+  }
+
+  private dispatchSetControlValue(
+    element: IElement,
+    value: any,
+    context: IControlContext,
+    rule: IControlRuleOption
+  ) {
+    const isList = !!element.control?.listType
+    const type = element.control?.type || ControlType.TEXT
+
+    switch (type) {
+      case ControlType.RADIO: {
+        const radio = isList
+          ? new ListRadioControl(element, this)
+          : new RadioControl(element, this)
+        this.activeControl = radio
+        if (value !== null && value !== undefined) {
+          radio.setSelect(value as any, context, rule)
+        }
+        break
+      }
+      case ControlType.CHECKBOX: {
+        const checkbox = isList
+          ? new ListCheckboxControl(element, this)
+          : new CheckboxControl(element, this)
+        this.activeControl = checkbox
+        if (value !== null && value !== undefined) {
+          checkbox.setSelect(value as any, context, rule)
+        }
+        break
+      }
+      case ControlType.IMAGE: {
+        const image = isList
+          ? new ListImageControl(element, this)
+          : new ImageControl(element, this)
+        this.activeControl = image
+        if (value !== null && value !== undefined) {
+          image.setValue(value as any, context, rule)
+        }
+        break
+      }
+      case ControlType.SELECT: {
+        const select = new SelectControl(element, this)
+        this.activeControl = select
+        if (typeof value === 'string') {
+          select.setSelect(value, context, rule)
+        } else {
+          select.clearSelect(context, rule)
+        }
+        break
+      }
+      case ControlType.DATE: {
+        const date = new DateControl(element, this)
+        this.activeControl = date
+        if (Array.isArray(value)) {
+          if (value.length) {
+            formatElementList(value as IElement[], {
+              isHandleFirstElement: false,
+              editorOptions: this.options
+            })
+          }
+          date.setValue(value as IElement[], context, rule)
+        } else if (typeof value === 'string') {
+          date.setSelect(value, context, rule)
+        } else {
+          date.clearSelect(context, rule)
+        }
+        break
+      }
+      case ControlType.NUMBER: {
+        const formatValue = this.formatControlTextValue(value)
+        const numberCtrl = new NumberControl(element, this)
+        this.activeControl = numberCtrl
+        if (formatValue.length) {
+          numberCtrl.setValue(formatValue, context, rule)
+        } else {
+          numberCtrl.clearValue(context, rule)
+        }
+        break
+      }
+      case ControlType.TEXT:
+      default: {
+        const text = isList
+          ? new ListTextControl(element, this)
+          : new TextControl(element, this)
+        this.activeControl = text
+        if (value !== null && value !== undefined && value !== '') {
+          if (isList) {
+            text.setValue(value as any, context, rule)
+          } else {
+            const formatValue = this.formatControlTextValue(value)
+            text.setValue(formatValue, context, rule)
+          }
+        } else {
+          text.clearValue(context, rule)
+        }
+        break
+      }
+    }
+  }
+
+  private formatControlTextValue(value: any): IElement[] {
+    const formatValue = Array.isArray(value)
+      ? value
+      : value !== null && value !== undefined && value !== ''
+        ? splitText(String(value)).map(ch => ({
+            value: ch === '\n' ? ZERO : ch
+          }))
+        : []
+    if (formatValue.length) {
+      formatElementList(formatValue, {
+        isHandleFirstElement: false,
+        editorOptions: this.options
+      })
+    }
+    return formatValue
   }
 
   public setExtensionListById(payload: ISetControlExtensionOption[]) {

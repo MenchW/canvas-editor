@@ -4,7 +4,8 @@ import { VerticalAlign } from '../../../dataset/enum/VerticalAlign'
 import {
   TableBorder,
   TdBorder,
-  TdSlash
+  TdSlash,
+  TdTextDirection
 } from '../../../dataset/enum/table/Table'
 import { IRegisterContextMenu } from '../../../interface/contextmenu/ContextMenu'
 import { Command } from '../../command/Command'
@@ -27,6 +28,9 @@ const {
     VERTICAL_ALIGN_TOP,
     VERTICAL_ALIGN_MIDDLE,
     VERTICAL_ALIGN_BOTTOM,
+    TEXT_DIRECTION,
+    TEXT_DIRECTION_HORIZONTAL,
+    TEXT_DIRECTION_VERTICAL,
     INSERT_ROW_COL,
     INSERT_TOP_ROW,
     INSERT_BOTTOM_ROW,
@@ -205,6 +209,38 @@ export const tableMenus: IRegisterContextMenu[] = [
         when: () => true,
         callback: (command: Command) => {
           command.executeTableTdVerticalAlign(VerticalAlign.BOTTOM)
+        }
+      }
+    ]
+  },
+  {
+    key: TEXT_DIRECTION,
+    i18nPath: 'contextmenu.table.textDirection',
+    icon: 'text-direction',
+    when: payload => {
+      return (
+        !payload.isReadonly &&
+        payload.isInTable &&
+        payload.options.mode !== EditorMode.FORM
+      )
+    },
+    childMenus: [
+      {
+        key: TEXT_DIRECTION_HORIZONTAL,
+        i18nPath: 'contextmenu.table.textDirectionHorizontal',
+        icon: 'text-direction-horizontal',
+        when: () => true,
+        callback: (command: Command) => {
+          command.executeTableTdTextDirection(TdTextDirection.HORIZONTAL)
+        }
+      },
+      {
+        key: TEXT_DIRECTION_VERTICAL,
+        i18nPath: 'contextmenu.table.textDirectionVertical',
+        icon: 'text-direction-vertical',
+        when: () => true,
+        callback: (command: Command) => {
+          command.executeTableTdTextDirection(TdTextDirection.VERTICAL)
         }
       }
     ]

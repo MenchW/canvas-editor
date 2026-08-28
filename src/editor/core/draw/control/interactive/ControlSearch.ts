@@ -35,6 +35,9 @@ export class ControlSearch {
 
   // 获取控件设置高亮信息
   public getControlHighlight(elementList: IElement[], index: number) {
+    const element = elementList[index]
+    // 防御:渲染异常时元素可能越界/缺失,直接跳过高亮
+    if (!element) return
     const {
       control: {
         activeBackgroundColor,
@@ -43,7 +46,6 @@ export class ControlSearch {
         noValueBackgroundColor
       }
     } = this.options
-    const element = elementList[index]
     const isPrintMode = this.draw.isPrintMode()
     const activeControlElement = this.control.getActiveControl()?.getElement()
     // 颜色配置：元素 > 控件激活 > 控件禁用 > 控件存在值 > 控件不存在值

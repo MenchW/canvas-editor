@@ -827,3 +827,69 @@ describe('zipElementList - 嵌套控件', () => {
     expect(outerValue[4].value).toBe('c')
   })
 })
+
+describe('formatElementList - 图片占位符', () => {
+  it('IMAGE 控件无值时生成文本占位符(格式 @字段名)', () => {
+    const list: any[] = [
+      {
+        type: ElementType.CONTROL,
+        value: '',
+        controlId: 'img-ctrl-1',
+        control: {
+          type: ControlType.IMAGE,
+          conceptId: 'avatar',
+          placeholder: '患者头像',
+          value: null,
+          width: 200,
+          height: 150
+        }
+      }
+    ]
+    formatElementList(list, { editorOptions: mockOptions })
+    const placeholderEl = list.find(
+      (el: any) =>
+        el.controlComponent === ControlComponent.PLACEHOLDER &&
+        el.control?.conceptId === 'avatar'
+    )
+    expect(placeholderEl).toBeDefined()
+    expect(placeholderEl.type).toBe(ElementType.CONTROL)
+    expect(placeholderEl.value).toBe('患')
+    expect(placeholderEl.controlId).toBe('img-ctrl-1')
+    expect(placeholderEl.control?.type).toBe(ControlType.IMAGE)
+    // 占位文本整体为 {@患者头像}(含控件前后缀)
+    const placeholderText = list
+      .filter(
+        (el: any) =>
+          el.controlId === 'img-ctrl-1' &&
+          el.controlComponent === ControlComponent.PLACEHOLDER
+      )
+      .map((el: any) => el.value)
+      .join('')
+    expect(placeholderText).toBe('患者头像')
+  })
+
+  it('TEXT 控件无值时仍生成文本占位(不回归)', () => {
+    const list: any[] = [
+      {
+        type: ElementType.CONTROL,
+        value: '',
+        controlId: 'txt-ctrl-1',
+        control: {
+          type: ControlType.TEXT,
+          conceptId: 'name',
+          placeholder: '患者姓名',
+          value: null
+        }
+      }
+    ]
+    formatElementList(list, { editorOptions: mockOptions })
+    const placeholderEl = list.find(
+      (el: any) =>
+        el.controlComponent === ControlComponent.PLACEHOLDER &&
+        el.control?.conceptId === 'name'
+    )
+    expect(placeholderEl).toBeDefined()
+    expect(placeholderEl.type).toBe(ElementType.CONTROL)
+    expect(placeholderEl.value).toMatch(/患/)
+  })
+})

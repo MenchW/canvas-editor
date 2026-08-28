@@ -19,6 +19,12 @@ export default defineConfig(({ mode }) => {
     include: ['tests/**/*.test.ts'],
     css: false,
     pool: 'threads',
+    poolOptions: {
+      threads: {
+        singleThread: true
+      }
+    },
+    testTimeout: 20000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
@@ -30,6 +36,23 @@ export default defineConfig(({ mode }) => {
         'src/editor/core/draw/particle/latex/utils/symbols.ts',
         'src/editor/core/draw/particle/latex/utils/hershey.ts'
       ]
+    }
+  }
+  if (mode === 'sdk') {
+    return {
+      resolve,
+      test,
+      build: {
+        outDir: 'dist/sdk',
+        emptyOutDir: false,
+        lib: {
+          name: 'CanvasEditorHost',
+          fileName: 'report-design-sdk',
+          entry: path.resolve(__dirname, 'src/sdk/index.ts'),
+          formats: ['es', 'umd']
+        },
+        sourcemap: true
+      }
     }
   }
   if (mode === 'lib') {
@@ -53,6 +76,7 @@ export default defineConfig(({ mode }) => {
         }
       ],
       build: {
+        emptyOutDir: false,
         lib: {
           name,
           fileName: name,
@@ -66,9 +90,23 @@ export default defineConfig(({ mode }) => {
     resolve,
     test,
     base: `/${name}/`,
+    build: {
+      emptyOutDir: false
+    },
     server: {
       host: '0.0.0.0',
-      port: 3000
+      port: 3000,
+      proxy: {
+        '/system': {
+          target: 'http://10.0.43.207:30300',
+          changeOrigin: true
+        },
+        '/prod-api': {
+          target: 'http://10.0.43.207:30300',
+          changeOrigin: true,
+          rewrite: path => path.replace(/^\/prod-api/, '')
+        }
+      }
     }
   }
 })

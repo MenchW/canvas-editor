@@ -14,7 +14,7 @@ import {
 } from '../../../../interface/Control'
 import { IEditorOption } from '../../../../interface/Editor'
 import { IElement } from '../../../../interface/Element'
-import { omitObject, pickObject } from '../../../../utils'
+import { omitObject, pickObject, splitText } from '../../../../utils'
 import {
   formatElementContext,
   isElementTraceDeleted
@@ -187,33 +187,33 @@ export class DateControl implements IControlInstance {
     // 清空选项
     const prefixIndex = this.clearSelect(context, {
       isAddPlaceholder: false,
-      isIgnoreDeletedRule: options.isIgnoreDeletedRule
+      isIgnoreDeletedRule: options.isIgnoreDeletedRule,
+      isIgnoreDisabledRule: options.isIgnoreDisabledRule
     })
     if (!~prefixIndex) return
     // 属性赋值元素-默认为前缀属性
-    const propertyElement = omitObject(
-      elementList[prefixIndex],
-      EDITOR_ELEMENT_STYLE_ATTR
-    )
+    const propertyElement = omitObject(elementList[prefixIndex], [
+      'id',
+      ...EDITOR_ELEMENT_STYLE_ATTR
+    ])
     const start = prefixIndex + 1
     const draw = this.control.getDraw()
-    for (let i = 0; i < date.length; i++) {
-      const newElement: IElement = {
-        ...styleElement,
-        ...propertyElement,
-        type: ElementType.TEXT,
-        value: date[i],
-        controlComponent: ControlComponent.VALUE
-      }
-      formatElementContext(elementList, [newElement], prefixIndex, {
-        editorOptions: this.options
-      })
-      draw.getTraceParticle().markElementListInserted([newElement])
-      draw.spliceElementList(elementList, start + i, 0, [newElement])
-    }
+    const chars = splitText(date)
+    const newElementList: IElement[] = chars.map(char => ({
+      ...styleElement,
+      ...propertyElement,
+      type: ElementType.TEXT,
+      value: char,
+      controlComponent: ControlComponent.VALUE
+    }))
+    formatElementContext(elementList, newElementList, prefixIndex, {
+      editorOptions: this.options
+    })
+    draw.getTraceParticle().markElementListInserted(newElementList)
+    draw.spliceElementList(elementList, start, 0, newElementList)
     // 重新渲染控件
     if (!context.range) {
-      const newIndex = start + date.length - 1
+      const newIndex = start + newElementList.length - 1
       this.control.repaintControl({
         curIndex: newIndex
       })

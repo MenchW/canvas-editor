@@ -1,7 +1,11 @@
 import { ElementType, IElement, TableBorder, VerticalAlign } from '../../../..'
 import { ZERO } from '../../../../dataset/constant/Common'
 import { TABLE_CONTEXT_ATTR } from '../../../../dataset/constant/Element'
-import { TdBorder, TdSlash } from '../../../../dataset/enum/table/Table'
+import {
+  TdBorder,
+  TdSlash,
+  TdTextDirection
+} from '../../../../dataset/enum/table/Table'
 import { DeepRequired } from '../../../../interface/Common'
 import { IEditorOption } from '../../../../interface/Editor'
 import { IColgroup } from '../../../../interface/table/Colgroup'
@@ -73,6 +77,7 @@ export class TableOperate {
         tdList.push({
           colspan: 1,
           rowspan: 1,
+          verticalAlign: VerticalAlign.MIDDLE,
           value: []
         })
       }
@@ -826,6 +831,30 @@ export class TableOperate {
         }
         // 重设垂直对齐方式
         td.verticalAlign = payload
+      }
+    }
+    const { endIndex } = this.range.getRange()
+    this.draw.render({
+      curIndex: endIndex
+    })
+  }
+
+  public tableTdTextDirection(payload: TdTextDirection) {
+    const rowCol = this.tableParticle.getRangeRowCol()
+    if (!rowCol) return
+    for (let r = 0; r < rowCol.length; r++) {
+      const row = rowCol[r]
+      for (let c = 0; c < row.length; c++) {
+        const td = row[c]
+        if (
+          !td ||
+          td.textDirection === payload ||
+          (!td.textDirection && payload === TdTextDirection.HORIZONTAL)
+        ) {
+          continue
+        }
+        // 重设文字方向
+        td.textDirection = payload
       }
     }
     const { endIndex } = this.range.getRange()

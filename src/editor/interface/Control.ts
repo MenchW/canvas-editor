@@ -52,6 +52,11 @@ export interface IControlNumber {
   }
 }
 
+export interface IControlImage {
+  width?: number
+  height?: number
+}
+
 export interface IControlHighlightRule {
   keyword: string
   alpha?: number
@@ -91,14 +96,21 @@ export interface IControlBasic {
   cascade?: IControlCascadeRule[]
   validation?: IControlValidation
   compute?: string // 计算表达式：结果自动回写本控件值（如 BMI）
+  defaultValue?: any // 控件默认值（当回显为空或异常时作为 Fallback 回显）
+  listType?: string
+  layout?: 'horizontal' | 'vertical' | 'grid' | string
+  gridCols?: number
+  isVertical?: boolean
 }
 
 export interface IControlStyle {
   font?: string
   size?: number
   bold?: boolean
+  color?: string
   highlight?: string
   italic?: boolean
+  underline?: boolean
   strikeout?: boolean
 }
 
@@ -109,7 +121,8 @@ export type IControl = IControlBasic &
   Partial<IControlCheckbox> &
   Partial<IControlRadio> &
   Partial<IControlDate> &
-  Partial<IControlNumber>
+  Partial<IControlNumber> &
+  Partial<IControlImage>
 
 export interface IControlOption {
   placeholderColor?: string
@@ -180,7 +193,7 @@ export interface ISetControlValueOption {
   groupId?: string
   conceptId?: string
   areaId?: string
-  value: string | IElement[] | null
+  value: string | IElement[] | any[] | any
   isSubmitHistory?: boolean
 }
 

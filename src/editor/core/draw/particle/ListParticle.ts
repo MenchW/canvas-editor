@@ -303,12 +303,17 @@ export class ListParticle {
     elementList: IElement[]
   ): Map<string, number> {
     const listStyleMap = new Map<string, number>()
+    if (!Array.isArray(elementList) || !elementList.length) return listStyleMap
     let start = 0
-    let curListId = elementList[start].listId
+    let curListId = elementList[start]?.listId
     let curElementList: IElement[] = []
     const elementLength = elementList.length
     while (start < elementLength) {
       const curElement = elementList[start]
+      if (!curElement) {
+        start++
+        continue
+      }
       if (curListId && curListId === curElement.listId) {
         curElementList.push(curElement)
       } else {
@@ -324,9 +329,9 @@ export class ListParticle {
       }
       start++
     }
-    if (curElementList.length) {
+    if (curElementList.length && curListId) {
       const width = this.getListStyleWidth(ctx, curElementList)
-      listStyleMap.set(curListId!, width)
+      listStyleMap.set(curListId, width)
     }
     return listStyleMap
   }

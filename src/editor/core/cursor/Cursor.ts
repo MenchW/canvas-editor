@@ -1,6 +1,7 @@
 import { CURSOR_AGENT_OFFSET_HEIGHT } from '../../dataset/constant/Cursor'
 import { EDITOR_PREFIX } from '../../dataset/constant/Editor'
 import { MoveDirection } from '../../dataset/enum/Observer'
+import { TdTextDirection } from '../../dataset/enum/table/Table'
 import { DeepRequired } from '../../interface/Common'
 import { ICursorOption } from '../../interface/Cursor'
 import { IEditorOption } from '../../interface/Editor'
@@ -143,7 +144,6 @@ export class Cursor {
     const defaultOffsetHeight = CURSOR_AGENT_OFFSET_HEIGHT * scale
     // 增加1/4字体大小（最小为defaultOffsetHeight即默认偏移高度）
     const increaseHeight = Math.min(metrics.height / 4, defaultOffsetHeight)
-    const cursorHeight = metrics.height + increaseHeight * 2
     const agentCursorDom = this.cursorAgent.getAgentCursorDom()
     if (isFocus) {
       setTimeout(() => {
@@ -153,12 +153,40 @@ export class Cursor {
     // fillText位置 + 文字基线到底部距离 - 模拟光标偏移量
     const descent =
       metrics.boundingBoxDescent < 0 ? 0 : metrics.boundingBoxDescent
-    const cursorTop =
+
+    // 获取当前上下文与单元格文字方向
+    const positionContext = this.position.getPositionContext()
+    const td = positionContext.isTable
+      ? this.position.getTableTdByContext(
+          this.draw.getOriginalElementList(),
+          positionContext
+        )
+      : null
+    const isVertical = td?.textDirection === TdTextDirection.VERTICAL
+
+    let cursorWidth = width * scale
+    let cursorHeight = metrics.height + increaseHeight * 2
+    let cursorLeft = hitLineStartIndex ? leftTop[0] : rightTop[0]
+    let cursorTop =
       leftTop[1] + ascent + descent - (cursorHeight - increaseHeight) + preY
-    const cursorLeft = hitLineStartIndex ? leftTop[0] : rightTop[0]
+
+    if (isVertical) {
+      // 竖排（直排）模式下：光标呈现为横向水平光标（与 Word 竖排一致）
+      cursorWidth = Math.max(metrics.width, metrics.height)
+      cursorHeight = width * scale
+      cursorLeft = leftTop[0]
+      // 行首光标在字符上方，字后光标在字符下方
+      cursorTop =
+        (hitLineStartIndex
+          ? leftTop[1]
+          : (cursorPosition.coordinate.leftBottom?.[1] ?? (leftTop[1] + metrics.height))) + preY
+    }
+
     agentCursorDom.style.left = `${cursorLeft}px`
     agentCursorDom.style.top = `${
-      cursorTop + cursorHeight - defaultOffsetHeight
+      isVertical
+        ? cursorTop
+        : cursorTop + cursorHeight - defaultOffsetHeight
     }px`
     // 模拟光标显示
     if (!isShow) {
@@ -169,7 +197,7 @@ export class Cursor {
     const oldTop = this.cursorDom.style.top
     // 设置光标位置
     const isReadonly = this.draw.isReadonly()
-    this.cursorDom.style.width = `${width * scale}px`
+    this.cursorDom.style.width = `${cursorWidth}px`
     this.cursorDom.style.backgroundColor = color
     this.cursorDom.style.left = `${cursorLeft}px`
     this.cursorDom.style.top = `${cursorTop}px`

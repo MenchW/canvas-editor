@@ -678,7 +678,10 @@ export class TableParticle {
         // 计算格宽高
         let width = 0
         for (let col = 0; col < td.colspan; col++) {
-          width += colgroup[col + colIndex].width
+          const colGroupItem = colgroup[col + colIndex]
+          // 防御:colgroup 数据异常(合并单元格/脏数据)时跳过缺失列,避免渲染崩溃
+          if (!colGroupItem) break
+          width += colGroupItem.width
         }
         let height = 0
         for (let row = 0; row < td.rowspan; row++) {

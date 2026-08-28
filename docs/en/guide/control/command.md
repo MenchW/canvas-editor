@@ -29,6 +29,16 @@ const controlList = await instance.command.getControlList()
 
 ## Execute
 
+### executeConvertControlToText
+
+Feature: Unwrap all controls in document into plain text elements (discarding prefix, postfix, value text styling and placeholder)
+
+Usage:
+
+```javascript
+instance.command.executeConvertControlToText()
+```
+
 ### executeRemoveControl
 
 Feature: Delete the control

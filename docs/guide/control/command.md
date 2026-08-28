@@ -29,6 +29,16 @@ const controlList = await instance.command.getControlList()
 
 ## 执行动作
 
+### executeConvertControlToText
+
+功能：将文档中所有控件转化为普通纯文本（脱壳，丢弃前缀、后缀、预设置文本及占位符）
+
+用法：
+
+```javascript
+instance.command.executeConvertControlToText()
+```
+
 ### executeRemoveControl
 
 功能：删除控件

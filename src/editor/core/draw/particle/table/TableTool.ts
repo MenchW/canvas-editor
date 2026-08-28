@@ -17,7 +17,7 @@ interface IAnchorMouseDown {
 
 export class TableTool {
   // 单元格最小宽度
-  private readonly MIN_TD_WIDTH = 20
+  private readonly MIN_TD_WIDTH = 28
   // 行列工具相对表格偏移值
   private readonly ROW_COL_OFFSET = 18
   // 快速添加行列工具宽度

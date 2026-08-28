@@ -23,7 +23,12 @@ export const EDITOR_ELEMENT_PARAGRAPH_STYLE_ATTR: Array<keyof IElement> = [
   'rowFlex',
   'rowMargin',
   'level',
-  'title'
+  'title',
+  'textIndent',
+  'lineHeight',
+  'lineHeightRule',
+  'spaceBefore',
+  'spaceAfter'
 ]
 
 export const EDITOR_ELEMENT_COPY_ATTR: Array<keyof IElement> = [
@@ -106,6 +111,7 @@ export const TABLE_TD_ZIP_ATTR: Array<keyof ITd> = [
   'extension',
   'externalId',
   'verticalAlign',
+  'textDirection',
   'backgroundColor',
   'borderTypes',
   'slashTypes',
@@ -142,8 +148,10 @@ export const CONTROL_STYLE_ATTR: Array<keyof IControlStyle> = [
   'font',
   'size',
   'bold',
+  'color',
   'highlight',
   'italic',
+  'underline',
   'strikeout'
 ]
 

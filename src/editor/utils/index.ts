@@ -54,20 +54,55 @@ export function deepCloneOmitKeys<T, K>(obj: T, omitKeys: (keyof K)[]): T {
   return newObj
 }
 
-export function deepClone<T>(obj: T): T {
-  if (typeof structuredClone === 'function') {
-    return structuredClone(obj)
-  }
+export function deepClone<T>(obj: T, hash = new WeakMap()): T {
   if (!obj || typeof obj !== 'object') {
     return obj
   }
-  let newObj = {} as T
-  if (Array.isArray(obj)) {
-    newObj = obj.map(item => deepClone(item)) as T
-  } else {
-    ;(Object.keys(obj) as (keyof T)[]).forEach(key => {
-      newObj[key] = deepClone(obj[key])
+  if (
+    (typeof Element !== 'undefined' && obj instanceof Element) ||
+    (typeof Node !== 'undefined' && obj instanceof Node) ||
+    (typeof Window !== 'undefined' && obj instanceof Window)
+  ) {
+    return obj
+  }
+  if (obj instanceof Date) {
+    return new Date(obj.getTime()) as any
+  }
+  if (obj instanceof RegExp) {
+    return new RegExp(obj.source, obj.flags) as any
+  }
+  if (obj instanceof Map) {
+    const result = new Map()
+    hash.set(obj, result)
+    obj.forEach((val, key) => {
+      result.set(key, deepClone(val, hash))
     })
+    return result as any
+  }
+  if (obj instanceof Set) {
+    const result = new Set()
+    hash.set(obj, result)
+    obj.forEach(val => {
+      result.add(deepClone(val, hash))
+    })
+    return result as any
+  }
+  if (hash.has(obj as object)) {
+    return hash.get(obj as object)
+  }
+  let newObj: any
+  if (Array.isArray(obj)) {
+    newObj = []
+    hash.set(obj as object, newObj)
+    for (let i = 0; i < obj.length; i++) {
+      newObj[i] = deepClone(obj[i], hash)
+    }
+  } else {
+    newObj = {}
+    hash.set(obj as object, newObj)
+    for (const key of Object.keys(obj)) {
+      newObj[key] = deepClone((obj as any)[key], hash)
+    }
   }
   return newObj
 }
@@ -452,4 +487,61 @@ export function scrollIntoView(container: HTMLElement, selected: HTMLElement) {
   } else if (bottom > viewRectBottom) {
     container.scrollTop = bottom - container.clientHeight
   }
+}
+
+/**
+ * 按路径取值，支持：
+ * - 点号链式：user.age
+ * - 数组索引：records[0].name
+ * - 数组通配：records[*].name（返回所有元素该路径的取值数组，过滤 undefined）
+ * - 多层嵌套：a.b[1].c[*].d
+ * - 特殊值 '$self'：返回 data 本身（循环行上下文用）
+ */
+export function getValueByPath(data: any, path: string): any {
+  if (!data || typeof data !== 'object') return undefined
+  if (path === '$self') return data
+  const parts = path.split('.').filter(Boolean)
+
+  const resolve = (acc: any, rest: string[]): any => {
+    if (rest.length === 0) return acc
+    if (acc === undefined || acc === null) return undefined
+    const [head, ...tail] = rest
+    const match = /^([^[]*)(?:\[(\*|\d+)\])?$/.exec(head)
+    const key = match ? match[1] : head
+    const isIndex = !!match && match[2] !== undefined
+    const isWildcard = isIndex && match[2] === '*'
+    const index = isIndex && !isWildcard ? parseInt(match![2] as string) : undefined
+
+    let next: any
+    if (Array.isArray(acc)) {
+      if (isIndex) {
+        // 数组上按索引/通配取子项继续解析（通配结果扁平化）
+        if (isWildcard) {
+          return acc
+            .flatMap(item => resolve(item, tail))
+            .filter((v: any) => v !== undefined)
+        }
+        next = acc[index as number]
+      } else if (key) {
+        next = (acc as any)[key]
+      } else {
+        next = acc
+      }
+    } else if (isIndex) {
+      const prop = (acc as any)[key]
+      if (prop === undefined || prop === null) return undefined
+      if (isWildcard) {
+        if (!Array.isArray(prop)) return undefined
+        return prop
+          .flatMap(item => resolve(item, tail))
+          .filter((v: any) => v !== undefined)
+      }
+      next = prop[index as number]
+    } else {
+      next = (acc as any)[key]
+    }
+    return resolve(next, tail)
+  }
+
+  return resolve(data, parts)
 }

@@ -296,10 +296,12 @@ const {
 ```javascript
 const {
   pageNo: number
+  index?: number
+  tdValueIndex?: number
   element: IElement | null
   rangeRect: RangeRect | null
   tableInfo: ITableInfoByEvent | null
-}[] = await instance.command.getPositionContextByEvent(evt: MouseEvent, options?: IPositionContextByEventOption)
+} = instance.command.getPositionContextByEvent(evt: MouseEvent, options?: IPositionContextByEventOption)
 ```
 
 示例：
@@ -338,3 +340,29 @@ const {
   endPageNo: number
 } = instance.command.getAreaValue(options: IGetAreaValueOption)
 ```
+
+## getControlValue
+
+功能：获取指定或全量控件的当前存储值与节点信息
+
+用法：
+
+```javascript
+const {
+  value: string | null
+  innerText: string | null
+  zone: EditorZone
+  elementList?: IElement[]
+}[] = instance.command.getControlValue(payload: IGetControlValueOption)
+```
+
+## getControlList
+
+功能：获取文档内所有控件的定义列表
+
+用法：
+
+```javascript
+const controlList = instance.command.getControlList()
+```
+

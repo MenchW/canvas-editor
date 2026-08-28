@@ -98,5 +98,12 @@ export const richtextKeys: IRegisterShortcut[] = [
     callback: (command: Command) => {
       command.executeRowFlex(RowFlex.JUSTIFY)
     }
+  },
+  {
+    key: KeyMap.Enter,
+    mod: true,
+    callback: (command: Command) => {
+      command.executePageBreak()
+    }
   }
 ]

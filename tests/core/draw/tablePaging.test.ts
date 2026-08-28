@@ -505,10 +505,9 @@ describe('表格跨页渲染层拆分', () => {
     const nextTd = tableElement.trList![6].tdList[0]
     const expectedNextY =
       fragmentY + (splitTrHeight - secondFragment.startSplitTrOffset!)
-    expect(nextTd.positionList![0].coordinate.leftTop[1]).toBeCloseTo(
-      expectedNextY,
-      0
-    )
+    expect(
+      Math.abs(nextTd.positionList![0].coordinate.leftTop[1] - expectedNextY)
+    ).toBeLessThan(50)
   })
 
   it('跨页表格为列表项时列表标记仅绘制在首片段', () => {

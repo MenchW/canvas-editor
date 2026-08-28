@@ -551,10 +551,11 @@ export class Position {
               startRowIndex = visible.startRowIndex
             }
             // 续排片段追加位置而非清空（同一单元格跨页累积）
-            if (!isContinuation) {
+            // 防御:跨页片段 td 可能未初始化 positionList
+            if (!Array.isArray(td.positionList) || !isContinuation) {
               td.positionList = []
             }
-            const tdPositionList = td.positionList!
+            const tdPositionList = td.positionList
             // 片段内单元格内容纵坐标偏移（窗口顶部在片段内的位置）
             const drawnOffsetY = tableFragment
               ? this.draw
@@ -596,17 +597,20 @@ export class Position {
               for (let d = 0; d < tr.tdList.length; d++) {
                 const td = tr.tdList[d]
                 const positionList: IElementPosition[] = []
+                const startX =
+                  (td.x! + tdPadding[3]) * scale +
+                  tablePreX +
+                  (element.translateX || 0) * scale
+                const startY =
+                  (repeatAccHeight + tdPadding[0]) * scale + tablePreY
                 this.computePageRowPosition({
                   positionList,
                   rowList: td.rowList!,
                   pageNo,
                   startRowIndex: 0,
                   startIndex: 0,
-                  startX:
-                    (td.x! + tdPadding[3]) * scale +
-                    tablePreX +
-                    (element.translateX || 0) * scale,
-                  startY: (repeatAccHeight + tdPadding[0]) * scale + tablePreY,
+                  startX,
+                  startY,
                   innerWidth: (td.width! - tdPaddingWidth) * scale,
                   isTable: true,
                   index: index - 1,
@@ -637,9 +641,10 @@ export class Position {
     td: ITd,
     positionList: IElementPosition[]
   ) {
+    const verticalAlign = td.verticalAlign || VerticalAlign.MIDDLE
     if (
-      td.verticalAlign !== VerticalAlign.MIDDLE &&
-      td.verticalAlign !== VerticalAlign.BOTTOM
+      verticalAlign !== VerticalAlign.MIDDLE &&
+      verticalAlign !== VerticalAlign.BOTTOM
     ) {
       return
     }
@@ -649,9 +654,10 @@ export class Position {
     } = this.options
     const tdPaddingHeight = tdPadding[0] + tdPadding[2]
     const rowsHeight = td.rowList!.reduce((pre, cur) => pre + cur.height, 0)
-    const blankHeight = (td.height! - tdPaddingHeight) * scale - rowsHeight
+    const tdHeight = td.realHeight || td.height!
+    const blankHeight = (tdHeight - tdPaddingHeight) * scale - rowsHeight
     const offsetHeight =
-      td.verticalAlign === VerticalAlign.MIDDLE ? blankHeight / 2 : blankHeight
+      verticalAlign === VerticalAlign.MIDDLE ? blankHeight / 2 : blankHeight
     if (Math.floor(offsetHeight) > 0) {
       positionList.forEach(tdPosition => {
         const {

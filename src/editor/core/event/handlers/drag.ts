@@ -8,6 +8,9 @@ function dragover(evt: DragEvent | MouseEvent, host: CanvasEvent) {
   const isReadonly = draw.isReadonly()
   if (isReadonly) return
   evt.preventDefault()
+  if ('dataTransfer' in evt && evt.dataTransfer) {
+    evt.dataTransfer.dropEffect = 'copy'
+  }
   // 非编辑器区禁止拖放
   const pageContainer = draw.getPageContainer()
   const editorRegion = findParent(
@@ -42,8 +45,8 @@ function dragover(evt: DragEvent | MouseEvent, host: CanvasEvent) {
     cursor: { dragColor, dragWidth, dragFloatImageDisabled }
   } = draw.getOptions()
   // 拖拽图片是否定位光标
-  if (dragFloatImageDisabled) {
-    const dragElement = host.cacheElementList?.[host.cacheRange!.startIndex]
+  if (dragFloatImageDisabled && host.cacheRange) {
+    const dragElement = host.cacheElementList?.[host.cacheRange.startIndex]
     if (
       dragElement?.type === ElementType.IMAGE &&
       (dragElement.imgDisplay === ImageDisplay.FLOAT_TOP ||

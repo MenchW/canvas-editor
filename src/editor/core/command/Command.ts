@@ -3,6 +3,7 @@ import { CommandAdapt } from './CommandAdapt'
 // 通过CommandAdapt中转避免直接暴露编辑器上下文
 export class Command {
   public executeMode: CommandAdapt['mode']
+  public executeConvertControlToText: CommandAdapt['convertControlToText']
   public executeCut: CommandAdapt['cut']
   public executeCopy: CommandAdapt['copy']
   public executePaste: CommandAdapt['paste']
@@ -16,6 +17,8 @@ export class Command {
   public executeHideCursor: CommandAdapt['hideCursor']
   public executeUndo: CommandAdapt['undo']
   public executeRedo: CommandAdapt['redo']
+  public getOriginalElementList: CommandAdapt['getOriginalElementList']
+  public executeRecoveryHistory: CommandAdapt['recoveryHistory']
   public executePainter: CommandAdapt['painter']
   public executeApplyPainterStyle: CommandAdapt['applyPainterStyle']
   public executeFormat: CommandAdapt['format']
@@ -48,6 +51,7 @@ export class Command {
   public executeSplitVerticalTableCell: CommandAdapt['splitVerticalTableCell']
   public executeSplitHorizontalTableCell: CommandAdapt['splitHorizontalTableCell']
   public executeTableTdVerticalAlign: CommandAdapt['tableTdVerticalAlign']
+  public executeTableTdTextDirection: CommandAdapt['tableTdTextDirection']
   public executeTableBorderType: CommandAdapt['tableBorderType']
   public executeTableBorderColor: CommandAdapt['tableBorderColor']
   public executeTableTdBorderType: CommandAdapt['tableTdBorderType']
@@ -70,6 +74,7 @@ export class Command {
   public executeSearchNavigateNext: CommandAdapt['searchNavigateNext']
   public executeReplace: CommandAdapt['replace']
   public executePrint: CommandAdapt['print']
+  public executeExportPdf: CommandAdapt['exportPdf']
   public executeReplaceImageElement: CommandAdapt['replaceImageElement']
   public executeSaveAsImageElement: CommandAdapt['saveAsImageElement']
   public executeSetImageCrop: CommandAdapt['setImageCrop']
@@ -202,9 +207,14 @@ export class Command {
       'executeHideCursor',
       adapt.hideCursor.bind(adapt)
     )
-    // 撤销、重做、格式刷、清除格式
+    // 撤销、重做、清空历史记录、格式刷、清除格式
     this.executeUndo = this.wrap('executeUndo', adapt.undo.bind(adapt))
     this.executeRedo = this.wrap('executeRedo', adapt.redo.bind(adapt))
+    this.executeRecoveryHistory = this.wrap(
+      'executeRecoveryHistory',
+      adapt.recoveryHistory.bind(adapt)
+    )
+    this.getOriginalElementList = adapt.getOriginalElementList.bind(adapt)
     this.executePainter = this.wrap('executePainter', adapt.painter.bind(adapt))
     this.executeApplyPainterStyle = this.wrap(
       'executeApplyPainterStyle',
@@ -303,6 +313,10 @@ export class Command {
       'executeTableTdVerticalAlign',
       adapt.tableTdVerticalAlign.bind(adapt)
     )
+    this.executeTableTdTextDirection = this.wrap(
+      'executeTableTdTextDirection',
+      adapt.tableTdTextDirection.bind(adapt)
+    )
     this.executeTableBorderType = this.wrap(
       'executeTableBorderType',
       adapt.tableBorderType.bind(adapt)
@@ -379,6 +393,10 @@ export class Command {
     )
     this.executeReplace = this.wrap('executeReplace', adapt.replace.bind(adapt))
     this.executePrint = this.wrap('executePrint', adapt.print.bind(adapt))
+    this.executeExportPdf = this.wrap(
+      'executeExportPdf',
+      adapt.exportPdf.bind(adapt)
+    )
     this.executeReplaceImageElement = this.wrap(
       'executeReplaceImageElement',
       adapt.replaceImageElement.bind(adapt)
@@ -622,6 +640,10 @@ export class Command {
     this.executeJumpControl = this.wrap(
       'executeJumpControl',
       adapt.jumpControl.bind(adapt)
+    )
+    this.executeConvertControlToText = this.wrap(
+      'executeConvertControlToText',
+      adapt.convertControlToText.bind(adapt)
     )
   }
 }

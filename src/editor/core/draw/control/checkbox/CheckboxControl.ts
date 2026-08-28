@@ -1,4 +1,8 @@
-import { ControlComponent } from '../../../../dataset/enum/Control'
+import { ZERO } from '../../../../dataset/constant/Common'
+import { CONTROL_STYLE_ATTR } from '../../../../dataset/constant/Element'
+import { ControlComponent, ControlType } from '../../../../dataset/enum/Control'
+import { EditorMode } from '../../../../dataset/enum/Editor'
+import { ElementType } from '../../../../dataset/enum/Element'
 import { KeyMap } from '../../../../dataset/enum/KeyMap'
 import {
   IControlContext,
@@ -6,6 +10,7 @@ import {
   IControlRuleOption
 } from '../../../../interface/Control'
 import { IElement } from '../../../../interface/Element'
+import { pickObject, splitText } from '../../../../utils'
 import { Control } from '../Control'
 
 export class CheckboxControl implements IControlInstance {
@@ -69,12 +74,53 @@ export class CheckboxControl implements IControlInstance {
     return data
   }
 
-  public setValue(): number {
-    return -1
+  public setValue(
+    data: IElement[],
+    context: IControlContext = {},
+    options: IControlRuleOption = {}
+  ): number {
+    const draw = this.control.getDraw()
+    const isPreviewEdit = draw.getMode() === EditorMode.PREVIEW_EDIT
+    if (!isPreviewEdit) {
+      return -1
+    }
+    const elementList = context.elementList || this.control.getElementList()
+    const range = context.range || this.control.getRange()
+    const { startIndex, endIndex } = range
+    const startElement = elementList[startIndex]
+    if (!startElement) return -1
+
+    // 移除选区元素
+    if (startIndex !== endIndex) {
+      draw.deleteElementList(
+        elementList,
+        startIndex + 1,
+        endIndex - startIndex,
+        {
+          isIgnoreDeletedRule: options.isIgnoreDeletedRule
+        }
+      )
+    }
+
+    const anchorElement = pickObject(startElement, [
+      'control',
+      'controlId',
+      ...CONTROL_STYLE_ATTR
+    ])
+
+    // 插入新元素（例如换行符 ZERO 或编辑文本）
+    const insertElements: IElement[] = data.map(item => ({
+      ...anchorElement,
+      ...item,
+      controlComponent: ControlComponent.VALUE
+    }))
+
+    draw.spliceElementList(elementList, startIndex + 1, 0, insertElements)
+    return startIndex + insertElements.length
   }
 
   public setSelect(
-    codes: string[],
+    payload: string[] | string | any[],
     context: IControlContext = {},
     options: IControlRuleOption = {}
   ) {
@@ -89,45 +135,132 @@ export class CheckboxControl implements IControlInstance {
     const elementList = context.elementList || this.control.getElementList()
     const { startIndex } = context.range || this.control.getRange()
     const startElement = elementList[startIndex]
-    // 向左查找
-    let preIndex = startIndex
-    while (preIndex > 0) {
-      const preElement = elementList[preIndex]
-      if (
-        preElement.controlId !== startElement.controlId ||
-        preElement.controlComponent === ControlComponent.PREFIX ||
-        preElement.controlComponent === ControlComponent.PRE_TEXT
-      ) {
-        break
+    const targetControlId = startElement?.controlId || this.element.controlId
+    const draw = this.control.getDraw()
+
+    // 解析下发数据：支持选项数组 [{label, code, checked}]、逗号分隔字符串或普通 codes 数组
+    let codes: string[] = []
+    if (Array.isArray(payload) && payload.length > 0 && typeof payload[0] === 'object' && payload[0] !== null) {
+      const valueSets: Array<{ value: string; code: string }> = []
+      payload.forEach((item: any, idx: number) => {
+        const label = String(item.label ?? item.text ?? item.name ?? item.value ?? `条款${idx + 1}`)
+        const code = String(item.value ?? item.code ?? item.id ?? `clause_${idx + 1}`)
+        const checked = item.checked === true || item.selected === true
+        valueSets.push({ value: label, code })
+        if (checked) codes.push(code)
+      })
+      if (control) {
+        control.valueSets = valueSets
       }
-      if (preElement.controlComponent === ControlComponent.CHECKBOX) {
-        const checkbox = preElement.checkbox!
-        checkbox.value = codes.includes(checkbox.code!)
-      }
-      preIndex--
+    } else if (Array.isArray(payload)) {
+      codes = payload.map(String)
+    } else if (typeof payload === 'string') {
+      codes = payload ? payload.split(',') : []
     }
-    // 向右查找
-    let nextIndex = startIndex + 1
-    while (nextIndex < elementList.length) {
-      const nextElement = elementList[nextIndex]
-      if (
-        nextElement.controlId !== startElement.controlId ||
-        nextElement.controlComponent === ControlComponent.POSTFIX ||
-        nextElement.controlComponent === ControlComponent.POST_TEXT
-      ) {
-        break
-      }
-      if (nextElement.controlComponent === ControlComponent.CHECKBOX) {
-        const checkbox = nextElement.checkbox!
-        checkbox.value = codes.includes(checkbox.code!)
-      }
-      nextIndex++
+
+    if (control) {
+      control.code = codes.length ? codes.join(',') : null
     }
-    control!.code = codes.join(',')
-    this.control.repaintControl({
-      curIndex: startIndex,
-      isSetCursor: false
-    })
+
+    // 检查是否存在 CHECKBOX 选项元素，并定位 PREFIX / POSTFIX 边界
+    let hasCheckboxEl = false
+    let prefixIndex = -1
+    let postfixIndex = -1
+    if (targetControlId) {
+      for (let i = 0; i < elementList.length; i++) {
+        const el = elementList[i]
+        if (el.controlId === targetControlId) {
+          if (el.controlComponent === ControlComponent.PREFIX) {
+            prefixIndex = i
+          }
+          if (el.controlComponent === ControlComponent.POSTFIX) {
+            postfixIndex = i
+          }
+          if (el.controlComponent === ControlComponent.CHECKBOX) {
+            hasCheckboxEl = true
+            if (el.checkbox) {
+              el.checkbox.value = codes.includes(el.checkbox.code!)
+            }
+          }
+        }
+      }
+    }
+
+    // 若处于 PLACEHOLDER 占位符形态，现在回显了数据，将占位符替换为展开的复选框选项列表
+    if (
+      !hasCheckboxEl &&
+      targetControlId &&
+      Array.isArray(control?.valueSets) &&
+      control.valueSets.length > 0
+    ) {
+      if (control) {
+        control.type = ControlType.CHECKBOX
+        control.code = codes.length ? codes.join(',') : null
+      }
+      const anchorNode = elementList[prefixIndex !== -1 ? prefixIndex : startIndex] || this.element
+      const anchorElement = pickObject(anchorNode, [
+        'control',
+        'controlId',
+        ...CONTROL_STYLE_ATTR
+      ])
+      if (anchorElement.control) {
+        anchorElement.control.type = ControlType.CHECKBOX
+        anchorElement.control.code = codes.length ? codes.join(',') : null
+        anchorElement.control.valueSets = control?.valueSets
+      }
+
+      const insertAt = prefixIndex !== -1 ? prefixIndex + 1 : startIndex + 1
+      const deleteCount = postfixIndex !== -1 ? postfixIndex - insertAt : 0
+      if (deleteCount > 0) {
+        draw.deleteElementList(elementList, insertAt, deleteCount, {
+          isIgnoreDeletedRule: options.isIgnoreDeletedRule
+        })
+      }
+      const newElements: IElement[] = []
+      const valueSets = control!.valueSets
+      const checkboxOption = draw.getOptions().checkbox
+      const layout = control?.layout || 'vertical'
+      const isVertical = layout === 'vertical'
+      const isGrid = layout === 'grid'
+      const gridCols = Number(control?.gridCols) || 2
+
+      for (let v = 0; v < valueSets.length; v++) {
+        const valueSet = valueSets[v]
+        newElements.push({
+          ...anchorElement,
+          value: '',
+          type: ElementType.CONTROL,
+          controlComponent: ControlComponent.CHECKBOX,
+          checkbox: {
+            code: valueSet.code,
+            value: codes.includes(valueSet.code)
+          }
+        })
+        const valueStrList = splitText(valueSet.value)
+        for (let e = 0; e < valueStrList.length; e++) {
+          const valChar = valueStrList[e]
+          const isLastLetter = e === valueStrList.length - 1
+          newElements.push({
+            ...anchorElement,
+            value: valChar === '\n' ? ZERO : valChar,
+            letterSpacing: isLastLetter ? checkboxOption.gap : 0,
+            controlComponent: ControlComponent.VALUE
+          })
+        }
+        const shouldWrap =
+          (isVertical && v < valueSets.length - 1) ||
+          (isGrid && (v + 1) % gridCols === 0 && v < valueSets.length - 1)
+        if (shouldWrap) {
+          newElements.push({
+            ...anchorElement,
+            value: ZERO,
+            controlComponent: ControlComponent.VALUE
+          })
+        }
+      }
+      draw.spliceElementList(elementList, insertAt, 0, newElements)
+    }
+
     this.control.emitControlContentChange({
       context
     })
@@ -135,6 +268,10 @@ export class CheckboxControl implements IControlInstance {
 
   public keydown(evt: KeyboardEvent): number | null {
     if (this.control.getIsDisabledControl()) {
+      return null
+    }
+    // 无痕编辑模式 (PREVIEW_EDIT) 下解包控件，允许光标自由在文字间逐字删除/按 Enter 换行，禁止整块删除控件
+    if (this.control.getDraw().getMode() === EditorMode.PREVIEW_EDIT) {
       return null
     }
     const range = this.control.getRange()

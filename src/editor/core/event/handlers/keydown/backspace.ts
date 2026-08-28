@@ -1,4 +1,6 @@
 import { ZERO } from '../../../../dataset/constant/Common'
+import { ControlComponent, ControlType } from '../../../../dataset/enum/Control'
+import { EditorMode } from '../../../../dataset/enum/Editor'
 import { CanvasEvent } from '../../CanvasEvent'
 
 // 删除光标前隐藏元素，跳过留痕删除元素（痕迹不可移除）
@@ -164,12 +166,54 @@ export function backspace(evt: KeyboardEvent, host: CanvasEvent) {
         nextIndex++
       }
     }
+    const isPreviewEdit = draw.getMode() === EditorMode.PREVIEW_EDIT
     if (!isCollapsed) {
-      draw.deleteElementList(elementList, startIndex + 1, endIndex - startIndex)
+      // 检查选中区域是否包含图片控件/占位符控件
+      const startElement = elementList[startIndex]
+      if (!isPreviewEdit && startElement?.controlId) {
+        curIndex = control.removeControl(startIndex)
+      } else {
+        draw.deleteElementList(elementList, startIndex + 1, endIndex - startIndex)
+        curIndex = startIndex
+      }
     } else {
-      draw.deleteElementList(elementList, index, 1)
+      const startElement = elementList[index]
+      if (
+        !isPreviewEdit &&
+        (startElement?.controlId ||
+          (elementList[index - 1]?.controlId &&
+            elementList[index - 1]?.control?.type === ControlType.IMAGE))
+      ) {
+        curIndex = control.removeControl(
+          startElement?.controlId ? index : index - 1
+        )
+      } else if (isPreviewEdit) {
+        // PREVIEW_EDIT 无痕编辑解包：若当前命中隐形辅助字符 (POSTFIX/PREFIX/PLACEHOLDER)
+        // 自动向前穿透删除隐形字符并连同其紧邻的真实可见字符一并删除，保证 1 次退格删除末尾文字
+        let deleteIndex = index
+        while (
+          deleteIndex > 0 &&
+          (elementList[deleteIndex]?.controlComponent ===
+            ControlComponent.POSTFIX ||
+            elementList[deleteIndex]?.controlComponent ===
+              ControlComponent.PREFIX ||
+            elementList[deleteIndex]?.controlComponent ===
+              ControlComponent.PLACEHOLDER)
+        ) {
+          draw.deleteElementList(elementList, deleteIndex, 1)
+          deleteIndex--
+        }
+        if (deleteIndex >= 0) {
+          draw.deleteElementList(elementList, deleteIndex, 1)
+          curIndex = Math.max(0, deleteIndex - 1)
+        } else {
+          curIndex = 0
+        }
+      } else {
+        draw.deleteElementList(elementList, index, 1)
+        curIndex = index - 1
+      }
     }
-    curIndex = isCollapsed ? index - 1 : startIndex
   }
   draw.getGlobalEvent().setCanvasEventAbility()
   if (curIndex === null) {

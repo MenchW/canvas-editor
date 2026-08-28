@@ -4,7 +4,8 @@ export enum ControlType {
   CHECKBOX = 'checkbox',
   RADIO = 'radio',
   DATE = 'date',
-  NUMBER = 'number'
+  NUMBER = 'number',
+  IMAGE = 'image'
 }
 
 export enum ControlComponent {

@@ -22,7 +22,8 @@ export enum EditorMode {
   PRINT = 'print', // 打印模式（文档不可编辑、隐藏辅助元素、选区、未书写控件及边框）
   DESIGN = 'design', // 设计模式（不可删除、只读等配置不控制）
   GRAFFITI = 'graffiti', // 涂鸦模式（屏蔽选区、允许长按移动绘制线条）
-  TRACE = 'trace' // 留痕模式（只读查看痕迹：删除元素红色中划线、新增元素蓝色下划线）
+  TRACE = 'trace', // 留痕模式（只读查看痕迹：删除元素红色中划线、新增元素蓝色下划线）
+  PREVIEW_EDIT = 'preview_edit' // 无痕编辑模式（自由文本编辑，隐藏/脱壳控件辅助元素与占位符）
 }
 
 export enum EditorZone {

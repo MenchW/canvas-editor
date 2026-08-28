@@ -1,0 +1,1787 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>动态文档报告设计器 Demo (单文件版本 v1.0)</title>
+  <!-- Element Plus CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- Element Plus JS -->
+  <script src="https://unpkg.com/element-plus"></script>
+  <!-- Element Plus Icons -->
+  <script src="https://unpkg.com/@element-plus/icons-vue"></script>
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- html2canvas & jsPDF for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    body {
+      background-color: #f3f4f6;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      user-select: none;
+    }
+    .designer-container {
+      display: flex;
+      height: calc(100vh - 56px);
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* 侧边栏面板基类 (支持 300ms 宽度平滑过渡) */
+    .sidebar-panel {
+      background: #ffffff;
+      border-right: 1px solid #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* 右侧属性面板基类 (支持 300ms 宽度平滑过渡) */
+    .property-panel {
+      background: #ffffff;
+      border-left: 1px solid #e5e7eb;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* CSS Grid 现代标准手风琴高平滑度折叠动画 */
+    .accordion-wrapper {
+      display: grid;
+      grid-template-rows: 1fr;
+      transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+      opacity: 1;
+    }
+    .accordion-wrapper.collapsed {
+      grid-template-rows: 0fr;
+      opacity: 0;
+    }
+    .accordion-content {
+      overflow: hidden;
+    }
+
+    /* 主画布区域 */
+    .canvas-workspace {
+      flex: 1;
+      overflow: auto;
+      background: #e5e7eb;
+      position: relative;
+      padding: 40px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    /* PDF/底板 页面卡片容器 (无 width/height 过渡以避免缩放抖动) */
+    .pdf-page-card {
+      position: relative;
+      background: #ffffff;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+      margin-bottom: 28px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .pdf-canvas-layer {
+      width: 100%;
+      height: 100%;
+      display: block;
+      pointer-events: none;
+    }
+    /* 参考 PDF.js 的 Annotation Layer 定位覆盖层 */
+    .pdf-annotation-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: auto;
+      overflow: hidden;
+    }
+    /* 控件设计元素 */
+    .designer-control-item {
+      position: absolute;
+      box-sizing: border-box;
+      cursor: move;
+      border: 1px dashed #93c5fd;
+      background-color: rgba(239, 246, 255, 0.65);
+      border-radius: 3px;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+      padding: 0;
+      overflow: hidden;
+    }
+    .designer-control-item:hover {
+      border-color: #3b82f6;
+      background-color: rgba(219, 234, 254, 0.8);
+    }
+    .designer-control-item.active {
+      border: 2px solid #2563eb;
+      background-color: rgba(219, 234, 254, 0.9);
+      z-index: 20;
+    }
+    .designer-control-item.locked {
+      cursor: not-allowed;
+      border: 1.5px dashed #f59e0b;
+      background-color: rgba(254, 243, 199, 0.6);
+    }
+    /* 预览模式下隐藏控件虚线边框与缩放手柄 */
+    .preview-mode .designer-control-item {
+      border: none !important;
+      background-color: transparent !important;
+      cursor: default !important;
+      padding: 0 !important;
+    }
+    /* 四角缩放手柄 */
+    .resize-handle {
+      position: absolute;
+      width: 9px;
+      height: 9px;
+      background: #2563eb;
+      border: 1.5px solid #ffffff;
+      border-radius: 50%;
+      z-index: 30;
+    }
+    .resize-handle.se { right: -5px; bottom: -5px; cursor: se-resize; }
+    .resize-handle.sw { left: -5px; bottom: -5px; cursor: sw-resize; }
+    .resize-handle.ne { right: -5px; top: -4px; cursor: ne-resize; }
+    .resize-handle.nw { left: -5px; top: -4px; cursor: nw-resize; }
+
+    /* 可拖拽控件项 */
+    .drag-item {
+      cursor: grab;
+      padding: 10px 14px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s ease;
+    }
+    .drag-item:hover {
+      background: #eff6ff;
+      border-color: #3b82f6;
+      color: #1d4ed8;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 5px rgba(59, 130, 246, 0.1);
+    }
+    .drag-item:active {
+      cursor: grabbing;
+    }
+
+    /* 滚动条美化 */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div id="app" @click="closeContextMenu">
+    <!-- 顶部工具栏 -->
+    <header class="h-14 bg-white border-b border-gray-200 px-6 flex items-center justify-between shadow-sm z-20">
+      <div class="flex items-center space-x-3">
+        <div class="bg-blue-600 text-white font-bold px-3.5 py-1 rounded text-sm tracking-wide shadow-sm">
+          动态文档报告设计器
+        </div>
+        <span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 font-mono font-bold rounded-md border border-blue-200">v1.0</span>
+      </div>
+
+      <!-- 中间：画布控制组件（标尺开合、缩放与切模式） -->
+      <div class="flex items-center space-x-5">
+        <!-- Photoshop 标尺与参考线切换按钮 -->
+        <button @click="showRulers = !showRulers" 
+                :class="showRulers ? 'bg-blue-50 text-blue-600 border-blue-300 font-medium shadow-sm' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'" 
+                class="border text-xs px-3 py-1.5 rounded-md transition flex items-center space-x-1.5"
+                title="开启/关闭 Photoshop 标尺与参考辅助线">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z"></path>
+          </svg>
+          <span>标尺参考线</span>
+        </button>
+
+        <!-- 画布缩放按钮组 -->
+        <div class="flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200">
+          <button @click="zoomOut" class="px-2.5 py-1 text-xs text-gray-600 hover:bg-white rounded font-medium transition" title="缩小 (或 Ctrl+滚轮)">-</button>
+          <span class="px-3 text-xs font-semibold text-gray-700 w-16 text-center">{{ Math.round(zoomScale * 100) }}%</span>
+          <button @click="zoomIn" class="px-2.5 py-1 text-xs text-gray-600 hover:bg-white rounded font-medium transition" title="放大 (或 Ctrl+滚轮)">+</button>
+          <button @click="resetZoom" class="px-2.5 py-1 text-xs text-gray-500 hover:bg-white rounded transition ml-1">重置</button>
+        </div>
+
+        <!-- 模式切换：设计 vs 预览 -->
+        <div class="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
+          <button @click="mode = 'design'" :class="mode === 'design' ? 'bg-white text-blue-600 shadow-sm font-medium' : 'text-gray-600 hover:text-gray-900'" class="px-4 py-1 text-xs rounded transition flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+            <span>设计模式</span>
+          </button>
+          <button @click="mode = 'preview'" :class="mode === 'preview' ? 'bg-white text-blue-600 shadow-sm font-medium' : 'text-gray-600 hover:text-gray-900'" class="px-4 py-1 text-xs rounded transition flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+            <span>预览模式 (填入Mock数据)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 右侧：上传底板 & 导出PDF -->
+      <div class="flex items-center space-x-3">
+        <!-- 上传底版按钮 -->
+        <label class="cursor-pointer bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs px-3.5 py-1.5 rounded-md font-medium shadow-sm transition flex items-center space-x-1.5">
+          <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+          <span>上传底版 (PDF/图片)</span>
+          <input type="file" class="hidden" accept=".pdf,.png,.jpg,.jpeg,.webp" @change="handleFileUpload" />
+        </label>
+
+        <!-- 导出 PDF 按钮 -->
+        <button @click="exportToPDF" :disabled="isExporting" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-4 py-1.5 rounded-md font-medium shadow-sm transition flex items-center space-x-1.5 disabled:opacity-50">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          <span>{{ isExporting ? '导出中...' : '导出 PDF' }}</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="designer-container">
+
+      <!-- 1. 左侧业务控件栏 (单 DOM 节点，width: 300px ↔ 36px 300ms 丝滑过渡) -->
+      <aside class="sidebar-panel flex-shrink-0 relative" :style="{ width: isLeftPanelCollapsed ? '36px' : '300px' }">
+        
+        <!-- A. 面板收起状态时的细长条视图 (动画淡入/淡出) -->
+        <div @click="isLeftPanelCollapsed = false"
+             class="absolute inset-0 bg-white flex flex-col items-center pt-3 cursor-pointer hover:bg-blue-50 transition-opacity duration-300 z-20 group"
+             :class="{ 'opacity-0 pointer-events-none': !isLeftPanelCollapsed }"
+             title="点击展开业务控件面板">
+          <div class="p-1 rounded bg-gray-100 group-hover:bg-blue-100 group-hover:text-blue-600 transition mb-4">
+            <svg class="w-4 h-4 text-gray-600 group-hover:text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+          </div>
+          <div class="flex-1 flex items-center justify-center pb-8">
+            <span class="text-xs font-bold text-gray-600 group-hover:text-blue-600 tracking-widest whitespace-nowrap" style="writing-mode: vertical-lr; text-orientation: mixed;">业务数据控件</span>
+          </div>
+        </div>
+
+        <!-- B. 面板展开状态时的完整内容视图 (300px 宽) -->
+        <div class="w-[300px] h-full overflow-y-auto p-4 flex flex-col transition-opacity duration-300"
+             :class="{ 'opacity-0 pointer-events-none': isLeftPanelCollapsed }">
+          <div class="flex items-center justify-between mb-4 pb-2 border-b border-gray-100 flex-shrink-0">
+            <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wider">业务数据控件</h2>
+            <div class="flex items-center space-x-1">
+              <span class="text-xs text-gray-400">拖拽入画布</span>
+              <button @click="isLeftPanelCollapsed = true" class="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition" title="收起面板">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="flex-1 overflow-y-auto">
+            <!-- 循环渲染大类 (支持点击大类标题进行 CSS Grid 高度动画展开/折叠) -->
+            <div v-for="category in controlCategories" :key="category.id" class="mb-4">
+              <div @click="category.collapsed = !category.collapsed" 
+                   class="flex items-center justify-between text-xs font-semibold text-gray-600 mb-2 px-1 cursor-pointer select-none hover:text-blue-600 transition">
+                <div class="flex items-center space-x-1.5">
+                  <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                  <span>{{ category.name }}</span>
+                  <span class="text-gray-400 font-normal">({{ category.items.length }})</span>
+                </div>
+                <svg class="w-3.5 h-3.5 text-gray-400 transition-transform duration-300" :class="{ 'transform -rotate-90': category.collapsed }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
+
+              <!-- 控件项折叠手风琴容器 (CSS Grid 300ms 丝滑过渡) -->
+              <div class="accordion-wrapper" :class="{ collapsed: category.collapsed }">
+                <div class="accordion-content space-y-2 py-0.5">
+                  <div v-for="item in category.items" 
+                       :key="item.id" 
+                       class="drag-item"
+                       draggable="true" 
+                       @dragstart="onDragStart($event, item)">
+                    <div class="flex items-center space-x-2">
+                      <span class="text-xs font-medium text-gray-700">{{ item.label }}</span>
+                    </div>
+                    <span class="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded font-mono">${{ item.key }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 代码扩展口子提示 UI -->
+            <div class="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700">
+              <p class="font-semibold mb-1 flex items-center space-x-1">
+                <svg class="w-3.5 h-3.5 text-blue-600 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>控件扩展口子说明：</span>
+              </p>
+              <p class="text-blue-600 leading-relaxed">
+                代码中配置 `CONTROL_CATEGORIES` 数组即可新增大类或具体业务字段。支持动态扩充自定义文本、多表格和各类签章图片。
+              </p>
+              <button @click="addCustomControl" class="mt-2 w-full py-1 bg-white border border-blue-300 text-blue-600 rounded text-xs hover:bg-blue-100 transition font-medium">
+                + 动态插入自定义控件项
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </aside>
+
+      <!-- 2. 中间画布区域 (点击空白失焦；Photoshop 标尺与拖拽参考线) -->
+      <main class="canvas-workspace" :class="{ 'preview-mode': mode === 'preview' }" @click="clearSelection">
+
+        <div v-if="loadingPdf" class="py-12 text-center text-gray-500 flex flex-col items-center">
+          <svg class="animate-spin h-8 w-8 text-blue-600 mb-3" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+          <span>正在解析底版文件...</span>
+        </div>
+
+        <div v-else-if="pages.length === 0" class="py-16 text-center text-gray-400">
+          暂无底板页面
+        </div>
+
+        <!-- 连续多页视图列表 (方案 A：垂直滚动) -->
+        <div v-else class="flex flex-col items-center">
+          <div v-for="(page, pIndex) in pages" 
+               :key="pIndex" 
+               class="pdf-page-card"
+               :style="{ width: (page.width * zoomScale) + 'px', height: (page.height * zoomScale) + 'px' }">
+
+            <!-- Photoshop 风格顶部横向标尺 (按住拖拽拉出横向参考线) -->
+            <div v-if="showRulers && mode === 'design'" 
+                 class="pdf-ruler-h absolute -top-5 left-0 w-full h-5 bg-slate-100 border-b border-gray-300 flex items-end select-none pointer-events-auto cursor-ns-resize overflow-hidden z-30 shadow-sm"
+                 @mousedown.stop="startCreateGuide($event, pIndex, 'h')"
+                 title="按住鼠标向下拖拽可拉出横向参考线">
+              <svg class="w-full h-full">
+                <template v-for="tick in getRulerTicks(page.width)" :key="tick.val">
+                  <line :x1="tick.val * zoomScale" y1="10" :x2="tick.val * zoomScale" y2="20" stroke="#64748b" stroke-width="1" />
+                  <text :x="tick.val * zoomScale + 2" y="9" font-size="8" fill="#475569" font-family="monospace">{{ tick.val }}</text>
+                </template>
+              </svg>
+            </div>
+
+            <!-- Photoshop 风格左侧竖向标尺 (按住拖拽拉出竖向参考线) -->
+            <div v-if="showRulers && mode === 'design'" 
+                 class="pdf-ruler-v absolute top-0 -left-5 w-5 h-full bg-slate-100 border-r border-gray-300 flex justify-end select-none pointer-events-auto cursor-ew-resize overflow-hidden z-30 shadow-sm"
+                 @mousedown.stop="startCreateGuide($event, pIndex, 'v')"
+                 title="按住鼠标向右拖拽可拉出竖向参考线">
+              <svg class="w-full h-full">
+                <template v-for="tick in getRulerTicks(page.height)" :key="tick.val">
+                  <line :y1="tick.val * zoomScale" x1="10" :y2="tick.val * zoomScale" x2="20" stroke="#64748b" stroke-width="1" />
+                  <text :y="tick.val * zoomScale + 2" x="2" font-size="8" fill="#475569" font-family="monospace">{{ tick.val }}</text>
+                </template>
+              </svg>
+            </div>
+
+            <!-- 左上角 0,0 标尺交汇原点小方块 -->
+            <div v-if="showRulers && mode === 'design'" class="absolute -top-5 -left-5 w-5 h-5 bg-slate-200 border-r border-b border-gray-300 z-30 flex items-center justify-center text-[9px] text-gray-500 font-mono select-none">
+              px
+            </div>
+
+            <!-- 每一页底板 (PDF/图片/默认空白) 高高清DataURL驱动 -->
+            <img :src="page.bgDataUrl" class="w-full h-full object-contain pointer-events-none block" />
+
+            <!-- PDF.js 标注层风格覆盖层 (与 PDF 页面绝对尺寸按比例绑定) -->
+            <div class="pdf-annotation-layer" 
+                 @dragover.prevent 
+                 @drop="onDropOnPage($event, pIndex)">
+
+              <!-- 渲染当前页拉出的 Cyan 参考引导线 -->
+              <template v-if="showRulers && mode === 'design'">
+                <div v-for="guide in getPageGuides(pIndex)" 
+                     :key="guide.id"
+                     :class="guide.type === 'h' ? 'w-full h-0 border-t-2 border-dashed border-cyan-500 cursor-ns-resize' : 'h-full w-0 border-l-2 border-dashed border-cyan-500 cursor-ew-resize'"
+                     :style="getGuideStyle(guide)"
+                     class="absolute z-25 group"
+                     @mousedown.stop="startMoveGuide($event, guide)"
+                     @dblclick.stop="deleteGuide(guide.id)">
+                  <div class="hidden group-hover:block absolute bg-cyan-600 text-white text-[10px] px-1.5 py-0.5 rounded shadow-md -top-5 left-3 font-mono whitespace-nowrap z-30 pointer-events-none">
+                    {{ guide.type === 'h' ? 'Y: ' + guide.pos + 'px' : 'X: ' + guide.pos + 'px' }} (双击删除)
+                  </div>
+                </div>
+              </template>
+
+              <!-- 拖拽拉出新参考线时的动态虚影预览 (Ghost Line Preview) -->
+              <template v-if="showRulers && mode === 'design' && draggingNewGuide.active && draggingNewGuide.pageIndex === pIndex">
+                <div :class="draggingNewGuide.type === 'h' ? 'w-full h-0 border-t-2 border-dashed border-blue-600 cursor-ns-resize opacity-80' : 'h-full w-0 border-l-2 border-dashed border-blue-600 cursor-ew-resize opacity-80'"
+                     :style="getGuideStyle(draggingNewGuide)"
+                     class="absolute z-40 pointer-events-none">
+                  <div class="absolute bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded shadow-lg -top-5 left-3 font-mono whitespace-nowrap z-50">
+                    {{ draggingNewGuide.type === 'h' ? 'Y: ' + draggingNewGuide.pos + 'px' : 'X: ' + draggingNewGuide.pos + 'px' }}
+                  </div>
+                </div>
+              </template>
+
+              <!-- 渲染强绑定在当前页 (pIndex) 的所有控件 -->
+              <div v-for="ctrl in getPageControls(pIndex)" 
+                   :key="ctrl.id"
+                   :data-id="ctrl.id"
+                   class="designer-control-item"
+                   :class="{ active: selectedControlId === ctrl.id, locked: ctrl.locked }"
+                   :style="getControlStyle(ctrl)"
+                   @mousedown.stop="selectAndStartMove($event, ctrl)"
+                   @click.stop
+                   @contextmenu.prevent.stop="onContextMenu($event, ctrl)">
+
+                <!-- 锁定图标角标 -->
+                <div v-if="ctrl.locked && mode === 'design'" class="absolute -top-2 -right-2 bg-amber-500 text-white rounded-full p-0.5 shadow-sm z-30" title="该控件已锁定（禁止拖拽平移与编辑）">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                </div>
+
+                <!-- 控件渲染分组件逻辑：文本 / 表格 / 图片 -->
+                
+                <!-- A. 文本控件内容 (包裹 line-height: 1 的 span，实现 DOM 字符与 PDF Canvas 0 误差物理对齐) -->
+                <template v-if="ctrl.type === 'text'">
+                  <div :style="getTextStyle(ctrl)" 
+                       class="w-full h-full px-1 text-control-box"
+                       :class="ctrl.textOverflow === 'wrap' ? 'break-all whitespace-normal overflow-visible' : 'whitespace-nowrap overflow-hidden'">
+                    <span class="text-glyph-content inline-block" style="line-height: 1; display: inline-block;">{{ getFormattedText(ctrl) }}</span>
+                  </div>
+                </template>
+
+                <!-- B. 表格控件内容 -->
+                <template v-else-if="ctrl.type === 'table'">
+                  <div class="w-full h-full overflow-hidden flex flex-col bg-white">
+                    <div v-if="mode === 'design'" class="text-[10px] text-gray-500 bg-gray-50 px-1 border-b flex justify-between items-center">
+                      <span>表格: {{ ctrl.label }}</span>
+                      <span>{{ ctrl.headers.length }}列</span>
+                    </div>
+                    <table class="w-full h-full text-left border-collapse" :style="{ fontSize: (ctrl.fontSize * zoomScale) + 'px' }">
+                      <thead>
+                        <tr :style="{ backgroundColor: ctrl.headerBg }">
+                          <th v-for="(h, i) in ctrl.headers" :key="i" class="p-1 border text-gray-700 font-semibold" :style="{ borderColor: ctrl.borderColor }">
+                            {{ h }}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <!-- 设计模式展现占位行 -->
+                        <template v-if="mode === 'design'">
+                          <tr v-for="r in 2" :key="r">
+                            <td v-for="(f, i) in ctrl.fields" :key="i" class="p-1 border text-gray-500 font-mono" :style="{ borderColor: ctrl.borderColor }">
+                              ${{ f }}
+                            </td>
+                          </tr>
+                        </template>
+                        <!-- 预览模式填充 Mock 数据行 -->
+                        <template v-else>
+                          <tr v-for="(row, rIndex) in (mockData[ctrl.key] || ctrl.mockData)" :key="rIndex">
+                            <td v-for="(f, i) in ctrl.fields" :key="i" class="p-1 border text-gray-800" :style="{ borderColor: ctrl.borderColor }">
+                              {{ row[f] }}
+                            </td>
+                          </tr>
+                        </template>
+                      </tbody>
+                    </table>
+                  </div>
+                </template>
+
+                <!-- C. 图片控件内容 -->
+                <template v-else-if="ctrl.type === 'image'">
+                  <div class="w-full h-full flex items-center justify-center bg-gray-100 overflow-hidden relative">
+                    <img :src="mode === 'preview' ? (mockData[ctrl.key] || ctrl.placeholderSrc) : ctrl.placeholderSrc" 
+                         :style="{ objectFit: ctrl.fit }" 
+                         class="w-full h-full" />
+                    <div v-if="mode === 'design'" class="absolute inset-0 bg-black bg-opacity-15 flex items-center justify-center text-white text-[10px]">
+                      {{ ctrl.label }}
+                    </div>
+                  </div>
+                </template>
+
+                <!-- 设计模式下的 4 角缩放手柄 (未锁定状态下显示) -->
+                <template v-if="mode === 'design' && selectedControlId === ctrl.id && !ctrl.locked">
+                  <div class="resize-handle nw" @mousedown.stop="startResize($event, ctrl, 'nw')"></div>
+                  <div class="resize-handle ne" @mousedown.stop="startResize($event, ctrl, 'ne')"></div>
+                  <div class="resize-handle sw" @mousedown.stop="startResize($event, ctrl, 'sw')"></div>
+                  <div class="resize-handle se" @mousedown.stop="startResize($event, ctrl, 'se')"></div>
+                </template>
+              </div>
+
+            </div>
+
+            <!-- 页码标示角标 -->
+            <div class="absolute -bottom-6 right-0 text-xs text-gray-400 font-mono">
+              第 {{ pIndex + 1 }} 页 / 共 {{ pages.length }} 页
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- 3. 右侧控件属性设置面板 (单 DOM 节点，width: 320px ↔ 36px 300ms 丝滑过渡) -->
+      <aside class="property-panel flex-shrink-0 relative" :style="{ width: isRightPanelCollapsed ? '36px' : '320px' }">
+        
+        <!-- A. 面板收起状态时的细长条视图 (动画淡入/淡出) -->
+        <div @click="isRightPanelCollapsed = false"
+             class="absolute inset-0 bg-white flex flex-col items-center pt-3 cursor-pointer hover:bg-blue-50 transition-opacity duration-300 z-20 group"
+             :class="{ 'opacity-0 pointer-events-none': !isRightPanelCollapsed }"
+             title="点击展开控件属性面板">
+          <div class="p-1 rounded bg-gray-100 group-hover:bg-blue-100 group-hover:text-blue-600 transition mb-4">
+            <svg class="w-4 h-4 text-gray-600 group-hover:text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg>
+          </div>
+          <div class="flex-1 flex items-center justify-center pb-8">
+            <span class="text-xs font-bold text-gray-600 group-hover:text-blue-600 tracking-widest whitespace-nowrap" style="writing-mode: vertical-lr; text-orientation: mixed;">控件属性配置</span>
+          </div>
+        </div>
+
+        <!-- B. 面板展开状态时的完整内容视图 (320px 宽) -->
+        <div class="w-[320px] h-full overflow-y-auto p-4 flex flex-col transition-opacity duration-300"
+             :class="{ 'opacity-0 pointer-events-none': isRightPanelCollapsed }">
+          <div class="flex items-center justify-between mb-4 pb-2 border-b border-gray-100 flex-shrink-0">
+            <div class="flex items-center space-x-2">
+              <button @click="isRightPanelCollapsed = true" class="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition" title="收起面板">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+              </button>
+              <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wider">控件属性配置</h2>
+            </div>
+            <span v-if="selectedControl" class="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-semibold">
+              {{ selectedControl.type }}
+            </span>
+          </div>
+
+          <div class="flex-1 overflow-y-auto">
+            <!-- 未选中控件提示 -->
+            <div v-if="!selectedControl" class="py-20 text-center text-gray-400 text-xs flex flex-col items-center">
+              <svg class="w-10 h-10 text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
+              请在画布上点击选中任意控件以配置属性
+            </div>
+
+            <!-- 选中控件属性编辑表单 -->
+            <div v-else class="space-y-4 text-xs">
+
+              <!-- 锁定警告 Banner -->
+              <div v-if="selectedControl.locked" class="bg-amber-50 border border-amber-200 text-amber-800 p-2.5 rounded-lg text-xs flex items-center justify-between shadow-sm">
+                <span class="flex items-center space-x-1">
+                  <span>🔒 该控件已被锁定（禁止编辑与删除）</span>
+                </span>
+                <button @click="toggleLockControl(selectedControl)" class="px-2 py-0.5 bg-amber-600 text-white rounded font-medium hover:bg-amber-700 text-[11px] transition">
+                  解锁
+                </button>
+              </div>
+
+              <!-- 通用基础属性 -->
+              <div class="bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-3">
+                <div class="font-semibold text-gray-700 flex justify-between items-center">
+                  <span>基本信息</span>
+                  <div class="flex items-center space-x-2">
+                    <button @click="toggleLockControl(selectedControl)" :class="selectedControl.locked ? 'text-amber-600 font-semibold' : 'text-gray-500'" class="hover:underline">
+                      {{ selectedControl.locked ? '🔒 解锁' : '🔓 锁定' }}
+                    </button>
+                    <button @click="deleteSelectedControl" :disabled="selectedControl.locked" class="text-red-500 hover:text-red-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                      删除
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="text-gray-500 block mb-1">控件名称 (Label)</label>
+                  <input v-model="selectedControl.label" :disabled="selectedControl.locked" type="text" class="w-full px-2.5 py-1.5 border rounded bg-white text-gray-800 focus:outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:opacity-60" />
+                </div>
+
+                <div>
+                  <label class="text-gray-500 block mb-1">数据占位 Key (${key})</label>
+                  <input v-model="selectedControl.key" :disabled="selectedControl.locked" type="text" class="w-full px-2.5 py-1.5 border rounded font-mono bg-white text-gray-800 focus:outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:opacity-60" />
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="text-gray-500 block mb-1">所属页码</label>
+                    <input :value="'第 ' + (selectedControl.pageIndex + 1) + ' 页'" disabled type="text" class="w-full px-2 py-1 border rounded bg-gray-100 text-gray-600 text-center opacity-75" />
+                  </div>
+                  <div>
+                    <label class="text-gray-500 block mb-1">控件类型</label>
+                    <input :value="selectedControl.type" disabled type="text" class="w-full px-2 py-1 border rounded bg-gray-100 text-gray-600 text-center opacity-75" />
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="text-gray-500 block mb-1">X 坐标 (px)</label>
+                    <input v-model.number="selectedControl.x" :disabled="selectedControl.locked" type="number" class="w-full px-2 py-1 border rounded bg-white text-gray-800 disabled:bg-gray-100 disabled:opacity-60" />
+                  </div>
+                  <div>
+                    <label class="text-gray-500 block mb-1">Y 坐标 (px)</label>
+                    <input v-model.number="selectedControl.y" :disabled="selectedControl.locked" type="number" class="w-full px-2 py-1 border rounded bg-white text-gray-800 disabled:bg-gray-100 disabled:opacity-60" />
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="text-gray-500 block mb-1">宽度 (px)</label>
+                    <input v-model.number="selectedControl.width" :disabled="selectedControl.locked" type="number" class="w-full px-2 py-1 border rounded bg-white text-gray-800 disabled:bg-gray-100 disabled:opacity-60" />
+                  </div>
+                  <div>
+                    <label class="text-gray-500 block mb-1">高度 (px)</label>
+                    <input v-model.number="selectedControl.height" :disabled="selectedControl.locked" type="number" class="w-full px-2 py-1 border rounded bg-white text-gray-800 disabled:bg-gray-100 disabled:opacity-60" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- A. 文本专用属性配置 -->
+              <div v-if="selectedControl.type === 'text'" class="bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-3">
+                <div class="font-semibold text-gray-700">文本专属属性</div>
+
+                <div>
+                  <label class="text-gray-500 block mb-1">默认测试值</label>
+                  <input v-model="selectedControl.defaultValue" :disabled="selectedControl.locked" type="text" class="w-full px-2.5 py-1.5 border rounded bg-white text-gray-800 disabled:bg-gray-100 disabled:opacity-60" />
+                </div>
+
+                <!-- 超出宽度排版方式 -->
+                <div>
+                  <label class="text-gray-500 block mb-1">超出宽度排版方式</label>
+                  <div class="flex space-x-1">
+                    <button @click="selectedControl.textOverflow = 'ellipsis'"
+                            :disabled="selectedControl.locked"
+                            :class="selectedControl.textOverflow !== 'wrap' ? 'bg-blue-600 text-white font-medium shadow-sm' : 'bg-white text-gray-700 border hover:bg-gray-50'"
+                            class="flex-1 py-1 rounded text-center text-xs transition disabled:opacity-50">
+                      单行省略号 (...)
+                    </button>
+                    <button @click="selectedControl.textOverflow = 'wrap'"
+                            :disabled="selectedControl.locked"
+                            :class="selectedControl.textOverflow === 'wrap' ? 'bg-blue-600 text-white font-medium shadow-sm' : 'bg-white text-gray-700 border hover:bg-gray-50'"
+                            class="flex-1 py-1 rounded text-center text-xs transition disabled:opacity-50">
+                      多行自动换行
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 精简单一的文字颜色与背景颜色设置 -->
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="text-gray-500 block mb-1">文字颜色</label>
+                    <input v-model="selectedControl.color" :disabled="selectedControl.locked" type="color" class="w-full h-7 p-0.5 border rounded bg-white cursor-pointer disabled:opacity-50" />
+                  </div>
+                  <div>
+                    <label class="text-gray-500 block mb-1">背景颜色</label>
+                    <div class="flex items-center space-x-1">
+                      <input type="color" 
+                             :value="selectedControl.bgColor === 'transparent' ? '#ffffff' : selectedControl.bgColor" 
+                             @input="selectedControl.bgColor = $event.target.value" 
+                             :disabled="selectedControl.locked" 
+                             class="w-8 h-7 p-0.5 border rounded bg-white cursor-pointer disabled:opacity-50" 
+                             title="选择背景颜色" />
+                      <button @click="selectedControl.bgColor = 'transparent'" 
+                              :disabled="selectedControl.locked" 
+                              :class="selectedControl.bgColor === 'transparent' ? 'bg-blue-600 text-white font-medium shadow-sm' : 'bg-gray-100 text-gray-700 border hover:bg-gray-200'"
+                              class="flex-1 py-1 text-xs rounded transition disabled:opacity-50">
+                        {{ selectedControl.bgColor === 'transparent' ? '透明' : '设为透明' }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="text-gray-500 block mb-1">字号 (px)</label>
+                    <input v-model.number="selectedControl.fontSize" :disabled="selectedControl.locked" type="number" class="w-full px-2 py-1 border rounded bg-white text-gray-800 disabled:bg-gray-100 disabled:opacity-60" />
+                  </div>
+                  <div>
+                    <label class="text-gray-500 block mb-1">字重</label>
+                    <select v-model="selectedControl.fontWeight" :disabled="selectedControl.locked" class="w-full px-2 py-1 border rounded bg-white text-gray-800 disabled:bg-gray-100 disabled:opacity-60">
+                      <option value="normal">正常 (Normal)</option>
+                      <option value="bold font-semibold">加粗 (Bold)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- 水平与垂直对齐方式 -->
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="text-gray-500 block mb-1">水平对齐</label>
+                    <div class="flex space-x-1">
+                      <button v-for="align in ['left', 'center', 'right']" 
+                              :key="align"
+                              @click="selectedControl.align = align"
+                              :disabled="selectedControl.locked"
+                              :class="selectedControl.align === align ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 border'"
+                              class="flex-1 py-1 rounded text-center capitalize text-xs font-medium disabled:opacity-50">
+                        {{ align }}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="text-gray-500 block mb-1">垂直对齐</label>
+                    <div class="flex space-x-1">
+                      <button v-for="vAlign in [
+                                { key: 'top', label: '顶部' },
+                                { key: 'center', label: '居中' },
+                                { key: 'bottom', label: '底部' }
+                              ]" 
+                              :key="vAlign.key"
+                              @click="selectedControl.verticalAlign = vAlign.key"
+                              :disabled="selectedControl.locked"
+                              :class="(selectedControl.verticalAlign || 'top') === vAlign.key ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 border'"
+                              class="flex-1 py-1 rounded text-center text-xs font-medium disabled:opacity-50">
+                        {{ vAlign.label }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- B. 表格专用属性配置 -->
+              <div v-if="selectedControl.type === 'table'" class="bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-3">
+                <div class="font-semibold text-gray-700">表格专属属性</div>
+
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="text-gray-500 block mb-1">表头背景色</label>
+                    <input v-model="selectedControl.headerBg" :disabled="selectedControl.locked" type="color" class="w-full h-7 p-0.5 border rounded bg-white cursor-pointer disabled:opacity-50" />
+                  </div>
+                  <div>
+                    <label class="text-gray-500 block mb-1">边框颜色</label>
+                    <input v-model="selectedControl.borderColor" :disabled="selectedControl.locked" type="color" class="w-full h-7 p-0.5 border rounded bg-white cursor-pointer disabled:opacity-50" />
+                  </div>
+                </div>
+
+                <div>
+                  <label class="text-gray-500 block mb-1">表格字号 (px)</label>
+                  <input v-model.number="selectedControl.fontSize" :disabled="selectedControl.locked" type="number" class="w-full px-2 py-1 border rounded bg-white text-gray-800 disabled:bg-gray-100 disabled:opacity-60" />
+                </div>
+
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <label class="text-gray-500">列配置 (Headers & Fields)</label>
+                    <button @click="addTableColumn" :disabled="selectedControl.locked" class="text-blue-600 text-[10px] hover:underline disabled:opacity-50">+ 新增列</button>
+                  </div>
+                  <div class="space-y-1.5 max-h-36 overflow-y-auto">
+                    <div v-for="(h, idx) in selectedControl.headers" :key="idx" class="flex items-center space-x-1">
+                      <input v-model="selectedControl.headers[idx]" :disabled="selectedControl.locked" placeholder="列头" type="text" class="w-1/2 px-1.5 py-0.5 border rounded text-[11px] disabled:bg-gray-100 disabled:opacity-60" />
+                      <input v-model="selectedControl.fields[idx]" :disabled="selectedControl.locked" placeholder="字段Key" type="text" class="w-1/2 px-1.5 py-0.5 border rounded font-mono text-[11px] disabled:bg-gray-100 disabled:opacity-60" />
+                      <button @click="removeTableColumn(idx)" :disabled="selectedControl.locked" class="text-red-400 hover:text-red-600 font-bold text-xs px-1 disabled:opacity-30">×</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- C. 图片专用属性配置 -->
+              <div v-if="selectedControl.type === 'image'" class="bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-3">
+                <div class="font-semibold text-gray-700">图片专属属性</div>
+
+                <div>
+                  <label class="text-gray-500 block mb-1">适应模式 (object-fit)</label>
+                  <select v-model="selectedControl.fit" :disabled="selectedControl.locked" class="w-full px-2 py-1 border rounded bg-white text-gray-800 disabled:bg-gray-100 disabled:opacity-60">
+                    <option value="contain">等比缩放居中 (contain)</option>
+                    <option value="cover">裁剪铺满 (cover)</option>
+                    <option value="fill">拉伸填满 (fill)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="text-gray-500 block mb-1">占位图 URL</label>
+                  <input v-model="selectedControl.placeholderSrc" :disabled="selectedControl.locked" type="text" class="w-full px-2 py-1 border rounded bg-white font-mono text-[11px] disabled:bg-gray-100 disabled:opacity-60" />
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </aside>
+    </div>
+
+    <!-- 右键快捷操作弹出菜单 (复制、锁定、删除) -->
+    <div v-if="contextMenu.visible" 
+         class="fixed z-50 bg-white border border-gray-200 shadow-lg rounded-md py-1 text-xs text-gray-700 w-32 select-none"
+         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+         @click.stop>
+      <button @click="duplicateControl(contextMenu.targetControl)" class="w-full text-left px-3 py-1.5 hover:bg-blue-50 hover:text-blue-600 flex items-center space-x-2">
+        <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 012-2v-8a2 2 0 01-2-2h-8a2 2 0 01-2 2v8a2 2 0 012 2z"></path></svg>
+        <span>复制控件</span>
+      </button>
+      <button @click="toggleLockControl(contextMenu.targetControl)" class="w-full text-left px-3 py-1.5 hover:bg-blue-50 hover:text-blue-600 flex items-center space-x-2">
+        <svg v-if="contextMenu.targetControl && contextMenu.targetControl.locked" class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+        <svg v-else class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+        <span>{{ contextMenu.targetControl && contextMenu.targetControl.locked ? '解锁控件' : '锁定控件' }}</span>
+      </button>
+      <div class="my-1 border-t border-gray-100"></div>
+      <button @click="deleteControl(contextMenu.targetControl)" 
+              :disabled="contextMenu.targetControl && contextMenu.targetControl.locked"
+              :class="contextMenu.targetControl && contextMenu.targetControl.locked ? 'opacity-40 cursor-not-allowed text-gray-400' : 'hover:bg-red-50 text-red-600'"
+              class="w-full text-left px-3 py-1.5 flex items-center space-x-2">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+        <span>删除控件</span>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // 配置 PDF.js Worker 路径 (CDN 引入)
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
+
+    // 【核心业务控件定义 - 预留扩展口子】
+    const DEFAULT_CONTROL_CATEGORIES = [
+      {
+        id: 'text',
+        name: '文本类控件',
+        collapsed: false,
+        items: [
+          { id: 'name', label: '姓名', type: 'text', key: 'name', defaultValue: '张三', width: 120, height: 32, fontSize: 14, color: '#111827', bgColor: 'transparent', align: 'left', verticalAlign: 'top', fontWeight: 'normal', textOverflow: 'ellipsis' },
+          { id: 'title', label: '报告标题', type: 'text', key: 'reportTitle', defaultValue: '职业卫生检测分析报告', width: 260, height: 44, fontSize: 18, color: '#1d4ed8', bgColor: 'transparent', align: 'center', verticalAlign: 'top', fontWeight: 'bold font-semibold', textOverflow: 'ellipsis' },
+          { id: 'date', label: '报告日期', type: 'text', key: 'reportDate', defaultValue: '2026-08-10', width: 140, height: 32, fontSize: 13, color: '#4b5563', bgColor: 'transparent', align: 'left', verticalAlign: 'top', fontWeight: 'normal', textOverflow: 'ellipsis' },
+          { id: 'company_name', label: '受检单位', type: 'text', key: 'companyName', defaultValue: '某某高新科技股份有限公司', width: 220, height: 36, fontSize: 14, color: '#1f2937', bgColor: 'transparent', align: 'left', verticalAlign: 'top', fontWeight: 'normal', textOverflow: 'ellipsis' }
+        ]
+      },
+      {
+        id: 'table',
+        name: '表格类控件',
+        collapsed: false,
+        items: [
+          {
+            id: 'detail_table',
+            label: '检测明细数据表',
+            type: 'table',
+            key: 'detailTable',
+            width: 480,
+            height: 160,
+            headers: ['序号', '检测项目', '结果数值', '评估结论'],
+            fields: ['id', 'item', 'result', 'status'],
+            mockData: [
+              { id: '1', item: '呼吸性粉尘', result: '1.2 mg/m³', status: '合格' },
+              { id: '2', item: '工作场所噪声', result: '78.5 dB(A)', status: '合格' },
+              { id: '3', item: '苯蒸气浓度', result: '未检出', status: '合格' }
+            ],
+            headerBg: '#eff6ff',
+            borderColor: '#bfdbfe',
+            fontSize: 12
+          }
+        ]
+      },
+      {
+        id: 'image',
+        name: '图片类控件',
+        collapsed: false,
+        items: [
+          {
+            id: 'company_logo',
+            label: '企业 LOGO',
+            type: 'image',
+            key: 'companyLogo',
+            width: 120,
+            height: 50,
+            fit: 'contain',
+            placeholderSrc: 'https://via.placeholder.com/120x50.png?text=COMPANY+LOGO'
+          },
+          {
+            id: 'official_seal',
+            label: '检验专用章',
+            type: 'image',
+            key: 'officialSeal',
+            width: 110,
+            height: 110,
+            fit: 'contain',
+            placeholderSrc: 'https://via.placeholder.com/110x110.png?text=SEAL'
+          }
+        ]
+      }
+    ];
+
+    createApp({
+      setup() {
+        const mode = ref('design'); // 'design' | 'preview'
+        const zoomScale = ref(1.0); // 1.0 = 100%
+        const loadingPdf = ref(false);
+        const isExporting = ref(false);
+
+        // Photoshop 标尺与参考线状态
+        const showRulers = ref(true);
+        const guides = reactive([]); // [{ id, pageIndex, type: 'h'|'v', pos: px }]
+
+        // 拖拽拉出新参考线的虚影状态
+        const draggingNewGuide = reactive({
+          active: false,
+          pageIndex: 0,
+          type: 'h',
+          pos: 0
+        });
+
+        // 两面板收缩展开状态
+        const isLeftPanelCollapsed = ref(false);
+        const isRightPanelCollapsed = ref(false);
+
+        // 右键快捷菜单状态
+        const contextMenu = reactive({
+          visible: false,
+          x: 0,
+          y: 0,
+          targetControl: null
+        });
+
+        // 业务大类控件定义 (支持折叠)
+        const controlCategories = reactive(DEFAULT_CONTROL_CATEGORIES);
+
+        // 页面与底板数据列表
+        const pages = reactive([]);
+
+        // 画布上落位的控件集合
+        const controls = reactive([]);
+        const selectedControlId = ref(null);
+
+        // 选中的控件计算属性
+        const selectedControl = computed(() => {
+          return controls.find(c => c.id === selectedControlId.value) || null;
+        });
+
+        // 填充预览模式的 Mock 数据
+        const mockData = reactive({
+          name: '李明 (运营高级经理)',
+          reportTitle: '2026半年度质量安全动态监测报告',
+          reportDate: '2026年08月10日',
+          companyName: '智联先锋软件技术有限公司',
+          companyLogo: 'https://via.placeholder.com/120x50/2563eb/ffffff.png?text=SmartTech',
+          officialSeal: 'https://via.placeholder.com/110x110/dc2626/ffffff.png?text=APPROVED',
+          detailTable: [
+            { id: '01', item: '环境温度', result: '24.5 ℃', status: '正常' },
+            { id: '02', item: '网络吞吐量', result: '985 Mbps', status: '优良' },
+            { id: '03', item: '系统可用性', result: '99.99%', status: '达标' }
+          ]
+        });
+
+        // Photoshop 标尺刻度计算函数
+        const getRulerTicks = (size) => {
+          const ticks = [];
+          const step = 50;
+          const count = Math.ceil(size / step);
+          for (let i = 0; i <= count; i++) {
+            ticks.push({ val: i * step });
+          }
+          return ticks;
+        };
+
+        const getPageGuides = (pageIndex) => {
+          return guides.filter(g => g.pageIndex === pageIndex);
+        };
+
+        const getGuideStyle = (guide) => {
+          if (guide.type === 'h') {
+            return { top: (guide.pos * zoomScale.value) + 'px', left: '0' };
+          } else {
+            return { left: (guide.pos * zoomScale.value) + 'px', top: '0' };
+          }
+        };
+
+        // 按住标尺向画布拖拽（虚影跟随，松开鼠标 mouseup 才正式写入）
+        const startCreateGuide = (e, pageIndex, type) => {
+          const pageCardEl = e.currentTarget.closest('.pdf-page-card');
+          const annotationLayerEl = pageCardEl.querySelector('.pdf-annotation-layer');
+          if (!annotationLayerEl) return;
+          const rect = annotationLayerEl.getBoundingClientRect();
+
+          draggingNewGuide.active = true;
+          draggingNewGuide.pageIndex = pageIndex;
+          draggingNewGuide.type = type;
+
+          const updatePos = (moveEvt) => {
+            let rawPos = type === 'h' ? (moveEvt.clientY - rect.top) : (moveEvt.clientX - rect.left);
+            draggingNewGuide.pos = Math.round(rawPos / zoomScale.value);
+          };
+
+          updatePos(e);
+
+          const onMouseMove = (moveEvt) => {
+            updatePos(moveEvt);
+          };
+
+          const onMouseUp = () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+
+            const targetPage = pages[pageIndex];
+            const maxPos = type === 'h' ? (targetPage ? targetPage.height : 2000) : (targetPage ? targetPage.width : 2000);
+
+            if (draggingNewGuide.pos >= 0 && draggingNewGuide.pos <= maxPos) {
+              guides.push({
+                id: 'guide_' + Date.now(),
+                pageIndex: draggingNewGuide.pageIndex,
+                type: draggingNewGuide.type,
+                pos: draggingNewGuide.pos
+              });
+            }
+
+            draggingNewGuide.active = false;
+          };
+
+          window.addEventListener('mousemove', onMouseMove);
+          window.addEventListener('mouseup', onMouseUp);
+        };
+
+        // 移动已有参考线
+        const startMoveGuide = (e, guide) => {
+          const annotationLayerEl = e.currentTarget.closest('.pdf-annotation-layer');
+          if (!annotationLayerEl) return;
+          const rect = annotationLayerEl.getBoundingClientRect();
+
+          const onMouseMove = (moveEvt) => {
+            let rawPos = guide.type === 'h' ? (moveEvt.clientY - rect.top) : (moveEvt.clientX - rect.left);
+            guide.pos = Math.round(rawPos / zoomScale.value);
+          };
+
+          const onMouseUp = () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+
+            const targetPage = pages[guide.pageIndex];
+            const maxPos = guide.type === 'h' ? (targetPage ? targetPage.height : 2000) : (targetPage ? targetPage.width : 2000);
+            if (guide.pos < 0 || guide.pos > maxPos) {
+              deleteGuide(guide.id);
+            }
+          };
+
+          window.addEventListener('mousemove', onMouseMove);
+          window.addEventListener('mouseup', onMouseUp);
+        };
+
+        // 双击参考线删除
+        const deleteGuide = (guideId) => {
+          const idx = guides.findIndex(g => g.id === guideId);
+          if (idx !== -1) guides.splice(idx, 1);
+        };
+
+        // 生成 1 页纯白透明空白底板的 Data URL
+        const createBlankPageDataUrl = (width, height) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+          return canvas.toDataURL('image/png');
+        };
+
+        // 初始化默认 A4 模板页面 (单页纯白底板 794 x 1123 px)
+        const initDefaultBlankTemplate = () => {
+          pages.length = 0;
+          pages.push({
+            width: 794,
+            height: 1123,
+            bgDataUrl: createBlankPageDataUrl(794, 1123)
+          });
+        };
+
+        // 上传文件处理 (支持 PDF, PNG, JPG, JPEG, WEBP)
+        const handleFileUpload = (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+
+          loadingPdf.value = true;
+          const fileType = (file.type || '').toLowerCase();
+          const fileName = (file.name || '').toLowerCase();
+          e.target.value = '';
+
+          const isPdf = fileType.includes('pdf') || fileName.endsWith('.pdf');
+          const isImage = fileType.startsWith('image/') || /\.(png|jpg|jpeg|webp|bmp)$/i.test(fileName);
+
+          if (isPdf) {
+            const reader = new FileReader();
+            reader.onerror = (err) => {
+              loadingPdf.value = false;
+              alert('读取 PDF 文件失败: ' + err);
+            };
+            reader.onload = async (evt) => {
+              try {
+                const typedarray = new Uint8Array(evt.target.result);
+                const pdf = await pdfjsLib.getDocument({
+                  data: typedarray,
+                  cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+                  cMapPacked: true
+                }).promise;
+                
+                const newPages = [];
+                for (let i = 1; i <= pdf.numPages; i++) {
+                  const page = await pdf.getPage(i);
+                  const viewport = page.getViewport({ scale: 1.5 });
+                  const offscreenCanvas = document.createElement('canvas');
+                  offscreenCanvas.width = viewport.width;
+                  offscreenCanvas.height = viewport.height;
+                  const ctx = offscreenCanvas.getContext('2d');
+
+                  await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                  const dataUrl = offscreenCanvas.toDataURL('image/png');
+
+                  newPages.push({
+                    width: Math.round(viewport.width / 1.2),
+                    height: Math.round(viewport.height / 1.2),
+                    bgDataUrl: dataUrl
+                  });
+                }
+
+                pages.length = 0;
+                pages.push(...newPages);
+              } catch (err) {
+                alert('PDF 解析失败: ' + (err.message || err));
+                console.error('PDF Parse Error:', err);
+              } finally {
+                loadingPdf.value = false;
+              }
+            };
+            reader.readAsArrayBuffer(file);
+          } else if (isImage) {
+            const reader = new FileReader();
+            reader.onerror = (err) => {
+              loadingPdf.value = false;
+              alert('读取图片文件失败: ' + err);
+            };
+            reader.onload = (evt) => {
+              const dataUrl = evt.target.result;
+              const img = new Image();
+              img.onerror = () => {
+                loadingPdf.value = false;
+                alert('图片加载失败');
+              };
+              img.onload = () => {
+                const maxInitW = 800;
+                const scaleRatio = img.width > maxInitW ? (maxInitW / img.width) : 1;
+                const targetW = Math.round(img.width * scaleRatio);
+                const targetH = Math.round(img.height * scaleRatio);
+
+                pages.length = 0;
+                pages.push({
+                  width: targetW,
+                  height: targetH,
+                  bgDataUrl: dataUrl
+                });
+
+                loadingPdf.value = false;
+              };
+              img.src = dataUrl;
+            };
+            reader.readAsDataURL(file);
+          } else {
+            loadingPdf.value = false;
+            alert('暂不支持的文件格式，请上传 PDF、PNG、JPG、JPEG 或 WEBP 文件。');
+          }
+        };
+
+        // 文本精准测量与截断处理 (系统字体库测量，彻底解决截断不全与省略号缺失)
+        const getFormattedText = (ctrl) => {
+          const rawText = mode.value === 'design' 
+            ? ctrl.label 
+            : String(mockData[ctrl.key] || ctrl.defaultValue || ctrl.label || '');
+
+          if (ctrl.textOverflow === 'wrap') {
+            return rawText;
+          }
+
+          const fontSz = Math.round(ctrl.fontSize * zoomScale.value);
+          const availW = (ctrl.width * zoomScale.value) - 8;
+
+          if (!getFormattedText._canvas) {
+            getFormattedText._canvas = document.createElement('canvas');
+          }
+          const ctx = getFormattedText._canvas.getContext('2d');
+          ctx.font = `${(ctrl.fontWeight || '').includes('bold') ? 'bold ' : ''}${fontSz}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+
+          const fullW = ctx.measureText(rawText).width;
+          if (fullW <= availW) {
+            return rawText;
+          }
+
+          let truncated = rawText;
+          while (truncated.length > 0 && (ctx.measureText(truncated + '...').width > availW)) {
+            truncated = truncated.slice(0, -1);
+          }
+          return truncated + '...';
+        };
+
+        // 文本排版样式 (标准 Flex 对齐，由包裹 span 的 line-height: 1 保证绝无 leading 偏差)
+        const getTextStyle = (ctrl) => {
+          const isWrap = ctrl.textOverflow === 'wrap';
+          const vAlign = ctrl.verticalAlign || 'top';
+          let alignStyle = {};
+
+          if (vAlign === 'top') {
+            alignStyle = { display: 'flex', alignItems: 'flex-start', paddingTop: '0px' };
+          } else if (vAlign === 'bottom') {
+            alignStyle = { display: 'flex', alignItems: 'flex-end', paddingBottom: '0px' };
+          } else {
+            alignStyle = { display: 'flex', alignItems: 'center' };
+          }
+
+          return {
+            fontSize: (ctrl.fontSize * zoomScale.value) + 'px',
+            color: ctrl.color,
+            backgroundColor: ctrl.bgColor || 'transparent',
+            textAlign: ctrl.align || 'left',
+            fontWeight: (ctrl.fontWeight || '').includes('bold') ? 'bold' : 'normal',
+            whiteSpace: isWrap ? 'normal' : 'nowrap',
+            wordBreak: isWrap ? 'break-all' : 'normal',
+            width: '100%',
+            height: '100%',
+            boxSizing: 'border-box',
+            ...alignStyle
+          };
+        };
+
+        // 获取特定页下的控件数组
+        const getPageControls = (pageIndex) => {
+          return controls.filter(c => c.pageIndex === pageIndex);
+        };
+
+        // 拖拽开始
+        const onDragStart = (e, item) => {
+          e.dataTransfer.setData('application/json', JSON.stringify(item));
+        };
+
+        // 放下控件到指定页面 (pIndex)
+        const onDropOnPage = (e, pIndex) => {
+          e.preventDefault();
+          const dataStr = e.dataTransfer.getData('application/json');
+          if (!dataStr) return;
+
+          const itemTemplate = JSON.parse(dataStr);
+          const annotationLayerEl = e.currentTarget;
+          const rect = annotationLayerEl.getBoundingClientRect();
+
+          const dropX = (e.clientX - rect.left) / zoomScale.value;
+          const dropY = (e.clientY - rect.top) / zoomScale.value;
+
+          const newCtrl = {
+            id: 'ctrl_' + Date.now(),
+            pageIndex: pIndex,
+            type: itemTemplate.type,
+            label: itemTemplate.label,
+            key: itemTemplate.key,
+            x: Math.round(dropX),
+            y: Math.round(dropY),
+            width: itemTemplate.width || 140,
+            height: itemTemplate.height || 36,
+            locked: false,
+
+            defaultValue: itemTemplate.defaultValue || '',
+            fontSize: itemTemplate.fontSize || 14,
+            color: itemTemplate.color || '#111827',
+            bgColor: itemTemplate.bgColor || 'transparent',
+            align: itemTemplate.align || 'left',
+            fontWeight: itemTemplate.fontWeight || 'normal',
+            textOverflow: itemTemplate.textOverflow || 'ellipsis',
+
+            headers: itemTemplate.headers ? [...itemTemplate.headers] : [],
+            fields: itemTemplate.fields ? [...itemTemplate.fields] : [],
+            mockData: itemTemplate.mockData ? JSON.parse(JSON.stringify(itemTemplate.mockData)) : [],
+            headerBg: itemTemplate.headerBg || '#f3f4f6',
+            borderColor: itemTemplate.borderColor || '#d1d5db',
+
+            fit: itemTemplate.fit || 'contain',
+            placeholderSrc: itemTemplate.placeholderSrc || 'https://via.placeholder.com/100.png'
+          };
+
+          controls.push(newCtrl);
+          selectedControlId.value = newCtrl.id;
+
+          // 放下新控件时自动展开折叠的属性面板
+          if (isRightPanelCollapsed.value) {
+            isRightPanelCollapsed.value = false;
+          }
+        };
+
+        // 控件样式
+        const getControlStyle = (ctrl) => {
+          return {
+            left: (ctrl.x * zoomScale.value) + 'px',
+            top: (ctrl.y * zoomScale.value) + 'px',
+            width: (ctrl.width * zoomScale.value) + 'px',
+            height: (ctrl.height * zoomScale.value) + 'px'
+          };
+        };
+
+        // 选中控件并开始拖拽平移
+        const selectAndStartMove = (e, ctrl) => {
+          closeContextMenu();
+          if (mode.value !== 'design') return;
+          selectedControlId.value = ctrl.id;
+
+          // 点击控件时如果属性面板处于折叠状态，自动将其展开
+          if (isRightPanelCollapsed.value) {
+            isRightPanelCollapsed.value = false;
+          }
+
+          // 锁定的控件阻止拖拽平移
+          if (ctrl.locked) return;
+
+          const startX = e.clientX;
+          const startY = e.clientY;
+          const initialX = ctrl.x;
+          const initialY = ctrl.y;
+
+          const onMouseMove = (moveEvt) => {
+            const dx = (moveEvt.clientX - startX) / zoomScale.value;
+            const dy = (moveEvt.clientY - startY) / zoomScale.value;
+            ctrl.x = Math.round(initialX + dx);
+            ctrl.y = Math.round(initialY + dy);
+          };
+
+          const onMouseUp = () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+          };
+
+          window.addEventListener('mousemove', onMouseMove);
+          window.addEventListener('mouseup', onMouseUp);
+        };
+
+        // 四角 Handle 调整大小
+        const startResize = (e, ctrl, handleType) => {
+          closeContextMenu();
+          if (mode.value !== 'design' || ctrl.locked) return;
+
+          const startX = e.clientX;
+          const startY = e.clientY;
+          const initialW = ctrl.width;
+          const initialH = ctrl.height;
+          const initialX = ctrl.x;
+          const initialY = ctrl.y;
+
+          const onMouseMove = (moveEvt) => {
+            const dx = (moveEvt.clientX - startX) / zoomScale.value;
+            const dy = (moveEvt.clientY - startY) / zoomScale.value;
+
+            if (handleType === 'se') {
+              ctrl.width = Math.max(30, Math.round(initialW + dx));
+              ctrl.height = Math.max(20, Math.round(initialH + dy));
+            } else if (handleType === 'sw') {
+              const newW = Math.max(30, Math.round(initialW - dx));
+              ctrl.x = Math.round(initialX + (initialW - newW));
+              ctrl.width = newW;
+              ctrl.height = Math.max(20, Math.round(initialH + dy));
+            } else if (handleType === 'ne') {
+              ctrl.width = Math.max(30, Math.round(initialW + dx));
+              const newH = Math.max(20, Math.round(initialH - dy));
+              ctrl.y = Math.round(initialY + (initialH - newH));
+              ctrl.height = newH;
+            } else if (handleType === 'nw') {
+              const newW = Math.max(30, Math.round(initialW - dx));
+              const newH = Math.max(20, Math.round(initialH - dy));
+              ctrl.x = Math.round(initialX + (initialW - newW));
+              ctrl.y = Math.round(initialY + (initialH - newH));
+              ctrl.width = newW;
+              ctrl.height = newH;
+            }
+          };
+
+          const onMouseUp = () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+          };
+
+          window.addEventListener('mousemove', onMouseMove);
+          window.addEventListener('mouseup', onMouseUp);
+        };
+
+        // 点击空白清空选择 (失焦)
+        const clearSelection = () => {
+          selectedControlId.value = null;
+          closeContextMenu();
+        };
+
+        // 右键快捷菜单响应
+        const onContextMenu = (e, ctrl) => {
+          if (mode.value !== 'design') return;
+          selectedControlId.value = ctrl.id;
+
+          if (isRightPanelCollapsed.value) {
+            isRightPanelCollapsed.value = false;
+          }
+
+          contextMenu.visible = true;
+          contextMenu.x = e.clientX;
+          contextMenu.y = e.clientY;
+          contextMenu.targetControl = ctrl;
+        };
+
+        const closeContextMenu = () => {
+          contextMenu.visible = false;
+        };
+
+        // 右键功能 A：复制控件
+        const duplicateControl = (ctrl) => {
+          const target = ctrl || selectedControl.value;
+          if (!target) return;
+          const copy = JSON.parse(JSON.stringify(target));
+          copy.id = 'ctrl_' + Date.now();
+          copy.x += 20;
+          copy.y += 20;
+          copy.locked = false;
+          controls.push(copy);
+          selectedControlId.value = copy.id;
+          closeContextMenu();
+        };
+
+        // 右键功能 B：锁定/解锁控件
+        const toggleLockControl = (ctrl) => {
+          const target = ctrl || selectedControl.value;
+          if (!target) return;
+          target.locked = !target.locked;
+          closeContextMenu();
+        };
+
+        // 删除控件 (锁定的控件无法删除)
+        const deleteControl = (ctrl) => {
+          const target = ctrl || selectedControl.value;
+          if (!target || target.locked) return;
+          const idx = controls.findIndex(c => c.id === target.id);
+          if (idx !== -1) {
+            controls.splice(idx, 1);
+            if (selectedControlId.value === target.id) {
+              selectedControlId.value = null;
+            }
+          }
+          closeContextMenu();
+        };
+
+        const deleteSelectedControl = () => {
+          if (!selectedControlId.value || selectedControl.value?.locked) return;
+          deleteControl(selectedControl.value);
+        };
+
+        // 键盘 Delete / Backspace 快捷按键
+        window.addEventListener('keydown', (e) => {
+          if ((e.key === 'Delete' || e.key === 'Backspace') && selectedControlId.value) {
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+            if (selectedControl.value && selectedControl.value.locked) return;
+            deleteSelectedControl();
+          }
+        });
+
+        // 缩放操作
+        const zoomIn = () => { if (zoomScale.value < 2.0) zoomScale.value += 0.1; };
+        const zoomOut = () => { if (zoomScale.value > 0.5) zoomScale.value -= 0.1; };
+        const resetZoom = () => { zoomScale.value = 1.0; };
+
+        // 表格动态列管理
+        const addTableColumn = () => {
+          if (!selectedControl.value || selectedControl.value.type !== 'table' || selectedControl.value.locked) return;
+          const colNum = selectedControl.value.headers.length + 1;
+          selectedControl.value.headers.push(`列${colNum}`);
+          selectedControl.value.fields.push(`field${colNum}`);
+        };
+
+        const removeTableColumn = (idx) => {
+          if (!selectedControl.value || selectedControl.value.type !== 'table' || selectedControl.value.locked) return;
+          selectedControl.value.headers.splice(idx, 1);
+          selectedControl.value.fields.splice(idx, 1);
+        };
+
+        // 动态添加扩展控件项
+        const addCustomControl = () => {
+          const textCategory = controlCategories.find(c => c.id === 'text');
+          if (textCategory) {
+            const count = textCategory.items.length + 1;
+            textCategory.items.push({
+              id: `custom_field_${count}`,
+              label: `动态扩张字段 ${count}`,
+              type: 'text',
+              key: `customKey${count}`,
+              defaultValue: `自定义值 ${count}`,
+              width: 150,
+              height: 32,
+              fontSize: 14,
+              color: '#059669',
+              bgColor: 'transparent',
+              align: 'left',
+              fontWeight: 'normal',
+              textOverflow: 'ellipsis'
+            });
+          }
+        };
+
+        // 核心导出 PDF (直接读取 DOM 真实物理像素坐标 + 2D Canvas 高清渲染，100.00% 像素级对齐)
+        const exportToPDF = async () => {
+          if (pages.length === 0) return;
+          isExporting.value = true;
+          const originalMode = mode.value;
+
+          // 保持当前预览状态并等待 DOM 视图渲染完毕
+          mode.value = 'preview';
+          await nextTick();
+          await new Promise(r => setTimeout(r, 60));
+
+          try {
+            const { jsPDF } = window.jspdf;
+            const pdfDoc = new jsPDF({
+              orientation: 'p',
+              unit: 'px',
+              format: [pages[0].width, pages[0].height]
+            });
+
+            const pageCards = document.querySelectorAll('.pdf-page-card');
+            const zoom = zoomScale.value || 1.0;
+
+            for (let i = 0; i < pages.length; i++) {
+              const page = pages[i];
+              const pW = page.width;
+              const pH = page.height;
+              const cardEl = pageCards[i];
+              const cardRect = cardEl ? cardEl.getBoundingClientRect() : null;
+
+              // 1. 创建 2x 物理像素高清离屏 Canvas 渲染器
+              const offCanvas = document.createElement('canvas');
+              const scale = 2;
+              offCanvas.width = pW * scale;
+              offCanvas.height = pH * scale;
+              const ctx = offCanvas.getContext('2d');
+              ctx.scale(scale, scale);
+
+              // 2. 绘制底层背景底板
+              if (page.bgDataUrl) {
+                const bgImg = new Image();
+                bgImg.src = page.bgDataUrl;
+                await new Promise((resolve) => {
+                  bgImg.onload = resolve;
+                  bgImg.onerror = resolve;
+                });
+                ctx.drawImage(bgImg, 0, 0, pW, pH);
+              } else {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, pW, pH);
+              }
+
+              // 3. 遍历精准绘制当前页面的所有拖拽业务控件
+              const pageCtrls = getPageControls(i);
+              for (const ctrl of pageCtrls) {
+                // 直接从屏幕实际 DOM 元素获取物理渲染位置，解决任何缩放与样式推迟死角！
+                let realX = ctrl.x;
+                let realY = ctrl.y;
+                let realW = ctrl.width;
+                let realH = ctrl.height;
+
+                if (cardEl && cardRect) {
+                  const ctrlDom = cardEl.querySelector(`[data-id="${ctrl.id}"]`);
+                  if (ctrlDom) {
+                    const ctrlRect = ctrlDom.getBoundingClientRect();
+                    realX = (ctrlRect.left - cardRect.left) / zoom;
+                    realY = (ctrlRect.top - cardRect.top) / zoom;
+                    realW = ctrlRect.width / zoom;
+                    realH = ctrlRect.height / zoom;
+                  }
+                }
+
+                if (ctrl.type === 'text') {
+                  // A. 绘制控件背景（若有）
+                  if (ctrl.bgColor && ctrl.bgColor !== 'transparent') {
+                    ctx.fillStyle = ctrl.bgColor;
+                    ctx.fillRect(realX, realY, realW, realH);
+                  }
+
+                  // B. 精准读取屏幕上文本字符 <span> 真实的物理 top / left，消除 CSS 行高 padding/leading 任何微小偏差
+                  let drawX = realX + 4;
+                  let drawY = realY;
+
+                  if (cardEl && cardRect) {
+                    const ctrlDom = cardEl.querySelector(`[data-id="${ctrl.id}"]`);
+                    const spanDom = ctrlDom ? ctrlDom.querySelector('.text-glyph-content') : null;
+                    if (spanDom) {
+                      const spanRect = spanDom.getBoundingClientRect();
+                      drawX = (spanRect.left - cardRect.left) / zoom;
+                      drawY = (spanRect.top - cardRect.top) / zoom;
+                    } else {
+                      const vAlign = ctrl.verticalAlign || 'top';
+                      if (vAlign === 'center') {
+                        drawY = realY + Math.max(0, (realH - (ctrl.fontSize || 14)) / 2);
+                      } else if (vAlign === 'bottom') {
+                        drawY = realY + Math.max(0, realH - (ctrl.fontSize || 14) - 2);
+                      }
+                    }
+                  }
+
+                  // C. 获取渲染文本与排版参数
+                  const rawText = String(mockData[ctrl.key] || ctrl.defaultValue || ctrl.label || '');
+                  const fontSz = ctrl.fontSize || 14;
+                  const isBold = (ctrl.fontWeight || '').includes('bold');
+                  ctx.font = `${isBold ? 'bold ' : ''}${fontSz}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+                  ctx.fillStyle = ctrl.color || '#111827';
+                  ctx.textAlign = ctrl.align || 'left';
+                  ctx.textBaseline = 'top'; // 配合 DOM 字符 top 坐标，实现 100.00% 绝对物理像素重合
+
+                  // 如果是居中或右对齐，根据 realW 重算 X 轴基准
+                  if (ctrl.align === 'center') {
+                    drawX = realX + realW / 2;
+                  } else if (ctrl.align === 'right') {
+                    drawX = realX + realW - 4;
+                  }
+
+                  // 单行省略模式 vs 多行换行模式
+                  if (ctrl.textOverflow !== 'wrap') {
+                    const availW = realW - 8;
+                    let renderText = rawText;
+                    if (ctx.measureText(renderText).width > availW) {
+                      while (renderText.length > 0 && (ctx.measureText(renderText + '...').width > availW)) {
+                        renderText = renderText.slice(0, -1);
+                      }
+                      renderText += '...';
+                    }
+                    ctx.fillText(renderText, drawX, drawY);
+                  } else {
+                    // 多行换行模式
+                    const chars = rawText.split('');
+                    let line = '';
+                    let currentY = drawY;
+                    const lineHeight = fontSz * 1.25;
+
+                    for (let n = 0; n < chars.length; n++) {
+                      const testLine = line + chars[n];
+                      if (ctx.measureText(testLine).width > realW - 8 && n > 0) {
+                        ctx.fillText(line, drawX, currentY);
+                        line = chars[n];
+                        currentY += lineHeight;
+                      } else {
+                        line = testLine;
+                      }
+                    }
+                    ctx.fillText(line, drawX, currentY);
+                  }
+
+                } else if (ctrl.type === 'table') {
+                  // 绘制表格控件
+                  ctx.fillStyle = '#ffffff';
+                  ctx.fillRect(realX, realY, realW, realH);
+
+                  const headers = ctrl.headers || [];
+                  const colWidth = realW / Math.max(1, headers.length);
+                  const headerHeight = 24;
+                  const fontSz = ctrl.fontSize || 12;
+                  const rowData = ctrl.mockData || [];
+                  const rowHeight = (realH - headerHeight) / Math.max(1, rowData.length);
+
+                  // 表头背景与文字
+                  ctx.fillStyle = ctrl.headerBg || '#eff6ff';
+                  ctx.fillRect(realX, realY, realW, headerHeight);
+
+                  ctx.font = `bold ${fontSz}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+                  ctx.fillStyle = '#1e293b';
+                  ctx.textAlign = 'left';
+                  ctx.textBaseline = 'middle';
+
+                  headers.forEach((h, colIdx) => {
+                    ctx.fillText(h, realX + colIdx * colWidth + 6, realY + headerHeight / 2);
+                  });
+
+                  // 数据行
+                  ctx.font = `${fontSz}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+                  ctx.fillStyle = '#334155';
+                  rowData.forEach((row, rowIdx) => {
+                    const rY = realY + headerHeight + rowIdx * rowHeight;
+                    (ctrl.fields || []).forEach((field, colIdx) => {
+                      const cellVal = String(row[field] || '');
+                      ctx.fillText(cellVal, realX + colIdx * colWidth + 6, rY + rowHeight / 2);
+                    });
+                  });
+
+                  // 外框与线段
+                  ctx.strokeStyle = ctrl.borderColor || '#bfdbfe';
+                  ctx.lineWidth = 1;
+                  ctx.strokeRect(realX, realY, realW, realH);
+                  ctx.beginPath();
+                  ctx.moveTo(realX, realY + headerHeight);
+                  ctx.lineTo(realX + realW, realY + headerHeight);
+                  ctx.stroke();
+                  for (let c = 1; c < headers.length; c++) {
+                    ctx.beginPath();
+                    ctx.moveTo(realX + c * colWidth, realY);
+                    ctx.lineTo(realX + c * colWidth, realY + realH);
+                    ctx.stroke();
+                  }
+
+                } else if (ctrl.type === 'image') {
+                  // 绘制图片控件
+                  if (ctrl.value) {
+                    const img = new Image();
+                    img.src = ctrl.value;
+                    await new Promise((resolve) => {
+                      img.onload = resolve;
+                      img.onerror = resolve;
+                    });
+                    ctx.drawImage(img, realX, realY, realW, realH);
+                  }
+                }
+              }
+
+              // 4. 将离屏 Canvas 写入 PDF
+              const imgData = offCanvas.toDataURL('image/jpeg', 0.98);
+              if (i > 0) pdfDoc.addPage([pW, pH], 'p');
+              pdfDoc.addImage(imgData, 'JPEG', 0, 0, pW, pH);
+            }
+
+            pdfDoc.save(`Dynamic-Report-${Date.now()}.pdf`);
+          } catch (err) {
+            console.error('导出 PDF 出错:', err);
+            alert('导出 PDF 失败: ' + (err.message || err));
+          } finally {
+            mode.value = originalMode;
+            isExporting.value = false;
+          }
+        };
+
+        // Ctrl + 鼠标滚轮缩放画布
+        const onCanvasWheel = (e) => {
+          if (e.ctrlKey) {
+            e.preventDefault();
+            const delta = e.deltaY < 0 ? 0.05 : -0.05;
+            const newZoom = Math.min(2.0, Math.max(0.5, zoomScale.value + delta));
+            zoomScale.value = Number(newZoom.toFixed(2));
+          }
+        };
+
+        onMounted(() => {
+          initDefaultBlankTemplate();
+
+          // 监听 Ctrl + 鼠标滚轮缩放画布
+          const workspaceEl = document.querySelector('.canvas-workspace');
+          if (workspaceEl) {
+            workspaceEl.addEventListener('wheel', onCanvasWheel, { passive: false });
+          }
+        });
+
+        return {
+          mode,
+          zoomScale,
+          loadingPdf,
+          isExporting,
+          showRulers,
+          guides,
+          draggingNewGuide,
+          isLeftPanelCollapsed,
+          isRightPanelCollapsed,
+          contextMenu,
+          controlCategories,
+          pages,
+          controls,
+          selectedControlId,
+          selectedControl,
+          mockData,
+          getRulerTicks,
+          getPageGuides,
+          getGuideStyle,
+          startCreateGuide,
+          startMoveGuide,
+          deleteGuide,
+          handleFileUpload,
+          getPageControls,
+          onDragStart,
+          onDropOnPage,
+          getControlStyle,
+          getTextStyle,
+          getFormattedText,
+          selectAndStartMove,
+          startResize,
+          clearSelection,
+          onContextMenu,
+          closeContextMenu,
+          duplicateControl,
+          toggleLockControl,
+          deleteControl,
+          deleteSelectedControl,
+          zoomIn,
+          zoomOut,
+          resetZoom,
+          addTableColumn,
+          removeTableColumn,
+          addCustomControl,
+          exportToPDF
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

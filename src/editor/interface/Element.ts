@@ -43,6 +43,12 @@ export interface IElementStyle {
   title?: ITitle
   letterSpacing?: number
   textDecoration?: ITextDecoration
+  /** 段落级样式(挂段落首元素,Word 导入/段落排版) */
+  textIndent?: number // 首行缩进(px)
+  lineHeight?: number // 行距倍率(覆盖全局 lineHeight)
+  lineHeightRule?: 'auto' | 'exact' | 'atLeast' // 行距规则
+  spaceBefore?: number // 段前间距(px)
+  spaceAfter?: number // 段后间距(px)
 }
 
 export interface IElementRule {
@@ -98,6 +104,7 @@ export interface ITableElement {
   trId?: string
   tableId?: string
   conceptId?: string
+  name?: string
 }
 
 export type ITable = ITableAttr & ITableRule & ITableElement

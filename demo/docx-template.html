@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Word 模板填充工具</title>
+
+    <!-- ========== CDN 依赖 ========== -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pizzip@3.2.0/dist/pizzip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.37.11/build/docxtemplater.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.2/dist/docx-preview.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f6f9fc;
+            height: 100vh;
+            overflow: hidden;
+            color: #1e293b;
+        }
+
+        .app-layout {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .sidebar {
+            width: 420px;
+            min-width: 360px;
+            background: #fff;
+            border-right: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            padding: 28px 24px;
+            gap: 24px;
+            overflow-y: auto;
+            z-index: 10;
+            box-shadow: 4px 0 24px rgba(0, 0, 0, 0.03);
+        }
+
+        .app-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .app-header .icon {
+            font-size: 26px;
+        }
+
+        .app-header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .status-tag {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: #f1f5f9;
+            color: #64748b;
+            display: inline-block;
+            margin-top: 4px;
+        }
+
+        .status-tag.ok {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-tag.fail {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .upload-area {
+            border: 2px dashed #cbd5e1;
+            border-radius: 14px;
+            padding: 24px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #fafcff;
+        }
+
+        .upload-area:hover,
+        .upload-area.dragover {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+
+        .upload-area .upload-icon {
+            font-size: 32px;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .upload-area .upload-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        .upload-area .upload-hint {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 4px;
+        }
+
+        .upload-area input[type="file"] {
+            display: none;
+        }
+
+        .file-info {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            padding: 10px 14px;
+            background: #f1f5f9;
+            border-radius: 10px;
+            font-size: 13px;
+        }
+
+        .file-info.show {
+            display: flex;
+        }
+
+        .file-info .file-name {
+            font-weight: 600;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-info .file-remove {
+            background: none;
+            border: none;
+            color: #ef4444;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .form-section {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            flex: 1;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #334155;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .form-group label .tag {
+            background: #dbeafe;
+            color: #1d4ed8;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        .form-group input {
+            padding: 10px 12px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+
+        .actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: auto;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #f1f5f9;
+            color: #1e293b;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: #0f172a;
+            color: #fff;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #1e293b;
+        }
+
+        .btn-success {
+            background: #059669;
+            color: #fff;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #047857;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .preview-pane {
+            flex: 1;
+            background: #f1f5f9;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .preview-header {
+            padding: 16px 24px;
+            background: #fff;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .preview-header .badge {
+            font-size: 12px;
+            background: #e2e8f0;
+            color: #475569;
+            padding: 2px 10px;
+            border-radius: 20px;
+        }
+
+        .preview-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .empty-state,
+        .loading-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-top: 120px;
+            color: #94a3b8;
+            font-size: 14px;
+            gap: 12px;
+        }
+
+        .loading-state {
+            display: none;
+        }
+
+        .loading-state.show {
+            display: flex;
+        }
+
+        .loader {
+            width: 36px;
+            height: 36px;
+            border: 3px solid #cbd5e1;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        #previewContent {
+            width: 100%;
+            max-width: 850px;
+        }
+
+        .docx-wrapper {
+            padding: 0 !important;
+            background: transparent !important;
+        }
+
+        .docx-wrapper>section.docx {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1) !important;
+            margin-bottom: 30px !important;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #0f172a;
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 13px;
+            opacity: 0;
+            transition: all 0.3s;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
+
+        .toast.error {
+            background: #b91c1c;
+        }
+
+        .toast.success {
+            background: #065f46;
+        }
+
+        @media (max-width: 860px) {
+            body {
+                overflow: auto;
+            }
+
+            .app-layout {
+                flex-direction: column;
+                height: auto;
+            }
+
+            .sidebar {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid #e2e8f0;
+            }
+
+            .preview-pane {
+                height: 600px;
+            }
+
+            .preview-body {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="toast" class="toast"></div>
+
+    <div class="app-layout">
+        <aside class="sidebar">
+            <header class="app-header">
+                <span class="icon">📄</span>
+                <div>
+                    <h1>Word 填充工具</h1>
+                    <span id="depStatus" class="status-tag">依赖检查中...</span>
+                </div>
+            </header>
+
+            <div class="upload-area" id="uploadArea">
+                <span class="upload-icon">📤</span>
+                <div class="upload-title">点击或拖拽上传模板</div>
+                <div class="upload-hint">支持 .docx 格式文档</div>
+                <input type="file" id="fileInput" accept=".docx" />
+                <div class="file-info" id="fileInfo">
+                    <span>📎</span>
+                    <span class="file-name" id="fileName">—</span>
+                    <button class="file-remove" id="fileRemove">✕</button>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <div class="form-group">
+                    <label>项目名称 <span class="tag">{projectName}</span></label>
+                    <input type="text" id="inputName" value="测试项目" placeholder="请输入项目名称" />
+                </div>
+                <div class="form-group">
+                    <label>委托方 <span class="tag">{test}</span></label>
+                    <input type="text" id="inputSex" value="测试委托方" placeholder="请输入委托方名称" />
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="btn btn-primary" id="btnPreview" disabled>👁️ 刷新预览</button>
+                <div class="btn-row">
+                    <button class="btn btn-success" id="btnDownload" disabled>⬇️ 下载文档</button>
+                    <button class="btn" id="btnReset">🔄 重置表单</button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="preview-pane">
+            <div class="preview-header">
+                <span>实时预览面板</span>
+                <span class="badge" id="previewStatus">未加载模板</span>
+            </div>
+            <div class="preview-body">
+                <div class="empty-state" id="emptyState">
+                    <span>👈 在左侧上传模板后将自动加载预览</span>
+                </div>
+                <div class="loading-state" id="loadingState">
+                    <div class="loader"></div>
+                    <span>正在生成并渲染文档...</span>
+                </div>
+                <div id="previewContent"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        (function () {
+            'use strict';
+
+            const toastEl = document.getElementById('toast');
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+            const fileInfo = document.getElementById('fileInfo');
+            const fileName = document.getElementById('fileName');
+            const fileRemove = document.getElementById('fileRemove');
+            const inputName = document.getElementById('inputName');
+            const inputSex = document.getElementById('inputSex');
+            const btnPreview = document.getElementById('btnPreview');
+            const btnDownload = document.getElementById('btnDownload');
+            const btnReset = document.getElementById('btnReset');
+            const emptyState = document.getElementById('emptyState');
+            const loadingState = document.getElementById('loadingState');
+            const previewContent = document.getElementById('previewContent');
+            const previewStatus = document.getElementById('previewStatus');
+            const depStatus = document.getElementById('depStatus');
+
+            let templateArrayBuffer = null;
+            let currentFileName = '填充结果.docx';
+            let isProcessing = false;
+
+            function showToast(msg, type = 'info') {
+                toastEl.textContent = msg;
+                toastEl.className = `toast show ${type}`;
+                clearTimeout(toastEl._timer);
+                toastEl._timer = setTimeout(() => toastEl.classList.remove('show'), 3000);
+            }
+
+            // 检查外部依赖加载情况
+            function checkDependencies() {
+                const hasSaveAs = typeof window.saveAs === 'function' || typeof saveAs === 'function';
+                const ok = window.JSZip && window.PizZip && window.docxtemplater && window.docx && hasSaveAs;
+
+                if (ok) {
+                    depStatus.textContent = '✅ 依赖已就绪';
+                    depStatus.className = 'status-tag ok';
+                } else {
+                    depStatus.textContent = '❌ CDN 依赖加载失败';
+                    depStatus.className = 'status-tag fail';
+                }
+                const ready = ok && templateArrayBuffer !== null;
+                btnPreview.disabled = !ready;
+                btnDownload.disabled = !ready;
+                return ok;
+            }
+
+            // 核心功能：使用 docxtemplater 生成替换数据后的真实 .docx 二进制 Blob 文本
+            function generateFilledDoc() {
+                return new Promise((resolve, reject) => {
+                    try {
+                        const zip = new window.PizZip(templateArrayBuffer);
+
+                        // 检查模板内部是否包含 `${` 语法
+                        const zipText = JSON.stringify(zip.files);
+                        const hasDollarSyntax = zipText.includes('${');
+
+                        const config = {
+                            paragraphLoop: true,
+                            linebreaks: true,
+                        };
+
+                        if (hasDollarSyntax) {
+                            config.delimiters = { start: '${', end: '}' };
+                        }
+
+                        const doc = new window.docxtemplater(zip, config);
+
+                        const projectNameVal = inputName.value.trim() || '';
+                        const testVal = inputSex.value.trim() || '';
+
+                        // 注入表单变量
+                        doc.render({
+                            projectName: projectNameVal,
+                            test: testVal,
+                            Name: projectNameVal,
+                            Sex: testVal
+                        });
+
+                        // 生成包含完整 word 格式信息的二进制 Blob 数据
+                        const out = doc.getZip().generate({
+                            type: 'blob',
+                            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        });
+                        resolve(out);
+                    } catch (err) {
+                        reject(err);
+                    }
+                });
+            }
+
+            async function handlePreview() {
+                if (isProcessing) return;
+                isProcessing = true;
+                emptyState.style.display = 'none';
+                previewContent.style.display = 'none';
+                loadingState.classList.add('show');
+                previewStatus.textContent = '正在生成...';
+
+                try {
+                    const blob = await generateFilledDoc();
+                    previewContent.innerHTML = '';
+                    previewContent.style.display = 'block';
+                    loadingState.classList.remove('show');
+
+                    await window.docx.renderAsync(blob, previewContent);
+                    previewStatus.textContent = '预览加载完成';
+                    showToast('预览生成成功', 'success');
+                } catch (err) {
+                    loadingState.classList.remove('show');
+                    previewContent.style.display = 'block';
+                    previewContent.innerHTML = `<div style="padding:16px;color:#b91c1c;background:#fef2f2;border-radius:8px;font-size:13px;">❌ 生成失败: ${err.message}</div>`;
+                    previewStatus.textContent = '生成失败';
+                    showToast('文档解析失败', 'error');
+                } finally {
+                    isProcessing = false;
+                }
+            }
+
+            // 下载真正的 .docx 模板填充结果
+            async function handleDownload() {
+                if (!templateArrayBuffer) {
+                    showToast('请先上传模板文件', 'error');
+                    return;
+                }
+                try {
+                    btnDownload.disabled = true;
+                    btnDownload.textContent = '⏳ 生成中...';
+
+                    // 1. 获取 docxtemplater 填充数据后的完整 docx 二进制文件
+                    const blob = await generateFilledDoc();
+
+                    // 2. 导出文件名处理
+                    const saveName = currentFileName.replace(/\.docx$/i, '_已填充.docx');
+
+                    // 3. 兼容触发下载
+                    const saveFn = window.saveAs || saveAs;
+                    saveFn(blob, saveName);
+
+                    showToast('已开始下载文档', 'success');
+                } catch (err) {
+                    showToast(`下载失败: ${err.message}`, 'error');
+                } finally {
+                    btnDownload.disabled = false;
+                    btnDownload.textContent = '⬇️ 下载文档';
+                }
+            }
+
+            function handleFile(file) {
+                if (!file.name.toLowerCase().endsWith('.docx')) {
+                    showToast('仅支持 .docx 文件', 'error');
+                    return;
+                }
+                currentFileName = file.name;
+                const reader = new FileReader();
+                reader.onload = async e => {
+                    templateArrayBuffer = e.target.result;
+                    fileName.textContent = file.name;
+                    fileInfo.classList.add('show');
+                    checkDependencies();
+                    showToast('模板加载成功', 'success');
+
+                    // 上传完成后自动调起预览
+                    await handlePreview();
+                };
+                reader.readAsArrayBuffer(file);
+            }
+
+            // 事件绑定
+            uploadArea.addEventListener('click', e => { if (e.target !== fileRemove) fileInput.click(); });
+            fileInput.addEventListener('change', function () { if (this.files.length) handleFile(this.files[0]); });
+            uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+            uploadArea.addEventListener('dragleave', e => { e.preventDefault(); uploadArea.classList.remove('dragover'); });
+            uploadArea.addEventListener('drop', e => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+            });
+
+            fileRemove.addEventListener('click', e => {
+                e.stopPropagation();
+                templateArrayBuffer = null;
+                fileInput.value = '';
+                fileInfo.classList.remove('show');
+                previewContent.innerHTML = '';
+                emptyState.style.display = 'flex';
+                previewStatus.textContent = '未加载模板';
+                checkDependencies();
+            });
+
+            btnPreview.addEventListener('click', handlePreview);
+            btnDownload.addEventListener('click', handleDownload);
+            btnReset.addEventListener('click', () => {
+                inputName.value = '测试项目';
+                inputSex.value = '测试委托方';
+                showToast('表单已重置');
+                if (templateArrayBuffer) handlePreview();
+            });
+
+            setTimeout(checkDependencies, 300);
+        })();
+    </script>
+</body>
+
+</html>

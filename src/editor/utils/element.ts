@@ -253,16 +253,22 @@ export function formatElementList(
           table: { defaultTrMinHeight, defaultColMinWidth },
           margins
         } = editorOptions
-        // 当colgroup未传入时，默认使用编辑器宽度平分
+        // 当colgroup未传入时，默认使用编辑器宽度平分（取所有行中最大列数）
         if (!el.colgroup?.length && el.trList.length) {
-          const colCount = el.trList[0].tdList.reduce(
-            (pre, cur) => pre + cur.colspan,
-            0
-          )
+          let maxColCount = 1
+          for (let r = 0; r < el.trList.length; r++) {
+            if (Array.isArray(el.trList[r]?.tdList)) {
+              const rCols = el.trList[r].tdList.reduce(
+                (pre, cur) => pre + (cur.colspan || 1),
+                0
+              )
+              if (rCols > maxColCount) maxColCount = rCols
+            }
+          }
           const innerWidth = editorOptions.width - margins[1] - margins[3]
-          const colWidth = Math.max(innerWidth / colCount, defaultColMinWidth)
+          const colWidth = Math.max(innerWidth / maxColCount, defaultColMinWidth)
           el.colgroup = []
-          for (let c = 0; c < colCount; c++) {
+          for (let c = 0; c < maxColCount; c++) {
             el.colgroup.push({ width: colWidth })
           }
         }
@@ -371,11 +377,18 @@ export function formatElementList(
         ...EDITOR_ROW_ATTR,
         ...EDITOR_TRACE_ATTR
       ])
-      // 控件设置的默认样式（以前缀为基准）
-      const controlDefaultStyle = pickObject(
-        <IElement>(<unknown>el.control),
-        CONTROL_STYLE_ATTR
-      )
+      // 控件设置的默认样式（从 el 和 el.control 聚合）
+      const controlDefaultStyle = {
+        ...pickObject(el, CONTROL_STYLE_ATTR),
+        ...pickObject(<IElement>(<unknown>el.control), CONTROL_STYLE_ATTR)
+      }
+      if (el.control) {
+        CONTROL_STYLE_ATTR.forEach(attr => {
+          if (el[attr] !== undefined && (el.control as any)[attr] === undefined) {
+            ;(el.control as any)[attr] = el[attr]
+          }
+        })
+      }
       // 前后缀个性化设置
       const thePrePostfixArg: Omit<IElement, 'value'> = {
         ...controlDefaultStyle,
@@ -413,13 +426,17 @@ export function formatElementList(
           i++
         }
       }
-      // 值
-      if (
+      // 值与占位符判定：无实际数据且配置了 placeholder 时统一显示占位符
+      const hasActualValue =
         (value && value.length) ||
-        type === ControlType.CHECKBOX ||
-        type === ControlType.RADIO ||
-        (type === ControlType.SELECT && code && (!value || !value.length))
-      ) {
+        (type === ControlType.SELECT && code && (!value || !value.length)) ||
+        ((type === ControlType.CHECKBOX || type === ControlType.RADIO) && code)
+      const shouldRenderValue =
+        hasActualValue ||
+        ((type === ControlType.CHECKBOX || type === ControlType.RADIO) &&
+          !placeholder)
+
+      if (shouldRenderValue) {
         let valueList: IElement[] = value ? deepClone(value) : []
         if (type === ControlType.CHECKBOX) {
           const codeList = code ? code.split(',') : []

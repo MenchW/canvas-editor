@@ -1,0 +1,1829 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>占位符与数据字典管理中心 - 面向开发者</title>
+  <!-- Element UI 2.15.14 CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15.14/lib/theme-chalk/index.css">
+  <!-- Vue 2.7.16 -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.js"></script>
+  <!-- Element UI 2.15.14 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15.14/lib/index.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #f0f2f5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px;
+      color: #1e293b;
+    }
+    #app {
+      padding: 16px;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    /* 顶部搜索卡片 */
+    .search-card {
+      background: #fff;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      padding: 16px 20px 0 20px;
+    }
+    .search-card .el-form-item {
+      margin-bottom: 16px;
+    }
+    /* 主内容区 */
+    .main-container {
+      flex: 1;
+      display: flex;
+      gap: 16px;
+      align-items: stretch;
+    }
+    /* 左侧分组卡片 */
+    .group-card {
+      width: 320px;
+      flex-shrink: 0;
+      background: #fff;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      display: flex;
+      flex-direction: column;
+    }
+    .group-card-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f8fafc;
+    }
+    .group-card-header .title {
+      font-weight: 600;
+      font-size: 14px;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .group-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+      max-height: calc(100vh - 210px);
+    }
+    .group-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      margin-bottom: 6px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid #f1f5f9;
+      transition: all 0.15s ease;
+      background-color: #fff;
+    }
+    .group-item:hover {
+      background-color: #f8fafc;
+      border-color: #cbd5e1;
+    }
+    .group-item.active {
+      background-color: #eff6ff;
+      border-color: #93c5fd;
+      color: #2563eb;
+    }
+    .group-item-info {
+      flex: 1;
+      min-width: 0;
+      margin-right: 8px;
+    }
+    .group-item-title {
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .group-item-system {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .group-item.active .group-item-system {
+      color: #3b82f6;
+    }
+    .group-actions {
+      display: none;
+      align-items: center;
+      gap: 4px;
+    }
+    .group-item:hover .group-actions,
+    .group-item.active .group-actions {
+      display: flex;
+    }
+    /* 右侧占位符表格卡片 */
+    .table-card {
+      flex: 1;
+      min-width: 0;
+      background: #fff;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      display: flex;
+      flex-direction: column;
+    }
+    .table-card-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f8fafc;
+    }
+    .table-card-header .title-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .table-card-header .current-group-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .table-body {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      max-height: calc(100vh - 210px);
+    }
+    .key-badge {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      color: #2563eb;
+      background: #eff6ff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid #bfdbfe;
+    }
+    .desc-text {
+      color: #475569;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .empty-placeholder {
+      padding: 40px 0;
+      text-align: center;
+    }
+    .table-row-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      white-space: nowrap;
+    }
+    /* 高级配置容器 */
+    .advanced-config-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+    }
+    .spacious-dialog {
+      margin-top: 2vh !important;
+      margin-bottom: 0;
+    }
+    .spacious-dialog .el-dialog__body {
+      padding: 16px 20px;
+      max-height: calc(96vh - 110px);
+      overflow-y: auto;
+    }
+    /* 实时表格视觉预览器 */
+    .table-live-preview-box {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 12px;
+      margin-top: 10px;
+      overflow-x: auto;
+    }
+    .preview-canvas-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      background: #ffffff;
+    }
+    .preview-canvas-table th, .preview-canvas-table td {
+      border: 1px solid #cbd5e1;
+      padding: 8px 10px;
+    }
+    .preview-canvas-table th {
+      background-color: #f1f5f9;
+      font-weight: 600;
+      color: #1e293b;
+      text-align: center;
+    }
+    .preview-canvas-table td {
+      text-align: left;
+    }
+    .preview-canvas-table .loop-row {
+      background-color: #fcfdfd;
+    }
+    .preview-canvas-table .loop-badge {
+      display: inline-block;
+      font-size: 10px;
+      background: #dcfce7;
+      color: #15803d;
+      border: 1px solid #86efac;
+      border-radius: 3px;
+      padding: 1px 4px;
+      margin-left: 4px;
+      font-weight: normal;
+    }
+    .preview-canvas-table .placeholder-chip {
+      display: inline-block;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      color: #2563eb;
+      background: #eff6ff;
+      border: 1px dashed #60a5fa;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-weight: 500;
+    }
+    /* 语法速查卡片 */
+    .syntax-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      font-size: 12px;
+      color: #475569;
+    }
+    .syntax-title {
+      font-weight: 600;
+      color: #0f172a;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .syntax-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .syntax-item {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      padding: 6px 8px;
+    }
+    .syntax-code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      color: #0284c7;
+      background: #e0f2fe;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+    .code-preview-box {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      padding: 12px;
+      border-radius: 6px;
+      max-height: 200px;
+      overflow: auto;
+      line-height: 1.5;
+    }
+    .preview-canvas-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      background: #fff;
+      margin-top: 4px;
+    }
+    .preview-canvas-table th, .preview-canvas-table td {
+      border: 1px solid #cbd5e1 !important;
+      padding: 8px 12px !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    .preview-canvas-table th {
+      background-color: #f8fafc !important;
+      color: #334155;
+      font-weight: 600;
+    }
+    .preview-chip {
+      display: inline-block;
+      background: #eff6ff;
+      color: #2563eb;
+      border: 1px solid #bfdbfe;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- 顶部过滤与全局操作栏 -->
+    <div class="search-card">
+      <el-form :inline="true" :model="searchForm" size="small" @submit.native.prevent="handleSearch">
+        <el-form-item label="所属系统">
+          <el-select v-model="searchForm.systemName" placeholder="全部系统" clearable filterable style="width: 220px;">
+            <el-option v-for="item in systemOptions" :key="item.value" :label="item.label" :value="item.value"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="分组名称">
+          <el-input v-model="searchForm.groupName" placeholder="搜索分组名" clearable @keyup.enter.native="handleSearch"></el-input>
+        </el-form-item>
+        <el-form-item label="占位符/Key">
+          <el-input v-model="searchForm.fieldName" placeholder="搜索字段名或 key" clearable @keyup.enter.native="handleSearch"></el-input>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" icon="el-icon-search" :loading="isSyncing" @click="handleSearch">查 询</el-button>
+          <el-button icon="el-icon-refresh-right" @click="handleResetSearch">重 置</el-button>
+        </el-form-item>
+      </el-form>
+    </div>
+
+    <!-- 主展示区：左侧分组列表，右侧占位符字段维护与复杂表格设计 -->
+    <div class="main-container">
+      <!-- 左侧分组卡片 -->
+      <div class="group-card">
+        <div class="group-card-header">
+          <div class="title">
+            <i class="el-icon-folder-opened" style="color: #3b82f6;"></i>
+            <span>数据分组 ({{ filteredGroups.length }})</span>
+          </div>
+          <el-button type="primary" size="mini" icon="el-icon-plus" @click="handleOpenAddGroup">新增分组</el-button>
+        </div>
+        <div class="group-list">
+          <div
+            v-for="group in filteredGroups"
+            :key="group._originalIndex"
+            class="group-item"
+            :class="{ active: currentGroupIndex === group._originalIndex }"
+            @click="handleSelectGroup(group._originalIndex)"
+          >
+            <div class="group-item-info">
+              <div class="group-item-title">
+                <span>{{ group.groupName }}</span>
+                <el-badge :value="(group.children || []).length" type="primary" style="margin-left: 4px;"></el-badge>
+              </div>
+              <div class="group-item-system">{{ formatSystemName(group.systemName || group.appId) }}</div>
+            </div>
+            <div class="group-actions" @click.stop>
+              <el-button type="text" size="mini" icon="el-icon-edit" @click="handleOpenEditGroup(group._originalIndex)"></el-button>
+              <el-popconfirm title="确定删除该分组及其全部占位符？" @confirm="handleDeleteGroup(group._originalIndex)">
+                <el-button slot="reference" type="text" size="mini" icon="el-icon-delete" style="color: #ef4444;"></el-button>
+              </el-popconfirm>
+            </div>
+          </div>
+          <div v-if="!filteredGroups.length" class="empty-placeholder">
+            <el-empty description="暂无匹配分组" :image-size="60"></el-empty>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧占位符字段与高级表格列表卡片 -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <div class="title-area">
+            <span class="current-group-name">{{ currentGroup ? currentGroup.groupName : '未选分组' }}</span>
+            <el-tag size="small" type="info" v-if="currentGroup">{{ formatSystemName(currentGroup.systemName || currentGroup.appId) }}</el-tag>
+            <span style="color: #64748b; font-size: 13px;" v-if="currentGroup && currentGroup.description">
+              - {{ currentGroup.description }}
+            </span>
+          </div>
+          <div class="header-actions" v-if="currentGroup">
+            <el-button type="info" size="small" icon="el-icon-document" @click="handleOpenGroupJsonModal">
+              查看回显结构JSON
+            </el-button>
+            <el-button type="primary" size="small" icon="el-icon-plus" @click="handleOpenAddField">
+              新增基础占位符
+            </el-button>
+            <el-button type="success" size="small" icon="el-icon-s-grid" @click="handleOpenAddTable">
+              新增结构化表格
+            </el-button>
+          </div>
+        </div>
+
+        <div class="table-body" style="padding: 0 20px 20px;" v-loading="isFieldLoading">
+          <el-tabs v-model="activeTab" type="card" style="margin-bottom: 12px; margin-top: 10px;">
+            <el-tab-pane name="all">
+              <span slot="label"><i class="el-icon-menu"></i> 全部控件 ({{ filteredAllFields.length }})</span>
+            </el-tab-pane>
+            <el-tab-pane name="scalar">
+              <span slot="label"><i class="el-icon-document"></i> 普通控件 ({{ filteredScalarFields.length }})</span>
+            </el-tab-pane>
+            <el-tab-pane name="table">
+              <span slot="label"><i class="el-icon-s-grid"></i> 结构化表格 ({{ filteredTableFields.length }})</span>
+            </el-tab-pane>
+          </el-tabs>
+
+          <!-- Tab 0: 全部控件综合列表 -->
+          <div v-show="activeTab === 'all'">
+            <el-table
+              :data="filteredAllFields"
+              size="small"
+              border
+              style="width: 100%;"
+              :header-cell-style="{ background: '#f8fafc', color: '#334155', fontWeight: '600' }"
+            >
+              <el-table-column label="占位符/表格名称" min-width="170" show-overflow-tooltip>
+                <template slot-scope="scope">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <i :class="scope.row.type === 'table' ? 'el-icon-s-grid' : 'el-icon-document'" :style="{ color: scope.row.type === 'table' ? '#2563eb' : '#059669', fontSize: '14px' }"></i>
+                    <span style="font-weight: 600; color: #0f172a;">{{ scope.row.name }}</span>
+                    <el-tag size="mini" v-if="scope.row.type === 'table'" type="danger" effect="dark">整表组件</el-tag>
+                    <el-tag size="mini" v-else-if="scope.row.type === 'checkbox'" type="success">多选框</el-tag>
+                  </div>
+                </template>
+              </el-table-column>
+
+              <el-table-column label="字段取值键名 (Key / Path)" min-width="180">
+                <template slot-scope="scope">
+                  <span class="key-badge" :style="scope.row.type === 'table' ? 'background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;' : ''">{{ scope.row.conceptId }}</span>
+                </template>
+              </el-table-column>
+
+              <el-table-column label="控件类型" min-width="140" align="center">
+                <template slot-scope="scope">
+                  <el-tag size="mini" v-if="scope.row.type === 'list'" type="primary" effect="plain">
+                    list.{{ scope.row.listType || 'text' }} <span style="font-size:11px;opacity:0.8;">({{ scope.row.layout === 'grid' ? (scope.row.gridCols || 2) + '列' : scope.row.layout === 'horizontal' ? '水平' : '垂直' }})</span>
+                  </el-tag>
+                  <el-tag size="mini" v-else :type="getTypeTagStyle(scope.row.type)">
+                    {{ scope.row.type }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+
+              <el-table-column label="业务说明" min-width="200" show-overflow-tooltip>
+                <template slot-scope="scope">
+                  <div class="desc-text">{{ scope.row.description || (scope.row.type === 'table' ? '标准结构化报表表格' : '暂无说明') }}</div>
+                </template>
+              </el-table-column>
+
+              <el-table-column prop="createTime" label="创建时间" width="160" align="center">
+                <template slot-scope="scope">
+                  <span style="color: #64748b; font-size: 12px;">{{ scope.row.createTime || '-' }}</span>
+                </template>
+              </el-table-column>
+
+              <el-table-column label="操作" width="140" align="center" fixed="right">
+                <template slot-scope="scope">
+                  <div class="table-row-actions">
+                    <el-button type="text" size="small" icon="el-icon-edit" @click="handleEditItem(scope.row._originalIndex)">
+                      {{ scope.row.type === 'table' ? '设计表格' : '编辑' }}
+                    </el-button>
+                    <el-popconfirm title="确定删除该项？" @confirm="handleDeleteField(scope.row._originalIndex)">
+                      <el-button slot="reference" type="text" size="small" icon="el-icon-delete" style="color: #ef4444;">
+                        删除
+                      </el-button>
+                    </el-popconfirm>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <!-- Tab 1: 普通控件列表 -->
+          <div v-show="activeTab === 'scalar'">
+            <el-table
+              :data="filteredScalarFields"
+              size="small"
+              border
+              style="width: 100%;"
+              :header-cell-style="{ background: '#f8fafc', color: '#334155', fontWeight: '600' }"
+            >
+              <el-table-column label="占位符名称" min-width="160" show-overflow-tooltip>
+                <template slot-scope="scope">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-weight: 600; color: #0f172a;">{{ scope.row.name }}</span>
+                  </div>
+                </template>
+              </el-table-column>
+
+              <el-table-column label="字段取值键名 (Key / Path)" min-width="180">
+                <template slot-scope="scope">
+                  <span class="key-badge">{{ scope.row.conceptId }}</span>
+                </template>
+              </el-table-column>
+
+              <el-table-column label="控件类型" width="120" align="center">
+                <template slot-scope="scope">
+                  <el-tag size="mini" :type="getTypeTagStyle(scope.row.type)">
+                    {{ scope.row.type }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+
+              <el-table-column label="业务说明" min-width="200" show-overflow-tooltip>
+                <template slot-scope="scope">
+                  <div class="desc-text">{{ scope.row.description || '暂无说明' }}</div>
+                </template>
+              </el-table-column>
+
+              <el-table-column prop="createTime" label="创建时间" width="160" align="center">
+                <template slot-scope="scope">
+                  <span style="color: #64748b; font-size: 12px;">{{ scope.row.createTime || '-' }}</span>
+                </template>
+              </el-table-column>
+
+              <el-table-column label="操作" width="140" align="center" fixed="right">
+                <template slot-scope="scope">
+                  <div class="table-row-actions">
+                    <el-button type="text" size="small" icon="el-icon-edit" @click="handleEditItem(scope.row._originalIndex)">
+                      编辑
+                    </el-button>
+                    <el-popconfirm title="确定删除该占位符字段？" @confirm="handleDeleteField(scope.row._originalIndex)">
+                      <el-button slot="reference" type="text" size="small" icon="el-icon-delete" style="color: #ef4444;">
+                        删除
+                      </el-button>
+                    </el-popconfirm>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <!-- Tab 2: 结构化表格汇总列表 -->
+          <div v-show="activeTab === 'table'">
+            <el-table
+              :data="filteredTableFields"
+              size="small"
+              border
+              style="width: 100%;"
+              :header-cell-style="{ background: '#f8fafc', color: '#334155', fontWeight: '600' }"
+            >
+              <el-table-column label="表格名称" min-width="170" show-overflow-tooltip>
+                <template slot-scope="scope">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <i class="el-icon-s-grid" style="color: #2563eb; font-size: 14px;"></i>
+                    <span style="font-weight: 600; color: #0f172a;">{{ scope.row.name }}</span>
+                    <el-tag size="mini" type="danger" effect="dark">整表组件</el-tag>
+                  </div>
+                </template>
+              </el-table-column>
+
+              <el-table-column label="表格结构概要" min-width="200" show-overflow-tooltip>
+                <template slot-scope="scope">
+                  <div v-if="scope.row.trList" style="font-size: 12px; color: #334155;">
+                    共 <b>{{ scope.row.trList.length }}</b> 行 (包含表头/明细loop循环/表尾合并行)
+                  </div>
+                  <div class="desc-text" style="margin-top: 2px;">{{ scope.row.description || '标准结构化报表表格' }}</div>
+                </template>
+              </el-table-column>
+
+              <el-table-column prop="createTime" label="创建时间" width="160" align="center">
+                <template slot-scope="scope">
+                  <span style="color: #64748b; font-size: 12px;">{{ scope.row.createTime || '-' }}</span>
+                </template>
+              </el-table-column>
+
+              <el-table-column label="操作" width="140" align="center" fixed="right">
+                <template slot-scope="scope">
+                  <div class="table-row-actions">
+                    <el-button type="text" size="small" icon="el-icon-edit" @click="handleEditItem(scope.row._originalIndex)">
+                      设计表格
+                    </el-button>
+                    <el-popconfirm title="确定删除该结构化表格？" @confirm="handleDeleteField(scope.row._originalIndex)">
+                      <el-button slot="reference" type="text" size="small" icon="el-icon-delete" style="color: #ef4444;">
+                        删除
+                      </el-button>
+                    </el-popconfirm>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 弹窗 1：新增 / 修改 分组 -->
+    <el-dialog
+      :title="groupDialogMode === 'add' ? '新增数据分组' : '修改数据分组'"
+      :visible.sync="groupDialogVisible"
+      width="500px"
+      custom-class="spacious-dialog"
+      :close-on-click-modal="false"
+      @close="handleGroupDialogClosed"
+      @closed="handleGroupDialogClosed"
+    >
+      <el-form ref="groupFormRef" :model="groupForm" :rules="groupRules" label-width="90px" size="small">
+        <el-form-item label="分组名称" prop="groupName">
+          <el-input v-model="groupForm.groupName" placeholder="如：患者基础信息、临床检验诊断"></el-input>
+        </el-form-item>
+        <el-form-item label="所属系统" prop="systemName">
+          <el-select v-model="groupForm.systemName" placeholder="请选择所属系统" clearable filterable style="width: 100%;">
+            <el-option v-for="item in systemOptions" :key="item.value" :label="item.label" :value="item.value"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="分组描述" prop="description">
+          <el-input type="textarea" :rows="3" v-model="groupForm.description" placeholder="请输入分组业务说明"></el-input>
+        </el-form-item>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button size="small" @click="groupDialogVisible = false">取消</el-button>
+        <el-button size="small" type="primary" @click="handleSaveGroup">确定</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 弹窗 2：新增 / 修改 基础占位符字段 -->
+    <el-dialog
+      :title="fieldDialogMode === 'add' ? '新增基础数据占位符' : '编辑基础数据占位符'"
+      :visible.sync="fieldDialogVisible"
+      width="800px"
+      custom-class="spacious-dialog"
+      :close-on-click-modal="false"
+      @close="handleFieldDialogClosed"
+      @closed="handleFieldDialogClosed"
+    >
+      <el-form :model="fieldForm" :rules="fieldRules" ref="fieldFormRef" label-width="110px" size="small">
+        <!-- 基础场景快捷载入 -->
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px;">
+          <div style="font-weight: 600; font-size: 13px; color: #1e40af; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <i class="el-icon-magic-stick"></i> 快捷载入基础字段预设：
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+            <el-button size="mini" type="primary" plain @click="applyBasicScenario('scenario_text')">1. 单行文本</el-button>
+            <el-button size="mini" type="info" plain @click="applyBasicScenario('scenario_image')">2. 单图片</el-button>
+            <el-button size="mini" type="primary" plain @click="applyBasicScenario('scenario_list_text')">3. List.文本分段</el-button>
+            <el-button size="mini" type="success" plain @click="applyBasicScenario('scenario_list_radio')">4. List.单选组</el-button>
+            <el-button size="mini" type="warning" plain @click="applyBasicScenario('scenario_list_checkbox')">5. List.多选组</el-button>
+            <el-button size="mini" type="danger" plain @click="applyBasicScenario('scenario_list_image')">6. List.多图列表</el-button>
+          </div>
+        </div>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="字段名称" prop="name">
+              <el-input v-model="fieldForm.name" placeholder="如：患者真实姓名、知情同意条款"></el-input>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item prop="conceptId">
+              <span slot="label">
+                字段键名
+                <el-tooltip effect="dark" content="回显数据取值路径，如 patient.name 或 surgery.consent" placement="top">
+                  <i class="el-icon-question" style="color: #64748b; cursor: pointer;"></i>
+                </el-tooltip>
+              </span>
+              <el-input v-model="fieldForm.conceptId" placeholder="如：patient.name 或 surgery.consent"></el-input>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="20">
+          <el-col :span="24">
+            <el-form-item label="控件类型" prop="type">
+              <el-radio-group v-model="fieldForm.type" @change="handleFieldTypeChange">
+                <el-radio label="text">text</el-radio>
+                <el-radio label="number">number</el-radio>
+                <el-radio label="image">image</el-radio>
+                <el-radio label="checkbox">checkbox</el-radio>
+                <el-radio label="radio">radio</el-radio>
+                <el-radio label="list">list</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- 若为 List 集合控件：配置其子形态与排版布局 -->
+        <div v-if="fieldForm.type === 'list'" class="advanced-config-box" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 6px; margin-bottom: 16px;">
+          <div style="font-weight: 600; font-size: 13px; color: #0f172a; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+            <i class="el-icon-s-operation" style="color: #2563eb;"></i> List 集合呈现形态与排版布局
+          </div>
+          <el-row :gutter="20" style="margin-bottom: 12px;">
+            <el-col :span="24">
+              <el-form-item label="呈现子形态" label-width="90px" style="margin-bottom: 0;">
+                <el-radio-group v-model="fieldForm.listType">
+                  <el-radio label="text">文本分段 (Text)</el-radio>
+                  <el-radio label="radio">单选组 (Radio)</el-radio>
+                  <el-radio label="checkbox">多选组 (Checkbox)</el-radio>
+                  <el-radio label="image">多图列表 (Image)</el-radio>
+                </el-radio-group>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="排版方式" label-width="90px" style="margin-bottom: 0;">
+                <el-select v-model="fieldForm.layout" size="small" style="width: 100%;">
+                  <el-option label="垂直分行排版 (Vertical)" value="vertical"></el-option>
+                  <el-option label="水平紧凑并排 (Horizontal)" value="horizontal"></el-option>
+                  <el-option label="自适应网格换行 (Grid N 列)" value="grid"></el-option>
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12" v-if="fieldForm.layout === 'grid'">
+              <el-form-item label="每行列数" label-width="90px" style="margin-bottom: 0;">
+                <el-input-number v-model="fieldForm.gridCols" :min="1" :max="12" size="small" style="width: 100%;"></el-input-number>
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
+
+        <el-row :gutter="20">
+          <el-col :span="24">
+            <el-form-item label="业务描述" prop="description">
+              <el-input type="textarea" :rows="6" v-model="fieldForm.description" placeholder="说明该字段的临床含义或来源" style="min-height: 140px;"></el-input>
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button size="small" @click="fieldDialogVisible = false">取消</el-button>
+        <el-button size="small" type="primary" @click="handleSaveField">确定</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 弹窗 3：新增 / 设计 结构化报表表格 (高级原生 HTML 模板设计态) -->
+    <el-dialog
+      :title="tableDialogMode === 'add' ? '新增结构化报表表格' : '设计结构化报表表格'"
+      :visible.sync="tableDialogVisible"
+      width="1280px"
+      top="2vh"
+      custom-class="spacious-dialog"
+      :close-on-click-modal="false"
+      @close="handleTableDialogClosed"
+      @closed="handleTableDialogClosed"
+    >
+      <el-form :model="tableForm" :rules="tableRules" ref="tableFormRef" label-width="110px" size="small">
+        <!-- 业务模板快捷载入 -->
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <span style="font-weight: 600; font-size: 13px; color: #166534; display: flex; align-items: center; gap: 4px;">
+            <i class="el-icon-magic-stick"></i> 快捷载入模板：
+          </span>
+          <el-button size="mini" type="danger" plain @click="applyTableTemplate('basic_table')">基础标准表格</el-button>
+          <el-button size="mini" type="primary" plain @click="applyTableTemplate('score_sheet')">范式 1：评分汇总表 (含表尾合并合计)</el-button>
+          <el-button size="mini" type="success" plain @click="applyTableTemplate('lis_table')">范式 2：明细表 (合并同类项 merge-same)</el-button>
+          <el-button size="mini" type="warning" plain @click="applyTableTemplate('group_report')">范式 3：大标题复合表 (通栏合并+多图)</el-button>
+        </div>
+
+        <el-row :gutter="20">
+          <el-col :span="16">
+            <el-form-item label="表格名称" prop="name">
+              <el-input v-model="tableForm.name" placeholder="如：质量评分汇总表、LIS常规检验明细表"></el-input>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="跨页重复表头" label-width="110px">
+              <el-switch v-model="tableForm.pagingRepeat" active-color="#13ce66"></el-switch>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="20">
+          <el-col :span="24">
+            <el-form-item label="业务说明" prop="description">
+              <el-input v-model="tableForm.description" placeholder="说明该表格的临床用途、表头结构与合并规则"></el-input>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <div class="advanced-config-box">
+          <!-- 1. 表格视觉效果实时预览器 (Live Visualizer) - 置于上方便于直观审查 -->
+          <div style="margin-bottom: 14px;">
+            <div style="font-weight: 600; font-size: 13px; color: #0f172a; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <i class="el-icon-view" style="color: #2563eb;"></i>
+                <span>表格效果实时预览 (参考)：</span>
+              </div>
+              <span style="font-size: 11px; color: #64748b;">支持真实 colspan/rowspan 单元格合并、表头加粗与循环行占位符效果</span>
+            </div>
+            <div class="table-live-preview-box" v-html="tablePreviewHtml"></div>
+          </div>
+
+          <!-- 2. HTML 表格模板代码编辑器 (更高视野) -->
+          <div>
+            <div style="font-weight: 600; font-size: 13px; color: #0f172a; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <i class="el-icon-document" style="color: #059669;"></i>
+                <span>HTML 表格模板代码 (实时双向编译与预览)</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <!-- 优雅的语法速查提示 Popover -->
+                <el-popover placement="bottom-end" width="540" trigger="hover">
+                  <div style="font-size: 12px; line-height: 1.6;" v-pre>
+                    <div style="font-weight: 600; color: #0284c7; margin-bottom: 6px; display: flex; align-items: center; gap: 4px;">
+                      <i class="el-icon-info"></i> 表格模板核心语法速查：
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 6px; background: #f8fafc; padding: 8px; border-radius: 4px; border: 1px solid #e2e8f0;">
+                      <div><code style="color:#0284c7;background:#e0f2fe;padding:2px 4px;border-radius:3px;">loop="item in dataset"</code> : 动态行循环 (如 <code>loop="item in score_sheet.items"</code>)</div>
+                      <div><code style="color:#0284c7;background:#e0f2fe;padding:2px 4px;border-radius:3px;">when="condition"</code> : 条件判断 (如 <code>when="item.score &lt; 60"</code>)</div>
+                      <div><code style="color:#0284c7;background:#e0f2fe;padding:2px 4px;border-radius:3px;">&#123;&#123; item.fieldKey &#125;&#125;</code> : 字段占位符 (双花括号标准语法)</div>
+                      <div><code style="color:#0284c7;background:#e0f2fe;padding:2px 4px;border-radius:3px;">merge-same</code> : 合并同类项 (默认垂直方向，可选 <code>merge-same="horizontal"</code>)</div>
+                      <div><code style="color:#0284c7;background:#e0f2fe;padding:2px 4px;border-radius:3px;">colspan="N"</code> : 跨列合并 (原生 HTML 数字，如通栏大标题 <code>colspan="4"</code>)</div>
+                      <div><code style="color:#0284c7;background:#e0f2fe;padding:2px 4px;border-radius:3px;">rowspan="N"</code> : 跨行合并 (原生 HTML 数字，如 <code>rowspan="2"</code>)</div>
+                      <div><code style="color:#0284c7;background:#e0f2fe;padding:2px 4px;border-radius:3px;">&lt;th&gt; / &lt;td&gt;</code> : <code>&lt;th&gt;</code> 默认加粗居中，<code>&lt;td&gt;</code> 为数据单元格</div>
+                      <div><code style="color:#0284c7;background:#e0f2fe;padding:2px 4px;border-radius:3px;">align="left|center|right"</code> : 文字水平对齐 (支持 style="text-align:...")</div>
+                      <div><code style="color:#0284c7;background:#e0f2fe;padding:2px 4px;border-radius:3px;">style="color:..;height:..;"</code> : CSS样式表不一定全都能用，但是基础的可以，其他的需要自行测试</div>
+                    </div>
+                  </div>
+                  <el-button slot="reference" size="mini" type="warning" plain icon="el-icon-question">语法速查</el-button>
+                </el-popover>
+                <el-button size="mini" type="primary" plain icon="el-icon-magic-stick" @click="handleFormatTableHtml">格式化 HTML 代码</el-button>
+              </div>
+            </div>
+
+            <el-input
+              type="textarea"
+              :rows="28"
+              v-model="tableForm.htmlTemplate"
+              placeholder="请输入 HTML 表格模板代码..."
+              style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; min-height: 540px;"
+              @input="handleCompileTableTemplate"
+            ></el-input>
+          </div>
+        </div>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button size="small" @click="tableDialogVisible = false">取消</el-button>
+        <el-button size="small" type="success" @click="handleSaveTable">保存表格组件</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 弹窗 4：分组回显数据结构 JSON 查看与开发者对接看板 -->
+    <el-dialog
+      :title="groupJsonDialogTitle"
+      :visible.sync="jsonDialogVisible"
+      width="960px"
+      top="3vh"
+      custom-class="spacious-dialog"
+    >
+      <div v-if="jsonParseError" style="margin-bottom: 12px;">
+        <el-alert :title="jsonParseError" type="error" show-icon :closable="false"></el-alert>
+      </div>
+      <div v-else style="font-size: 13px; color: #475569; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+        <i class="el-icon-info" style="color: #2563eb; font-size: 16px; flex-shrink: 0;"></i>
+        <span>该 JSON 是将当前分组下所有字段按<b>链式路径（点号嵌套）</b>与<b>复杂表格多层循环</b>自动生成的<b>标准后端回显业务数据报文</b>：</span>
+      </div>
+      <el-input
+        type="textarea"
+        :rows="28"
+        :value="groupJsonString"
+        readonly
+        style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; min-height: 560px;"
+      ></el-input>
+      <div slot="footer" class="dialog-footer">
+        <el-button size="small" type="primary" icon="el-icon-document-copy" :disabled="!!jsonParseError" @click="handleCopyJson">复制业务回显 JSON</el-button>
+        <el-button size="small" @click="jsonDialogVisible = false">关闭</el-button>
+      </div>
+    </el-dialog>
+  </div>
+
+  <script>
+    // -------------------------------------------------------------
+    // 基础辅助函数 (点号嵌套设值与 Mock 组装)
+    // -------------------------------------------------------------
+    function setNestedValue(obj, path, value) {
+      if (!path) return;
+      const parts = path.split('.');
+      let cur = obj;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const part = parts[i];
+        if (!cur[part] || typeof cur[part] !== 'object' || Array.isArray(cur[part])) {
+          cur[part] = {};
+        }
+        cur = cur[part];
+      }
+      cur[parts[parts.length - 1]] = value;
+    }
+
+    function getFieldValueOrType(field) {
+      const type = field.type || 'text';
+      const listType = field.listType || 'text';
+
+      if (type === 'list') {
+        if (listType === 'radio') {
+          return [
+            { label: '男', value: '1', checked: false },
+            { label: '女', value: '2', checked: true },
+            { label: '未知', value: '0', checked: false }
+          ];
+        }
+        if (listType === 'checkbox') {
+          return [
+            { label: '1. 患者及家属已知悉本次诊疗方案与风险。', value: 'clause_1', checked: true },
+            { label: '2. 术前已按规范完成血常规及凝血功能筛查。', value: 'clause_2', checked: false },
+            { label: '3. 经病史核实无已知麻醉药物严重过敏史。', value: 'clause_3', checked: true }
+          ];
+        }
+        if (listType === 'image') {
+          return [
+            'https://gips0.baidu.com/it/u=163643473,1997243702&fm=3074&app=3074&f=PNG?w=2560&h=1440',
+            'https://gips0.baidu.com/it/u=163643473,1997243702&fm=3074&app=3074&f=PNG?w=2560&h=1440'
+          ];
+        }
+        return [
+          { label: '1. 高血压3级（极高危）', code: 'item_1' },
+          { label: '2. 冠状动脉粥样硬化性心脏病', code: 'item_2' }
+        ];
+      }
+
+      if (type === 'radio' || type === 'checkbox') {
+        return '1';
+      }
+
+      if (type === 'number') {
+        return 0;
+      }
+      return type;
+    }
+
+    function buildGroupMockPayload(group) {
+      if (!group || !Array.isArray(group.children)) return {};
+      const payload = {};
+
+      group.children.forEach((field) => {
+        const key = (field.conceptId || '').trim();
+        if (!key) return;
+        setNestedValue(payload, key, getFieldValueOrType(field));
+      });
+
+      return payload;
+    }
+
+    // -------------------------------------------------------------
+    // 字段与分组实体双向归一化映射 (兼容 RuoYi 后端属性与 Canvas-Editor 前端属性)
+    // -------------------------------------------------------------
+    function normalizeField(f) {
+      if (!f) return f;
+      const name = f.name || f.fieldName || f.conceptName || '';
+      const conceptId = f.conceptId || f.fieldKey || f.fieldPath || f.key || '';
+      const type = f.type || f.fieldType || f.controlType || 'text';
+      const description = f.description || f.fieldDesc || '';
+      const listType = f.listType || 'text';
+      const layout = f.layout || 'vertical';
+      const gridCols = Number(f.gridCols) || 2;
+      const htmlTemplate = f.htmlTemplate || f.html_template || '';
+      const pagingRepeat = f.pagingRepeat !== undefined ? Boolean(f.pagingRepeat) : false;
+
+      return {
+        ...f,
+        id: f.id,
+        name,
+        fieldName: name,
+        conceptId,
+        fieldKey: conceptId,
+        type,
+        fieldType: type,
+        description,
+        fieldDesc: description,
+        listType,
+        layout,
+        gridCols,
+        htmlTemplate,
+        pagingRepeat
+      };
+    }
+
+    function normalizeGroup(g) {
+      if (!g) return g;
+      const rawChildren = g.children || g.fieldList || g.fields || [];
+      const children = Array.isArray(rawChildren) ? rawChildren.map(normalizeField) : [];
+      return {
+        ...g,
+        id: g.id || g.groupId,
+        groupName: g.groupName || g.name || '',
+        systemName: g.systemName || '',
+        description: g.description || g.fieldDesc || '',
+        children
+      };
+    }
+
+    // -------------------------------------------------------------
+    // REST API 客户端
+    // -------------------------------------------------------------
+    const API_BASE = window.API_BASE_URL || '';
+
+    function getAuthToken() {
+      const match = document.cookie.match(/(^|;\s*)Admin-Token=([^;]*)/);
+      return (match && match[2]) ? decodeURIComponent(match[2]) : '';
+    }
+
+    // 统一的 Element-UI 错误消息提示器
+    function showErrorMessage(msg) {
+      const displayMsg = typeof msg === 'object' ? JSON.stringify(msg) : String(msg);
+      if (window.ELEMENT && window.ELEMENT.Message) {
+        window.ELEMENT.Message.error(displayMsg);
+      } else if (typeof Vue !== 'undefined' && Vue.prototype && Vue.prototype.$message) {
+        Vue.prototype.$message.error(displayMsg);
+      } else {
+        console.error('[API 错误]', displayMsg);
+      }
+    }
+
+    async function apiRequest(url, options = {}) {
+      const method = options.method || 'GET';
+      let fullUrl = API_BASE + url;
+      const token = getAuthToken();
+      const fetchOptions = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': 'Bearer ' + token } : {}),
+          ...(options.headers || {})
+        }
+      };
+      if (options.params) {
+        const query = new URLSearchParams(options.params).toString();
+        if (query) fullUrl += (fullUrl.includes('?') ? '&' : '?') + query;
+      }
+      if (options.data && (method === 'POST' || method === 'PUT')) {
+        fetchOptions.body = JSON.stringify(options.data);
+      }
+
+      let response;
+      try {
+        response = await fetch(fullUrl, fetchOptions);
+      } catch (netErr) {
+        const errMsg = `网络连接异常或接口未启动: ${netErr.message || netErr}`;
+        showErrorMessage(errMsg);
+        throw netErr;
+      }
+
+      let resData;
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        try {
+          resData = await response.json();
+        } catch (e) {
+          resData = null;
+        }
+      } else {
+        resData = await response.text();
+      }
+
+      // 1. HTTP 状态码非 2xx 校验
+      if (!response.ok) {
+        const errorMsg =
+          (resData && typeof resData === 'object' && (resData.msg || resData.message || resData.res)) ||
+          (typeof resData === 'string' && resData) ||
+          `HTTP ${response.status} ${response.statusText}`;
+        const displayMsg = typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : String(errorMsg);
+        showErrorMessage(displayMsg);
+        throw new Error(displayMsg);
+      }
+
+      // 2. 统一业务 code 校验：若 code 不是 200，则自动统一提示错误信息 (msg || message || res)
+      if (resData && typeof resData === 'object' && resData.code !== undefined && resData.code !== 200) {
+        const errorMsg =
+          resData.msg ||
+          resData.message ||
+          resData.res ||
+          (typeof resData === 'string' ? resData : JSON.stringify(resData));
+        const displayMsg = typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : String(errorMsg);
+        showErrorMessage(displayMsg);
+        throw new Error(displayMsg);
+      }
+
+      return resData;
+    }
+
+    const componentApi = {
+      listSystem: (query) => apiRequest('/system/system/list', { method: 'GET', params: { pageNum: 1, pageSize: 1000, ...(query || {}) } }),
+      listGroup: (query) => apiRequest('/system/component-dictionary/group/list', { method: 'GET', params: query }),
+      getGroup: (id) => apiRequest(`/system/component-dictionary/group/${id}`, { method: 'GET' }),
+      addGroup: (data) => apiRequest('/system/component-dictionary/group', { method: 'POST', data }),
+      updateGroup: (data) => apiRequest('/system/component-dictionary/group', { method: 'PUT', data }),
+      delGroup: (ids) => apiRequest(`/system/component-dictionary/group/${ids}`, { method: 'DELETE' }),
+      getFieldTree: (id) => apiRequest(`/system/component-dictionary/group/${id}/field-tree`, { method: 'GET' }),
+      getField: (id) => apiRequest(`/system/component-dictionary/field/${id}`, { method: 'GET' }),
+      addField: (data) => apiRequest('/system/component-dictionary/field', { method: 'POST', data }),
+      updateField: (data) => apiRequest('/system/component-dictionary/field', { method: 'PUT', data }),
+      delField: (ids) => apiRequest(`/system/component-dictionary/field/${ids}`, { method: 'DELETE' })
+    };
+
+    new Vue({
+      el: '#app',
+      data() {
+        return {
+          systemOptions: [],
+          searchForm: {
+            systemName: '',
+            groupName: '',
+            fieldName: '',
+            fieldDesc: ''
+          },
+          groups: [],
+          currentGroupIndex: 0,
+          isSyncing: false,
+          isFieldLoading: false,
+
+          // 分组弹窗
+          groupDialogVisible: false,
+          groupDialogMode: 'add',
+          groupForm: {
+            groupName: '',
+            systemName: '',
+            description: ''
+          },
+          groupRules: {
+            groupName: [{ required: true, message: '请输入分组名称', trigger: 'blur' }]
+          },
+          editGroupIndex: -1,
+
+          // 基础占位符字段弹窗 (移除 array)
+          fieldDialogVisible: false,
+          fieldDialogMode: 'add',
+          fieldForm: {
+            name: '',
+            conceptId: '',
+            type: 'text',
+            listType: 'text',
+            layout: 'vertical',
+            gridCols: 2,
+            description: '',
+            defaultValue: ''
+          },
+          fieldRules: {
+            name: [{ required: true, message: '请输入字段名称', trigger: 'blur' }],
+            conceptId: [
+              { required: true, message: '请输入字段键名 (实际取值链名)', trigger: 'blur' },
+              { pattern: /^[a-zA-Z0-9_.-]+$/, message: '键名仅支持字母、数字、下划线、点及短横线', trigger: 'blur' }
+            ],
+            type: [{ required: true, message: '请选择控件类型', trigger: 'change' }]
+          },
+          editFieldIndex: -1,
+
+          // 结构化表格组件弹窗 (HTML + loop + when 模板)
+          tableDialogVisible: false,
+          tableDialogMode: 'add',
+          tableForm: {
+            name: '',
+            conceptId: '',
+            description: '',
+            htmlTemplate: ''
+          },
+          tableRules: {
+            name: [{ required: true, message: '请输入表格名称', trigger: 'blur' }]
+          },
+          editTableIndex: -1,
+          compiledTableInfo: { rowCount: 0, hasLoop: false, loopDataset: '', fieldCount: 0 },
+          tableMockJsonString: '{}',
+          compiledTableTrList: [],
+          compiledTableColgroup: [],
+
+          // 分组回显 JSON 查看弹窗
+          jsonDialogVisible: false,
+
+          // 右侧列表当前激活 Tab ('all' | 'scalar' | 'table')，默认全部
+          activeTab: 'all'
+        };
+      },
+      computed: {
+        filteredGroups() {
+          return this.groups.map((g, idx) => ({ ...g, _originalIndex: idx }));
+        },
+        currentGroup() {
+          if (this.currentGroupIndex >= 0 && this.currentGroupIndex < this.groups.length) {
+            return this.groups[this.currentGroupIndex];
+          }
+          return null;
+        },
+        currentFilteredFields() {
+          if (!this.currentGroup || !this.currentGroup.children) return [];
+          return this.currentGroup.children.map((f, idx) => ({ ...f, _originalIndex: idx }));
+        },
+        filteredAllFields() {
+          return this.currentFilteredFields;
+        },
+        filteredScalarFields() {
+          return this.currentFilteredFields.filter(f => f.type !== 'table' && f.type !== 'array');
+        },
+        filteredTableFields() {
+          return this.currentFilteredFields.filter(f => f.type === 'table' || f.type === 'array');
+        },
+        groupJsonDialogTitle() {
+          return this.currentGroup ? `分组 [${this.currentGroup.groupName}] 回显数据结构 JSON` : '分组回显数据结构 JSON';
+        },
+        groupJsonResult() {
+          if (!this.currentGroup) return { json: '{}', error: '' };
+          try {
+            const payload = buildGroupMockPayload(this.currentGroup);
+            return { json: JSON.stringify(payload, null, 2), error: '' };
+          } catch (err) {
+            return { json: '/* 回显结构组装失败，请检查上方错误提示 */', error: err.message || String(err) };
+          }
+        },
+        groupJsonString() {
+          return this.groupJsonResult.json;
+        },
+        jsonParseError() {
+          return this.groupJsonResult.error;
+        },
+        tablePreviewHtml() {
+          if (!this.tableForm.htmlTemplate || !this.tableForm.htmlTemplate.trim()) {
+            return '<div style="color:#94a3b8;text-align:center;padding:20px 0;">暂无可预览的表格数据，请输入 HTML 模板代码</div>';
+          }
+          let html = this.tableForm.htmlTemplate;
+          html = html.replace(/\{\{\s*([\w\.\-]+)\s*\}\}/g, '<span class="preview-chip">{$1}</span>');
+          if (!html.includes('preview-canvas-table')) {
+            html = html.replace(/<table/i, '<table class="preview-canvas-table"');
+          }
+          return html;
+        }
+      },
+      created() {
+        this.fetchSystemOptions();
+        this.loadData();
+      },
+      methods: {
+        formatSystemName(val) {
+          if (!val) return '未指定系统';
+          const hit = this.systemOptions.find(s => s.value === val || s.label === val || s.appId === val);
+          return hit ? hit.label : val;
+        },
+        async fetchSystemOptions() {
+          try {
+            const res = await componentApi.listSystem();
+            const rows = res?.rows || res?.data?.rows || res?.data || (Array.isArray(res) ? res : []);
+            if (Array.isArray(rows)) {
+              this.systemOptions = rows.map(item => ({
+                label: item.systemName || item.appId || '',
+                value: item.appId || item.systemName || '',
+                systemName: item.systemName || '',
+                appId: item.appId || ''
+              }));
+            }
+          } catch (e) {
+            console.warn('[fetchSystemOptions] 获取系统列表失败:', e);
+          }
+        },
+        async handleSearch() {
+          const params = {};
+          if (this.searchForm.systemName) {
+            params.systemName = this.searchForm.systemName;
+            params.appId = this.searchForm.systemName;
+          }
+          if (this.searchForm.groupName && this.searchForm.groupName.trim()) {
+            params.groupName = this.searchForm.groupName.trim();
+          }
+          if (this.searchForm.fieldName && this.searchForm.fieldName.trim()) {
+            params.fieldName = this.searchForm.fieldName.trim();
+          }
+          if (this.searchForm.fieldDesc && this.searchForm.fieldDesc.trim()) {
+            params.fieldDesc = this.searchForm.fieldDesc.trim();
+          }
+          this.currentGroupIndex = 0;
+          await this.loadData(params);
+        },
+        async handleResetSearch() {
+          this.searchForm = {
+            systemName: '',
+            groupName: '',
+            fieldName: '',
+            fieldDesc: ''
+          };
+          this.currentGroupIndex = 0;
+          await this.loadData();
+        },
+        async loadData(query = null) {
+          this.isSyncing = true;
+          // 纯接口驱动：直接从 REST API 接口获取分组列表 (按需加载：不预先拉取所有 field-tree)
+          try {
+            const res = await componentApi.listGroup(query || undefined);
+            const groupList = res?.data?.rows || res?.data || res?.rows || (Array.isArray(res) ? res : null);
+            if (Array.isArray(groupList) && groupList.length > 0) {
+              this.groups = groupList.map(g => normalizeGroup({
+                ...g,
+                children: g.children || g.fieldList || g.fields || [],
+                _loaded: Boolean(g.children && g.children.length > 0)
+              }));
+              if (this.currentGroupIndex >= this.groups.length || this.currentGroupIndex < 0) {
+                this.currentGroupIndex = 0;
+              }
+              this.isSyncing = false;
+              // 自动触发当前选中分组的字段懒加载
+              if (this.groups.length > 0) {
+                this.fetchGroupFields(this.currentGroupIndex);
+              }
+              return;
+            }
+          } catch (apiErr) {
+            console.warn('[component-management] 后端接口请求失败:', apiErr);
+          }
+
+          this.groups = [];
+          this.isSyncing = false;
+        },
+        async fetchGroupFields(groupIndex, forceRefresh = false) {
+          if (groupIndex < 0 || groupIndex >= this.groups.length) return;
+          const targetGroup = this.groups[groupIndex];
+          if (!targetGroup) return;
+
+          // 若已加载且非强刷，直接使用
+          if (targetGroup._loaded && !forceRefresh && targetGroup.children && targetGroup.children.length > 0) {
+            return;
+          }
+
+          // 具备服务端 id 时发起懒加载请求
+          if (targetGroup.id) {
+            this.isFieldLoading = true;
+            try {
+              const treeRes = await componentApi.getFieldTree(targetGroup.id);
+              const treeData = treeRes?.data || treeRes?.rows || (Array.isArray(treeRes) ? treeRes : []);
+              if (Array.isArray(treeData)) {
+                this.$set(targetGroup, 'children', treeData.map(normalizeField));
+                targetGroup._loaded = true;
+              }
+            } catch (err) {
+              console.error('[fetchGroupFields] 懒加载分组字段树失败:', err);
+            } finally {
+              this.isFieldLoading = false;
+            }
+          } else {
+            targetGroup._loaded = true;
+          }
+        },
+        handleSelectGroup(origIdx) {
+          this.currentGroupIndex = origIdx;
+          this.fetchGroupFields(origIdx);
+        },
+        // ----------------- 对话框关闭清空重置事件 -----------------
+        handleGroupDialogClosed() {
+          this.groupForm = {
+            id: undefined,
+            groupName: '',
+            systemName: '',
+            description: ''
+          };
+          this.editGroupIndex = -1;
+          this.groupDialogMode = 'add';
+          if (this.$refs.groupFormRef) {
+            this.$refs.groupFormRef.resetFields();
+            this.$refs.groupFormRef.clearValidate();
+          }
+        },
+        handleFieldDialogClosed() {
+          this.fieldForm = {
+            id: undefined,
+            name: '',
+            conceptId: '',
+            type: 'text',
+            listType: 'text',
+            layout: 'vertical',
+            gridCols: 2,
+            description: '',
+            defaultValue: ''
+          };
+          this.editFieldIndex = -1;
+          this.fieldDialogMode = 'add';
+          if (this.$refs.fieldFormRef) {
+            this.$refs.fieldFormRef.resetFields();
+            this.$refs.fieldFormRef.clearValidate();
+          }
+        },
+        handleTableDialogClosed() {
+          this.tableForm = {
+            id: undefined,
+            name: '',
+            conceptId: '',
+            description: '',
+            pagingRepeat: false,
+            htmlTemplate: ''
+          };
+          this.editTableIndex = -1;
+          this.tableDialogMode = 'add';
+          this.compiledTableInfo = { rowCount: 0, hasLoop: false, loopDataset: '', fieldCount: 0 };
+          if (this.$refs.tableFormRef) {
+            this.$refs.tableFormRef.resetFields();
+            this.$refs.tableFormRef.clearValidate();
+          }
+        },
+        handleOpenAddGroup() {
+          this.groupDialogMode = 'add';
+          this.groupForm = {
+            groupName: '',
+            systemName: this.systemOptions.length > 0 ? this.systemOptions[0].value : '',
+            description: ''
+          };
+          this.groupDialogVisible = true;
+          this.$nextTick(() => {
+            if (this.$refs.groupFormRef) this.$refs.groupFormRef.clearValidate();
+          });
+        },
+        handleOpenEditGroup(origIdx) {
+          this.groupDialogMode = 'edit';
+          this.editGroupIndex = origIdx;
+          const g = this.groups[origIdx];
+          const matched = this.systemOptions.find(s => s.value === g.systemName || s.label === g.systemName || s.appId === g.appId);
+          this.groupForm = {
+            id: g.id,
+            groupName: g.groupName,
+            systemName: matched ? matched.value : (g.systemName || ''),
+            description: g.description
+          };
+          this.groupDialogVisible = true;
+          this.$nextTick(() => {
+            if (this.$refs.groupFormRef) this.$refs.groupFormRef.clearValidate();
+          });
+        },
+        async handleSaveGroup() {
+          this.$refs.groupFormRef.validate(async valid => {
+            if (!valid) return;
+            const selectedSys = this.systemOptions.find(s => s.value === this.groupForm.systemName);
+            const payload = {
+              groupName: this.groupForm.groupName,
+              systemName: selectedSys ? selectedSys.label : this.groupForm.systemName,
+              appId: selectedSys ? selectedSys.value : this.groupForm.systemName,
+              description: this.groupForm.description
+            };
+
+            try {
+              if (this.groupDialogMode === 'add') {
+                const res = await componentApi.addGroup(payload);
+                if (res && res.code === 200) {
+                  this.$message.success(res.msg || res.message || '新增分组成功');
+                  this.groupDialogVisible = false;
+                  await this.loadData();
+                }
+              } else {
+                const res = await componentApi.updateGroup({ id: this.groupForm.id, ...payload });
+                if (res && res.code === 200) {
+                  this.$message.success(res.msg || res.message || '修改分组成功');
+                  this.groupDialogVisible = false;
+                  await this.loadData();
+                }
+              }
+            } catch (err) {
+              console.warn('[handleSaveGroup] 保存失败:', err);
+            }
+          });
+        },
+        async handleDeleteGroup(origIdx) {
+          const target = this.groups[origIdx];
+          if (target && target.id) {
+            try {
+              const res = await componentApi.delGroup(target.id);
+              if (res && res.code === 200) {
+                this.$message.success(res.msg || res.message || '删除分组成功');
+                await this.loadData();
+              }
+            } catch (err) {
+              console.warn('[handleDeleteGroup] 接口删除失败:', err);
+            }
+          }
+        },
+        // ----------------- 基础字段操作 -----------------
+        handleOpenAddField() {
+          this.fieldDialogMode = 'add';
+          this.fieldForm = {
+            name: '',
+            conceptId: '',
+            type: 'text',
+            listType: 'text',
+            layout: 'vertical',
+            gridCols: 2,
+            description: ''
+          };
+          this.fieldDialogVisible = true;
+          this.$nextTick(() => {
+            if (this.$refs.fieldFormRef) this.$refs.fieldFormRef.clearValidate();
+          });
+        },
+        handleFieldTypeChange(newType) {
+          if (newType === 'list') {
+            if (!this.fieldForm.listType) this.fieldForm.listType = 'text';
+            if (!this.fieldForm.layout) this.fieldForm.layout = 'vertical';
+            if (!this.fieldForm.gridCols) this.fieldForm.gridCols = 2;
+          }
+        },
+        applyBasicScenario(type) {
+          const scenarioMap = {
+            scenario_text: {
+              name: '患者姓名',
+              conceptId: 'patient.name',
+              type: 'text'
+            },
+            scenario_image: {
+              name: '患者头像 (身份照片)',
+              conceptId: 'patient.avatar',
+              type: 'image'
+            },
+            scenario_list_text: {
+              name: '临床诊断条目列表 (List.Text)',
+              conceptId: 'diagnose.diagnosis_items',
+              type: 'list',
+              listType: 'text',
+              layout: 'vertical'
+            },
+            scenario_list_radio: {
+              name: '患者性别 (List.Radio)',
+              conceptId: 'patient.gender',
+              type: 'list',
+              listType: 'radio',
+              layout: 'horizontal'
+            },
+            scenario_list_checkbox: {
+              name: '手术知情同意条款 (List.Checkbox)',
+              conceptId: 'surgery.consent_clauses',
+              type: 'list',
+              listType: 'checkbox',
+              layout: 'vertical'
+            },
+            scenario_list_image: {
+              name: '检查影像多图列表 (List.Image)',
+              conceptId: 'exam.report_images',
+              type: 'list',
+              listType: 'image',
+              layout: 'grid',
+              gridCols: 3
+            }
+          };
+
+          const preset = scenarioMap[type];
+          if (preset) {
+            this.fieldForm = {
+              id: this.fieldForm.id,
+              name: '',
+              conceptId: '',
+              type: 'text',
+              listType: 'text',
+              layout: 'vertical',
+              gridCols: 2,
+              description: this.fieldForm.description || '',
+              defaultValue: '',
+              ...preset
+            };
+            this.$message.success('已载入基础预设！');
+          }
+        },
+        async handleSaveField() {
+          this.$refs.fieldFormRef.validate(async valid => {
+            if (!valid) return;
+            const fieldItem = normalizeField({
+              id: this.fieldDialogMode === 'add' ? undefined : this.fieldForm.id,
+              name: this.fieldForm.name,
+              fieldName: this.fieldForm.name,
+              conceptId: this.fieldForm.conceptId,
+              fieldKey: this.fieldForm.conceptId,
+              type: this.fieldForm.type,
+              fieldType: this.fieldForm.type,
+              listType: this.fieldForm.type === 'list' ? (this.fieldForm.listType || 'text') : undefined,
+              layout: this.fieldForm.type === 'list' ? (this.fieldForm.layout || 'vertical') : undefined,
+              gridCols: this.fieldForm.type === 'list' && this.fieldForm.layout === 'grid' ? (this.fieldForm.gridCols || 2) : undefined,
+              description: this.fieldForm.description,
+              fieldDesc: this.fieldForm.description,
+              groupId: this.currentGroup?.id
+            });
+
+            try {
+              if (this.fieldDialogMode === 'add') {
+                const res = await componentApi.addField(fieldItem);
+                if (res && res.code === 200) {
+                  this.$message.success(res.msg || res.message || '新增占位符成功');
+                  this.fieldDialogVisible = false;
+                  await this.fetchGroupFields(this.currentGroupIndex, true);
+                }
+              } else {
+                const res = await componentApi.updateField(fieldItem);
+                if (res && res.code === 200) {
+                  this.$message.success(res.msg || res.message || '修改占位符成功');
+                  this.fieldDialogVisible = false;
+                  await this.fetchGroupFields(this.currentGroupIndex, true);
+                }
+              }
+            } catch (err) {
+              console.warn('[handleSaveField] 保存失败:', err);
+            }
+          });
+        },
+        // ----------------- 结构化表格专属操作 -----------------
+        handleOpenAddTable() {
+          this.tableDialogMode = 'add';
+          this.editTableIndex = -1;
+          this.tableForm = {
+            id: undefined,
+            name: '',
+            description: '',
+            pagingRepeat: false,
+            htmlTemplate: '<table border="1">\n  <tr>\n    <th>序号</th>\n    <th>项目名称</th>\n    <th>结果/数值</th>\n    <th>参考范围</th>\n    <th>单位</th>\n  </tr>\n  <tr loop="item in table_data.items">\n    <td>{{ item.index }}</td>\n    <td>{{ item.item_name }}</td>\n    <td>{{ item.result }}</td>\n    <td>{{ item.reference }}</td>\n    <td>{{ item.unit }}</td>\n  </tr>\n</table>'
+          };
+          this.handleCompileTableTemplate();
+          this.tableDialogVisible = true;
+          this.$nextTick(() => {
+            if (this.$refs.tableFormRef) this.$refs.tableFormRef.clearValidate();
+          });
+        },
+        handleEditItem(origIdx) {
+          const rawItem = this.currentGroup.children[origIdx];
+          const item = normalizeField(rawItem);
+          if (item.type === 'table' || item.type === 'array' || item.trList) {
+            // 打开表格设计弹窗
+            this.tableDialogMode = 'edit';
+            this.editTableIndex = origIdx;
+            this.tableForm = {
+              id: item.id,
+              name: item.name || item.fieldName || '',
+              description: item.description || item.fieldDesc || '',
+              pagingRepeat: Boolean(item.pagingRepeat),
+              htmlTemplate: item.htmlTemplate || ''
+            };
+            this.handleCompileTableTemplate();
+            this.tableDialogVisible = true;
+            this.$nextTick(() => {
+              if (this.$refs.tableFormRef) this.$refs.tableFormRef.clearValidate();
+            });
+          } else {
+            // 打开基础字段弹窗
+            this.fieldDialogMode = 'edit';
+            this.editFieldIndex = origIdx;
+            this.fieldForm = {
+              id: item.id,
+              name: item.name || item.fieldName || '',
+              conceptId: item.conceptId || item.fieldKey || '',
+              type: item.type || item.fieldType || 'text',
+              listType: item.listType || 'text',
+              layout: item.layout || 'vertical',
+              gridCols: item.gridCols || 2,
+              description: item.description || item.fieldDesc || ''
+            };
+            this.fieldDialogVisible = true;
+            this.$nextTick(() => {
+              if (this.$refs.fieldFormRef) this.$refs.fieldFormRef.clearValidate();
+            });
+          }
+        },
+        applyTableTemplate(type) {
+          const templateMap = {
+            basic_table: '<table border="1">\n  <tr>\n    <th>序号</th>\n    <th>项目名称</th>\n    <th>结果/数值</th>\n    <th>参考范围</th>\n    <th>单位</th>\n  </tr>\n  <tr loop="item in table_data.items">\n    <td>{{ item.index }}</td>\n    <td>{{ item.item_name }}</td>\n    <td>{{ item.result }}</td>\n    <td>{{ item.reference }}</td>\n    <td>{{ item.unit }}</td>\n  </tr>\n</table>',
+            score_sheet: '<table border="1">\n  <tr>\n    <th>序号</th>\n    <th>评审项目</th>\n    <th>满分分值</th>\n    <th>实际得分</th>\n  </tr>\n  <tr loop="item in score_sheet.items">\n    <td>{{ item.index }}</td>\n    <td>{{ item.item_name }}</td>\n    <td>{{ item.max_score }}</td>\n    <td>{{ item.actual_score }}</td>\n  </tr>\n  <tr>\n    <td colspan="2" align="center"><b>合 计</b></td>\n    <td>{{ score_sheet.total_max }}</td>\n    <td>{{ score_sheet.total_actual }}</td>\n  </tr>\n</table>',
+            lis_table: '<table border="1">\n  <tr>\n    <th>检验大类</th>\n    <th>检测项目</th>\n    <th>结果数值</th>\n    <th>单位</th>\n    <th>参考范围</th>\n  </tr>\n  <tr loop="item in lis.records">\n    <td merge-same>{{ item.category_name }}</td>\n    <td>{{ item.lab_item_name }}</td>\n    <td>{{ item.lab_item_value }}</td>\n    <td>{{ item.lab_item_unit }}</td>\n    <td>{{ item.lab_item_ref }}</td>\n  </tr>\n</table>',
+            group_report: '<table border="1">\n  <thead>\n    <tr>\n      <th>检测项目</th>\n      <th>结果数值</th>\n      <th>参考范围</th>\n      <th>化验报告影像 (多图)</th>\n    </tr>\n  </thead>\n  <tbody loop="group in composite.grouped_report">\n    <tr>\n      <td colspan="4" align="left" style="background:#F2F4F8;"><b>■ {{ group.title }}</b></td>\n    </tr>\n    <tr loop="item in group.children">\n      <td>{{ item.itemName }}</td>\n      <td>{{ item.result }}</td>\n      <td>{{ item.reference }}</td>\n      <td>{{ item.imgList }}</td>\n    </tr>\n  </tbody>\n</table>'
+          };
+
+          if (templateMap[type]) {
+            this.tableForm.pagingRepeat = false;
+            this.tableForm.htmlTemplate = templateMap[type];
+            this.handleCompileTableTemplate();
+          }
+        },
+        handleCompileTableTemplate() {
+          const html = this.tableForm.htmlTemplate || '';
+          const match = html.match(/loop="(?:\w+\s+in\s+)?([\w\.]+)"/);
+          const loopDataset = match ? match[1] : '';
+          this.compiledTableInfo = {
+            hasLoop: !!loopDataset,
+            loopDataset: loopDataset,
+            rowCount: (html.match(/<tr/gi) || []).length
+          };
+        },
+        handleFormatTableHtml() {
+          if (!this.tableForm.htmlTemplate || !this.tableForm.htmlTemplate.trim()) {
+            this.$message.warning('当前无 HTML 模板代码可格式化');
+            return;
+          }
+          try {
+            this.tableForm.htmlTemplate = this.formatHtmlSource(this.tableForm.htmlTemplate);
+            this.handleCompileTableTemplate();
+            this.$message.success('已完成 HTML 模板代码格式化！');
+          } catch (e) {
+            this.$message.error('格式化失败：' + (e.message || String(e)));
+          }
+        },
+        formatHtmlSource(html) {
+          if (!html) return '';
+          let indentLevel = 0;
+          const lines = [];
+          const cleaned = html.replace(/>\s*</g, '><').trim();
+          const tokens = cleaned
+            .split(new RegExp('(<!--[\\s\\S]*?-->|<[^>]+>)', 'g'))
+            .filter(t => t && t.trim().length > 0);
+
+          tokens.forEach(token => {
+            const trimmed = token.trim();
+            if (!trimmed) return;
+
+            if (trimmed.startsWith('<!--')) {
+              lines.push('  '.repeat(indentLevel) + trimmed);
+            } else if (trimmed.startsWith('</')) {
+              indentLevel = Math.max(0, indentLevel - 1);
+              lines.push('  '.repeat(indentLevel) + trimmed);
+            } else if (trimmed.startsWith('<') && !trimmed.endsWith('/>')) {
+              lines.push('  '.repeat(indentLevel) + trimmed);
+              const isSelfClosing = /^<(br|hr|img|input|col|meta|link)/i.test(trimmed);
+              if (!isSelfClosing) {
+                indentLevel++;
+              }
+            } else if (trimmed.startsWith('<') && trimmed.endsWith('/>')) {
+              lines.push('  '.repeat(indentLevel) + trimmed);
+            } else {
+              lines.push('  '.repeat(indentLevel) + trimmed);
+            }
+          });
+
+          let formatted = lines.join('\n');
+          // 将 <th>...</th> 和 <td>...</td> 收拢到单行展示
+          formatted = formatted.replace(/([ \t]*<(?:th|td)[^>]*>)\n[ \t]*([^\n<]+)\n[ \t]*(<\/(?:th|td)>)/gi, '$1$2$3');
+          return formatted;
+        },
+        async handleSaveTable() {
+          this.$refs.tableFormRef.validate(async valid => {
+            if (!valid) return;
+            this.handleCompileTableTemplate();
+            const inferredConceptId = (this.compiledTableInfo && this.compiledTableInfo.loopDataset)
+              ? this.compiledTableInfo.loopDataset
+              : (this.tableForm.conceptId || `table_${Date.now().toString(36)}`);
+            const tableItem = normalizeField({
+              id: this.tableDialogMode === 'add' ? undefined : this.tableForm.id,
+              name: this.tableForm.name,
+              fieldName: this.tableForm.name,
+              conceptId: inferredConceptId,
+              fieldKey: inferredConceptId,
+              type: 'table',
+              fieldType: 'table',
+              description: this.tableForm.description,
+              fieldDesc: this.tableForm.description,
+              pagingRepeat: this.tableForm.pagingRepeat !== false,
+              htmlTemplate: this.tableForm.htmlTemplate,
+              groupId: this.currentGroup?.id
+            });
+
+            try {
+              if (this.tableDialogMode === 'add') {
+                const res = await componentApi.addField(tableItem);
+                if (res && res.code === 200) {
+                  this.$message.success(res.msg || res.message || '新增结构化表格成功');
+                  this.tableDialogVisible = false;
+                  await this.fetchGroupFields(this.currentGroupIndex, true);
+                }
+              } else {
+                const res = await componentApi.updateField(tableItem);
+                if (res && res.code === 200) {
+                  this.$message.success(res.msg || res.message || '修改结构化表格成功');
+                  this.tableDialogVisible = false;
+                  await this.fetchGroupFields(this.currentGroupIndex, true);
+                }
+              }
+            } catch (err) {
+              console.warn('[handleSaveTable] 保存表格失败:', err);
+            }
+          });
+        },
+        async handleDeleteField(origIdx) {
+          const target = this.currentGroup.children[origIdx];
+          if (target && target.id) {
+            try {
+              const res = await componentApi.delField(target.id);
+              if (res && res.code === 200) {
+                this.$message.success(res.msg || res.message || '删除组件成功');
+                await this.fetchGroupFields(this.currentGroupIndex, true);
+              }
+            } catch (err) {
+              console.warn('[handleDeleteField] 接口删除失败:', err);
+            }
+          }
+        },
+        getTypeTagStyle(type) {
+          const map = {
+            text: '',
+            number: 'warning',
+            checkbox: 'success',
+            radio: 'info',
+            image: 'warning',
+            table: 'danger',
+            array: 'danger'
+          };
+          return map[type] || '';
+        },
+        handleOpenGroupJsonModal() {
+          this.jsonDialogVisible = true;
+        },
+        handleCopyJson() {
+          if (navigator.clipboard) {
+            navigator.clipboard.writeText(this.groupJsonString).then(() => {
+              this.$message.success('已复制当前分组业务回显 JSON 报文');
+            });
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

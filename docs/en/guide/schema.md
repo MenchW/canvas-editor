@@ -26,6 +26,7 @@ interface IElement {
   extension?: unknown;
   externalId?: string;
   hide?: boolean;
+  when?: string; // Conditional rendering expression (like v-if, auto-hidden when false)
   // style
   font?: string;
   size?: number;

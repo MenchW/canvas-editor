@@ -1,5 +1,6 @@
 .ce-contextmenu-container {
-  z-index: 9;
+  z-index: 9999;
+  max-height: calc(100vh - 70px);
   position: fixed;
   display: none;
   padding: 4px;
@@ -201,4 +202,16 @@
 
 .ce-contextmenu-border-td-back {
   background-image: url(../../../assets/images/table-border-td-back.svg);
+}
+
+.ce-contextmenu-text-direction {
+  background-image: url(../../../assets/images/text-direction.svg);
+}
+
+.ce-contextmenu-text-direction-horizontal {
+  background-image: url(../../../assets/images/text-direction-horizontal.svg);
+}
+
+.ce-contextmenu-text-direction-vertical {
+  background-image: url(../../../assets/images/text-direction-vertical.svg);
 }

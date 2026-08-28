@@ -9,17 +9,19 @@ import { IElement } from '../interface/Element'
  */
 export function getParagraphNo(elementList: IElement[], index: number): number {
   let paragraphNo = 0
+  const safeIndex = Math.min(index, elementList.length)
   // 初始换行占位符不计算
-  for (let i = 1; i < index; i++) {
+  for (let i = 1; i < safeIndex; i++) {
     const curElement = elementList[i]
     const preElement = elementList[i - 1]
+    if (!curElement || !preElement) continue
     // 正常换行（非列表） || 列表导致的段落变化 || 标题导致的段落变化
     if (
       (curElement.value === ZERO &&
         !curElement.listWrap &&
         !curElement.listId) ||
-      (curElement.listId !== preElement?.listId && preElement.value !== ZERO) ||
-      (curElement.titleId !== preElement?.titleId && preElement.value !== ZERO)
+      (curElement.listId !== preElement.listId && preElement.value !== ZERO) ||
+      (curElement.titleId !== preElement.titleId && preElement.value !== ZERO)
     ) {
       paragraphNo++
     }

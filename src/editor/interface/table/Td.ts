@@ -1,7 +1,13 @@
 import { VerticalAlign } from '../../dataset/enum/VerticalAlign'
-import { TdBorder, TdSlash } from '../../dataset/enum/table/Table'
+import {
+  TdBorder,
+  TdSlash,
+  TdTextDirection
+} from '../../dataset/enum/table/Table'
 import { IElement, IElementPosition } from '../Element'
 import { IRow } from '../Row'
+
+export { TdTextDirection }
 
 export interface ITd {
   conceptId?: string
@@ -25,9 +31,12 @@ export interface ITd {
   rowList?: IRow[]
   positionList?: IElementPosition[]
   verticalAlign?: VerticalAlign
+  textDirection?: TdTextDirection
   backgroundColor?: string
   borderTypes?: TdBorder[]
   slashTypes?: TdSlash[]
+  mergeSame?: 'vertical' | boolean
+  _remove?: boolean
   mainHeight?: number // 内容 + 内边距高度
   realHeight?: number // 真实高度（包含跨列）
   realMinHeight?: number // 真实最小高度（包含跨列）

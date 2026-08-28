@@ -557,8 +557,13 @@ export class Previewer {
     position: IElementPosition | null = null
   ) {
     const { scale } = this.options
-    const elementWidth = element.width! * scale
-    const elementHeight = element.height! * scale
+    // 防御:图片元素缺少宽高时跳过尺寸调整器,避免 NaN 显示与异常布局
+    if (element.width === undefined || element.height === undefined) {
+      this.clearResizer()
+      return
+    }
+    const elementWidth = element.width * scale
+    const elementHeight = element.height * scale
     // 尺寸预览
     this._updateResizerSizeView(elementWidth, elementHeight)
     // 优先使用浮动位置信息

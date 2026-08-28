@@ -2,8 +2,6 @@ import { ImageDisplay } from '../../../dataset/enum/Common'
 import { EditorMode } from '../../../dataset/enum/Editor'
 import { ElementType } from '../../../dataset/enum/Element'
 import { MouseEventButton } from '../../../dataset/enum/Event'
-import { ControlComponent } from '../../../dataset/enum/Control'
-import { ControlType } from '../../../dataset/enum/Control'
 import { IPreviewerDrawOption } from '../../../interface/Previewer'
 import { deepClone } from '../../../utils'
 import { isMod } from '../../../utils/hotkey'
@@ -31,6 +29,9 @@ export function hitCheckbox(element: IElement, draw: Draw) {
   if (!control) {
     draw.getCheckboxParticle().setSelect(element)
   } else {
+    if (typeof draw.getControl()?.initControl === 'function') {
+      draw.getControl().initControl()
+    }
     const codes = control?.code ? control.code.split(',') : []
     if (checkbox?.value) {
       const codeIndex = codes.findIndex(c => c === checkbox.code)
@@ -42,9 +43,16 @@ export function hitCheckbox(element: IElement, draw: Draw) {
         codes.push(checkbox.code)
       }
     }
-    const activeControl = draw.getControl().getActiveControl()
+    let activeControl = draw.getControl()?.getActiveControl()
+    if (!activeControl) {
+      activeControl = new CheckboxControl(element, draw.getControl() as any)
+    }
     if (activeControl instanceof CheckboxControl) {
       activeControl.setSelect(codes)
+      draw.render({
+        isCompute: false,
+        isSetCursor: false
+      })
     }
   }
 }
@@ -55,10 +63,20 @@ export function hitRadio(element: IElement, draw: Draw) {
   if (!control) {
     draw.getRadioParticle().setSelect(element)
   } else {
+    if (typeof draw.getControl()?.initControl === 'function') {
+      draw.getControl().initControl()
+    }
     const codes = radio?.code ? [radio.code] : []
-    const activeControl = draw.getControl().getActiveControl()
+    let activeControl = draw.getControl()?.getActiveControl()
+    if (!activeControl) {
+      activeControl = new RadioControl(element, draw.getControl() as any)
+    }
     if (activeControl instanceof RadioControl) {
       activeControl.setSelect(codes)
+      draw.render({
+        isCompute: false,
+        isSetCursor: false
+      })
     }
   }
 }
@@ -151,29 +169,11 @@ export function mousedown(evt: MouseEvent, host: CanvasEvent) {
     position.setCursorPosition(positionList[curIndex])
     // 更新只读状态
     isReadonly = draw.isReadonly()
-    // 复选框
+    // 复选框与单选框
     if (isDirectHitCheckbox && !isReadonly) {
       hitCheckbox(curElement, draw)
     } else if (isDirectHitRadio && !isReadonly) {
       hitRadio(curElement, draw)
-    } else if (
-      curElement.controlComponent === ControlComponent.VALUE &&
-      (curElement.control?.type === ControlType.CHECKBOX ||
-        curElement.control?.type === ControlType.RADIO)
-    ) {
-      // 向左查找
-      let preIndex = curIndex
-      while (preIndex > 0) {
-        const preElement = elementList[preIndex]
-        if (preElement.controlComponent === ControlComponent.CHECKBOX) {
-          hitCheckbox(preElement, draw)
-          break
-        } else if (preElement.controlComponent === ControlComponent.RADIO) {
-          hitRadio(preElement, draw)
-          break
-        }
-        preIndex--
-      }
     } else {
       draw.render({
         curIndex,

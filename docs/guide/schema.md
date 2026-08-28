@@ -26,6 +26,7 @@ interface IElement {
   extension?: unknown;
   externalId?: string;
   hide?: boolean;
+  when?: string; // 条件渲染表达式（类似 v-if，求值为 false 时自动隐藏/剔除）
   // 样式
   font?: string;
   size?: number;

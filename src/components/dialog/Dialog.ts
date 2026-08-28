@@ -11,6 +11,7 @@ export interface IDialogData {
   width?: number
   height?: number
   required?: boolean
+  tips?: string
 }
 
 export interface IDialogConfirm {
@@ -92,7 +93,10 @@ export class Dialog {
           optionName.classList.add('dialog-option__item--require')
         }
       }
-      // 选项输入框
+      // 选项输入框容器
+      const optionFieldContainer = document.createElement('div')
+      optionFieldContainer.classList.add('dialog-option__field')
+
       let optionInput:
         | HTMLInputElement
         | HTMLTextAreaElement
@@ -122,7 +126,17 @@ export class Dialog {
       if (!(optionInput instanceof HTMLSelectElement)) {
         optionInput.placeholder = option.placeholder || ''
       }
-      optionItemContainer.append(optionInput)
+      optionFieldContainer.append(optionInput)
+
+      // 输入框下方提示小字
+      if (option.tips) {
+        const tipText = document.createElement('div')
+        tipText.classList.add('dialog-option__item-tips')
+        tipText.append(document.createTextNode(option.tips))
+        optionFieldContainer.append(tipText)
+      }
+
+      optionItemContainer.append(optionFieldContainer)
       optionContainer.append(optionItemContainer)
       this.inputList.push(optionInput)
     }

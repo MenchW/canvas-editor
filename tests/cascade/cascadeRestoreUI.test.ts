@@ -7,10 +7,11 @@ import { mergeOption } from '@/editor/utils/option'
 import { formatElementList } from '@/editor/utils/element'
 import { ControlType } from '@/editor/dataset/enum/Control'
 import { ElementType } from '@/editor/dataset/enum/Element'
+import { EditorMode } from '@/editor/dataset/enum/Editor'
 import { SelectControl } from '@/editor/core/draw/control/select/SelectControl'
 import type { IElement } from '@/editor/interface/Element'
 
-const options = mergeOption({ width: 794, height: 1123 })
+const options = mergeOption({ width: 794, height: 1123, mode: EditorMode.EDIT })
 
 function createDraw(main: IElement[]): {
   draw: Draw

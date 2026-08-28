@@ -1,8 +1,7 @@
-import {
-  CONTROL_STYLE_ATTR,
-  TEXTLIKE_ELEMENT_TYPE
-} from '../../../../dataset/constant/Element'
+import { ZERO } from '../../../../dataset/constant/Common'
+import { CONTROL_STYLE_ATTR } from '../../../../dataset/constant/Element'
 import { ControlComponent } from '../../../../dataset/enum/Control'
+import { EditorMode } from '../../../../dataset/enum/Editor'
 import { KeyMap } from '../../../../dataset/enum/KeyMap'
 import { DeepRequired } from '../../../../interface/Common'
 import {
@@ -12,7 +11,7 @@ import {
 } from '../../../../interface/Control'
 import { IEditorOption } from '../../../../interface/Editor'
 import { IElement } from '../../../../interface/Element'
-import { omitObject, pickObject } from '../../../../utils'
+import { pickObject, splitText } from '../../../../utils'
 import {
   formatElementContext,
   isElementTraceDeleted,
@@ -158,33 +157,90 @@ export class TextControl implements IControlInstance {
       // 移除空白占位符
       this.control.removePlaceholder(startIndex, context)
     }
-    // 非文本类元素或前缀过渡掉样式属性
-    const anchorElement =
-      (startElement.type &&
-        !TEXTLIKE_ELEMENT_TYPE.includes(startElement.type)) ||
-      startElement.controlComponent === ControlComponent.PREFIX ||
-      startElement.controlComponent === ControlComponent.PRE_TEXT
-        ? pickObject(startElement, [
-            'control',
-            'controlId',
-            ...CONTROL_STYLE_ATTR
-          ])
-        : omitObject(startElement, ['type'])
+    // 聚合当前控件范围内配置的用户自定义样式 (字号、颜色、粗体、下划线等)
+    const controlStyle: Partial<IElement> = {}
+    CONTROL_STYLE_ATTR.forEach(attr => {
+      const isBracketEl =
+        startElement.controlComponent === ControlComponent.PREFIX ||
+        startElement.controlComponent === ControlComponent.POSTFIX
+      if (attr === 'color' && isBracketEl) {
+        if (startElement.control?.color !== undefined) {
+          controlStyle.color = startElement.control.color
+        } else if (this.element.control?.color !== undefined) {
+          controlStyle.color = this.element.control.color
+        } else if (this.element.color !== undefined) {
+          controlStyle.color = this.element.color
+        }
+      } else {
+        if (startElement[attr] !== undefined) {
+          controlStyle[attr] = startElement[attr] as any
+        } else if (startElement.control && (startElement.control as any)[attr] !== undefined) {
+          controlStyle[attr] = (startElement.control as any)[attr]
+        } else if (this.element.control && (this.element.control as any)[attr] !== undefined) {
+          controlStyle[attr] = (this.element.control as any)[attr]
+        } else if (this.element[attr] !== undefined) {
+          controlStyle[attr] = this.element[attr] as any
+        }
+      }
+    })
+
+    const anchorElement: IElement = {
+      ...pickObject(startElement, ['control', 'controlId']),
+      ...controlStyle
+    }
+
+    let formatData: IElement[] = []
+    if (typeof data === 'string') {
+      formatData = splitText(data).map(ch => ({
+        value: ch === '\n' ? ZERO : ch
+      }))
+    } else if (Array.isArray(data)) {
+      formatData = data.flatMap(item => {
+        if (typeof item === 'string') {
+          return splitText(item).map(ch => ({
+            value: ch === '\n' ? ZERO : ch
+          }))
+        }
+        if (
+          item &&
+          typeof item === 'object' &&
+          'value' in item &&
+          typeof item.value === 'string' &&
+          item.value.length > 1
+        ) {
+          return splitText(item.value).map(ch => ({
+            ...item,
+            value: ch === '\n' ? ZERO : ch
+          }))
+        }
+        return [
+          item && typeof item === 'object' && 'value' in item
+            ? item
+            : { value: String(item ?? '') }
+        ]
+      })
+    }
     // 插入起始位置
     const start = range.startIndex + 1
-    for (let i = 0; i < data.length; i++) {
+    for (let i = 0; i < formatData.length; i++) {
+      const itemData = formatData[i]
       const newElement: IElement = {
         ...anchorElement,
-        ...data[i],
+        ...itemData,
+        color: itemData.color || anchorElement.color,
+        size: itemData.size || anchorElement.size,
+        bold: itemData.bold !== undefined ? itemData.bold : anchorElement.bold,
+        italic: itemData.italic !== undefined ? itemData.italic : anchorElement.italic,
+        underline: itemData.underline !== undefined ? itemData.underline : anchorElement.underline,
         controlComponent: ControlComponent.VALUE
       }
-      formatElementContext(elementList, [newElement], startIndex, {
+      formatElementContext(elementList, [newElement], start + i, {
         editorOptions: this.options
       })
       draw.getTraceParticle().markElementListInserted([newElement])
       draw.spliceElementList(elementList, start + i, 0, [newElement])
     }
-    return start + data.length - 1
+    return start + formatData.length - 1
   }
 
   public clearValue(
@@ -225,6 +281,10 @@ export class TextControl implements IControlInstance {
 
   public keydown(evt: KeyboardEvent): number | null {
     if (this.control.getIsDisabledControl()) {
+      return null
+    }
+    // 无痕编辑模式 (PREVIEW_EDIT) 下解包控件，禁止触发整块 removeControl，统一交由全局逐字删除
+    if (this.control.getDraw().getMode() === EditorMode.PREVIEW_EDIT) {
       return null
     }
     const elementList = this.control.getElementList()

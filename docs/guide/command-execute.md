@@ -24,7 +24,7 @@ import { EDITOR_COMPONENT, EditorComponent } from '@hufe921/canvas-editor'
 
 ## executeMode
 
-功能：切换编辑器模式（编辑、清洁、只读、表单、打印、设计、涂鸦、留痕）
+功能：切换编辑器模式（编辑、清洁、只读、表单、打印、设计、涂鸦、留痕、无痕编辑）
 
 用法：
 
@@ -178,6 +178,16 @@ instance.command.executeUndo()
 
 ```javascript
 instance.command.executeRedo()
+```
+
+## executeRecoveryHistory
+
+功能：重置历史记录基准（清空撤销/重做历史栈，并将当前文档内容设为初始唯一历史记录）
+
+用法：
+
+```javascript
+instance.command.executeRecoveryHistory()
 ```
 
 ## executePainter
@@ -1097,3 +1107,214 @@ instance.command.executeLocationArea(areaId: string, options?: ILocationAreaOpti
 ```js
 instance.command.executeClearGraffiti()
 ```
+
+## executeSetImageCaption
+
+功能：设置或更新选中图片的题注描述文本
+
+用法：
+
+```javascript
+instance.command.executeSetImageCaption(payload: IImageCaption)
+```
+
+## executeConvertControlToText
+
+功能：将文档中所有控件解包转换为原生纯文本节点，丢弃所有前缀、后缀与占位符
+
+用法：
+
+```javascript
+instance.command.executeConvertControlToText()
+```
+
+## executeRemoveControl
+
+功能：移除当前选区所在或指定的控件
+
+用法：
+
+```javascript
+instance.command.executeRemoveControl(payload?: IRemoveControlOption)
+```
+
+## executeSetControlValue
+
+功能：设置单个指定控件的值
+
+用法：
+
+```javascript
+instance.command.executeSetControlValue(payload: ISetControlValueOption)
+```
+
+## executeSetControlValueList
+
+功能：批量设置多个控件的值
+
+用法：
+
+```javascript
+instance.command.executeSetControlValueList(payload: ISetControlValueOption[])
+```
+
+## executeSetControlExtension
+
+功能：设置单个控件的扩展数据字段
+
+用法：
+
+```javascript
+instance.command.executeSetControlExtension(payload: ISetControlExtensionOption)
+```
+
+## executeSetControlExtensionList
+
+功能：批量设置多个控件的扩展数据字段
+
+用法：
+
+```javascript
+instance.command.executeSetControlExtensionList(payload: ISetControlExtensionOption[])
+```
+
+## executeSetControlProperties
+
+功能：设置单个控件的基础属性（如 placeholder、prefix、postfix 等）
+
+用法：
+
+```javascript
+instance.command.executeSetControlProperties(payload: ISetControlProperties)
+```
+
+## executeSetControlPropertiesList
+
+功能：批量设置多个控件的基础属性
+
+用法：
+
+```javascript
+instance.command.executeSetControlPropertiesList(payload: ISetControlProperties[])
+```
+
+## executeSetControlHighlight
+
+功能：高亮指定的控件（根据关键词匹配）
+
+用法：
+
+```javascript
+instance.command.executeSetControlHighlight(payload: ISetControlHighlightOption)
+```
+
+## executeValidate
+
+功能：触发校验文档内所有控件的规则合法性
+
+用法：
+
+```javascript
+const errors = instance.command.executeValidate()
+```
+
+## executeClearValidate
+
+功能：清除文档中所有控件的表单校验错误高亮提示
+
+用法：
+
+```javascript
+instance.command.executeClearValidate()
+```
+
+## executeLocationControl
+
+功能：定位并聚焦跳转到指定的控件
+
+用法：
+
+```javascript
+instance.command.executeLocationControl(controlId: string, options?: ILocationControlOption)
+```
+
+## executeInsertControl
+
+功能：在当前光标位置插入一个控件元素
+
+用法：
+
+```javascript
+instance.command.executeInsertControl(payload: IElement)
+```
+
+## executeJumpControl
+
+功能：按顺序跳转至上一个或下一个控件
+
+用法：
+
+```javascript
+instance.command.executeJumpControl(payload?: { direction?: MoveDirection })
+```
+
+## executeTranslate
+
+功能：根据国际化 Key 获取并返回对应语言的翻译文本
+
+用法：
+
+```javascript
+const text = instance.command.executeTranslate(path: string)
+```
+
+## executeComputeElementListHeight
+
+功能：离屏计算预设元素列表（ElementList）在当前画布参数下的排版总高度
+
+用法：
+
+```javascript
+const height = instance.command.executeComputeElementListHeight(elementList: IElement[])
+```
+
+## executeConvertControlToText
+
+功能：一键将文档中所有控件“脱壳”转换为普通纯文本（自动去除控件的前缀、后缀以及未设值时的占位符，保留最终回显的文字与字符内容）
+
+用法：
+
+```javascript
+instance.command.executeConvertControlToText()
+```
+
+## executeRecoveryHistory
+
+功能：数据异步回显或文档加载完成后，重置并初始化唯一历史基准（清空当前的 Undo/Redo 历史记录栈，防止用户撤销回显前的内容）
+
+用法：
+
+```javascript
+instance.command.executeRecoveryHistory()
+```
+
+## executeWordTool
+
+功能：解析并导入本地 `.docx` Word 文档，将 Word 的文字排版、多级标题、直排文本与复杂表格高保真转化为原生 Canvas Editor Element 节点
+
+用法：
+
+```javascript
+instance.command.executeWordTool()
+```
+
+## executePrint
+
+功能：调用原生打印机进行高保真分页打印输出
+
+用法：
+
+```javascript
+instance.command.executePrint()
+```
+

@@ -1,3 +1,91 @@
+## [0.9.138](https://github.com/Hufe921/canvas-editor/compare/v0.9.137...v0.9.138) (2026-08-28)
+
+### Breaking Changes
+
+- **默认编辑器模式变更** (`src/editor/dataset/enum/Editor.ts`)：初始化默认模式由原先的编辑模式 `EditorMode.EDIT` 调整为只读模式 `EditorMode.READONLY`。
+
+### New Features & Modules（新增文件与功能模块）
+
+#### 1. 宿主集成 SDK 与通信协议 (`src/sdk/` & `src/bridge/`)
+- **`src/sdk/CanvasEditorHost.ts`**：提供宿主系统（Parent Page）与 iframe / 容器编辑器通信的 SDK，支持跨窗口命令分发、数据回显、保存/打印调度与事件监听。
+- **`src/sdk/transforms.ts` (`CanvasDataTransforms`)**：提供开箱即用的业务数据转换适配工具：
+  - `CanvasDataTransforms.list`：将字符串数组或换行文本转换为分段列表格式；
+  - `CanvasDataTransforms.images`：将 URL 数组、逗号分隔串或对象数组转换为图片控件数据；
+  - `CanvasDataTransforms.options`：将选项对象数组转换为单选/多选控件结构。
+- **`src/bridge/editorBridge.ts` & `src/bridge/schemaBridge.ts`**：编辑器内部的 RPC 消息分发桥梁与 Schema 映射层。
+
+#### 2. 全新控件形态与列表分段生态 (`src/editor/core/draw/control/`)
+- **`image/ImageControl.ts` (`ControlType.IMAGE`)**：新增图片控件，支持单图占位符、宽高配置与图片 URL/对象数据回显。
+- **`list/` 列表控件族**：
+  - `ListTextControl.ts` (`List.Text`)：多行分段列表控件，支持数组数据自动展开为多行段落；
+  - `ListRadioControl.ts` (`List.Radio`)：单选选项组控件，支持互斥勾选与状态回显；
+  - `ListCheckboxControl.ts` (`List.Checkbox`)：多选选项组控件，支持多项勾选与状态回显；
+  - `ListImageControl.ts` (`List.Image`)：多图网格列表控件，支持多张图片自适应网格排版。
+
+#### 3. 通用 HTML 表格模板解析引擎 (`src/utils/index.ts` 中的 `parseTableHtml`)
+- 支持将标准 HTML `<table>` 字符串转换为 Canvas Editor Table Element；
+- 原生支持 `tbody[loop]` 大标题循环、`tr[loop]` 明细行循环、`colspan` / `rowspan` 跨行列、单元格对齐、背景色及 `merge-same` 合并指令；
+- **单元格子节点递归解析与内联样式继承**：支持解析单元格内部嵌套的 `<div>`、`<span>`、`<b>`、`<i>`、`<u>` 等 DOM 节点，精准继承其内联 `style`（`color` 文字颜色、`font-weight` 加粗、`font-size` 字号、`text-decoration` 下划线、`font-style` 斜体）并挂载到对应文字/控件节点；
+- **声明式条件渲染指令 (`when="expression"`) 支持**：提供类似 `v-if` 的动态显隐控制能力，在明细数据行循环展开时对 `when` 表达式动态求值，当条件为 `false` 时自动剔除/隐藏对应节点。
+
+#### 4. 扩展插件集 (`src/plugins/`)
+- **`docx`**：本地 Word (.docx) 模板导入与解析；
+- **`excel`**：Excel 数据表格导入；
+- **`markdown`**：Markdown 格式文本导入与导出；
+- **`barcode1d` & `barcode2d`**：条形码与二维码绘制生成；
+- **`codeblock`**：代码块排版与语法高亮；
+- **`diagram`**：绘图与流程图支持；
+- **`menstrualHistory`**：病历月经史图表；
+- **`specialCharacters`**：特殊符号插入面板；
+- **`floatingToolbar`**：选区悬浮快捷工具栏；
+- **`case`**：大小写转换工具。
+
+#### 5. 全新 Demo 矩阵与 UI 组件
+- **`src/components/toast/`**：新增原生风格的 Toast 消息提示组件；
+- **`demo/` 多场景集成演示页面**：
+  - `demo/iframe-design.html`：宿主数据下发与双向通信设计态演示；
+  - `demo/component-management.html`：数据字典与占位符管理中心；
+  - `demo/docx-template.html`：Word 模板解析与文档导出演示；
+  - `demo/report-canvas.html`：动态循环明细表格与复杂检验报告演示。
+
+### Improvements & Modified Features（核心修改与影响范围）
+
+#### 1. 渲染引擎与排版增强 (`src/editor/core/draw/Draw.ts`, `Position.ts`, `Cursor.ts`)
+- **表格文字直排/竖排支持 (`TdTextDirection.VERTICAL`)**：
+  - 单元格支持文字竖向直排，字符垂直绝对居中对齐；
+  - 直排模式下光标形态自动切换为 Word 标准横向水平光标（下划线形式），段落行高在水平方向（X 轴）统一生效。
+- **段落级排版样式保留**：行高计算原生支持段前间距（`spaceBefore`）、行距（`lineHeight`）与段后间距（`spaceAfter`），高保真还原导入样式。
+- **无痕编辑模式 (`EditorMode.PREVIEW_EDIT`)**：在 `Draw.ts` 中跳过控件前后缀与占位符的渲染，允许在正文中自由修改文本内容。
+- **表格跨页与选区绘制防御**：修复表格跨页片段位置为空时的绘制异常，优化单元格垂直居中计算公式。
+
+#### 2. 命令与 API 扩展 (`src/editor/core/command/CommandAdapt.ts`, `Command.ts`)
+- **新增执行命令 (Execute Commands)**：
+  - `executeConvertControlToText()`：一键将所有控件“脱壳”转换为普通纯文本；
+  - `executeRecoveryHistory()`：重置唯一历史基准，清空 Undo/Redo 历史栈；
+  - `executeWordTool()`：解析并导入本地 Word (.docx) 文档；
+  - `executePrint()`：调用原生打印机进行分页打印；
+  - `executeExportPdf()`：离屏高保真渲染并导出 PDF 文件；
+  - `executeTableTdTextDirection(direction)`：切换单元格文字方向（横排 / 直排竖排）；
+  - `executeLocationControl(controlId, options)`：精准定位并跳转聚焦到指定控件；
+  - `executeJumpControl(payload)`：顺次跳转至上一个或下一个控件；
+  - `executeValidate(payload)` / `executeClearValidate()`：控件规则合法性校验与清除错误高亮。
+- **新增与增强查询命令 (Get Commands)**：
+  - `getControlValue(payload)`：按 ID、概念 ID、区域 ID 精细提取控件存储值、纯文本与节点信息；
+  - `getControlList()`：获取文档内全部控件的定义列表；
+  - `getPositionContextByEvent(evt, options)`：增强暴露 `index`、`tdValueIndex`、`rangeRect` 等定位字段。
+
+#### 3. 控件设值引擎与选区边界优化 (`src/editor/core/draw/control/`, `RangeManager.ts`)
+- **选区边界收缩修复 (`RangeManager.shrinkBoundary`)**：修复右边界非 Value 时向左收缩错改 `startIndex` 导致选区破坏的严重 Bug。
+- **批量设值引擎性能优化 (`Control.setValueListById`)**：预构建 $O(1)$ 哈希查找索引，提取 `dispatchSetControlValue` 策略分发函数，消除多层 if-else 嵌套并修复 `fakeRange` 范围计算偏移。
+- **日期控件连续改值修复 (`DateControl.ts`)**：在 `clearSelect` 中透传 `isIgnoreDisabledRule`，解决连续设值时的状态失效问题。
+- **复选框控件优化 (`CheckboxControl.ts`)**：修复取消不存在的 code 导致误删最后一个 code 的边界问题。
+
+#### 4. 设计器与 UI 布局重构 (`index.html`, `src/main.ts`, `src/style.css`, `Dialog.ts`)
+- **右侧数据占位符侧边栏**：新增树状数据字典面板，支持字段拖拽/点击插入及数据集 JSON 预览；
+- **顶栏标题展柜**：替换为 Word 式横向卡片标题展柜 (`.menu-item__title-gallery`)，更新清晰的 `import.svg` 图标；
+- **弹窗遮罩层级**：提升 Dialog 遮罩与弹窗 z-index 层级，解决侧边栏遮罩穿透与挤压问题。
+
+
 ## [0.9.137](https://github.com/Hufe921/canvas-editor/compare/v0.9.136...v0.9.137) (2026-07-10)
 
 

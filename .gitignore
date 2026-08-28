@@ -1,9 +1,11 @@
 .idea
 node_modules
 .DS_Store
-dist
+dist*
 dist-ssr
 *.local
 cache
 .temp
+.reasonix
+reasonix.toml
 coverage

@@ -296,10 +296,12 @@ Usage:
 ```javascript
 const {
   pageNo: number
+  index?: number
+  tdValueIndex?: number
   element: IElement | null
   rangeRect: RangeRect | null
   tableInfo: ITableInfoByEvent | null
-}[] = await instance.command.getPositionContextByEvent(evt: MouseEvent, options?: IPositionContextByEventOption)
+} = instance.command.getPositionContextByEvent(evt: MouseEvent, options?: IPositionContextByEventOption)
 ```
 
 demo:
@@ -311,7 +313,7 @@ instance.eventBus.on(
     const positionContext = instance.command.getPositionContextByEvent(evt)
     console.log(positionContext)
   }, 200)
-)``
+)
 ```
 
 ## getElementById
@@ -338,4 +340,29 @@ const {
   startPageNo: number
   endPageNo: number
 } = instance.command.getAreaValue(options: IGetAreaValueOption)
+```
+
+## getControlValue
+
+Feature: Get stored value and element details for specified or all controls
+
+Usage:
+
+```javascript
+const {
+  value: string | null
+  innerText: string | null
+  zone: EditorZone
+  elementList?: IElement[]
+}[] = instance.command.getControlValue(payload: IGetControlValueOption)
+```
+
+## getControlList
+
+Feature: Get definition list of all controls in the document
+
+Usage:
+
+```javascript
+const controlList = instance.command.getControlList()
 ```

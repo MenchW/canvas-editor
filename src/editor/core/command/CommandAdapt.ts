@@ -1,3 +1,4 @@
+import { jsPDF } from 'jspdf'
 import { NBSP, WRAP, ZERO } from '../../dataset/constant/Common'
 import {
   AREA_CONTEXT_ATTR,
@@ -25,7 +26,12 @@ import { ElementStyleKey } from '../../dataset/enum/ElementStyle'
 import { ListStyle, ListType } from '../../dataset/enum/List'
 import { MoveDirection } from '../../dataset/enum/Observer'
 import { RowFlex } from '../../dataset/enum/Row'
-import { TableBorder, TdBorder, TdSlash } from '../../dataset/enum/table/Table'
+import {
+  TableBorder,
+  TdBorder,
+  TdSlash,
+  TdTextDirection
+} from '../../dataset/enum/table/Table'
 import { TitleLevel } from '../../dataset/enum/Title'
 import { VerticalAlign } from '../../dataset/enum/VerticalAlign'
 import { ICatalog } from '../../interface/Catalog'
@@ -202,6 +208,7 @@ export class CommandAdapt {
     if (this.draw.isReadonly()) return
     const elementList = this.draw.getElementList()
     const { startIndex, endIndex } = this.range.getRange()
+    if (!~startIndex || !elementList[startIndex]) return
     const isCollapsed = startIndex === endIndex
     // 首字符禁止删除
     if (
@@ -217,12 +224,32 @@ export class CommandAdapt {
         startIndex + 1,
         endIndex - startIndex
       )
+      const curIndex = startIndex
+      this.range.setRange(curIndex, curIndex)
+      this.draw.render({ curIndex })
     } else {
-      this.draw.deleteElementList(elementList, startIndex, 1)
+      let deleteIndex = startIndex
+      if (this.draw.getMode() === EditorMode.PREVIEW_EDIT) {
+        while (
+          deleteIndex > 0 &&
+          (elementList[deleteIndex]?.controlComponent ===
+            ControlComponent.POSTFIX ||
+            elementList[deleteIndex]?.controlComponent ===
+              ControlComponent.PREFIX ||
+            elementList[deleteIndex]?.controlComponent ===
+              ControlComponent.PLACEHOLDER)
+        ) {
+          this.draw.deleteElementList(elementList, deleteIndex, 1)
+          deleteIndex--
+        }
+      }
+      if (deleteIndex >= 0) {
+        this.draw.deleteElementList(elementList, deleteIndex, 1)
+      }
+      const curIndex = Math.max(0, deleteIndex - 1)
+      this.range.setRange(curIndex, curIndex)
+      this.draw.render({ curIndex })
     }
-    const curIndex = isCollapsed ? startIndex - 1 : startIndex
-    this.range.setRange(curIndex, curIndex)
-    this.draw.render({ curIndex })
   }
 
   public setRange(
@@ -318,6 +345,10 @@ export class CommandAdapt {
     const isReadonly = this.draw.isReadonly()
     if (isReadonly) return
     this.historyManager.redo()
+  }
+
+  public recoveryHistory() {
+    this.draw.recoveryHistory()
   }
 
   public painter(options: IPainterOption) {
@@ -1057,6 +1088,12 @@ export class CommandAdapt {
     this.tableOperate.tableTdVerticalAlign(payload)
   }
 
+  public tableTdTextDirection(payload: TdTextDirection) {
+    const isReadonly = this.draw.isReadonly()
+    if (isReadonly) return
+    this.tableOperate.tableTdTextDirection(payload)
+  }
+
   public tableBorderType(payload: TableBorder) {
     const isReadonly = this.draw.isReadonly()
     if (isReadonly) return
@@ -1440,6 +1477,54 @@ export class CommandAdapt {
     }
   }
 
+  public async exportPdf(fileName = 'CanvasEditor文档') {
+    const pageCanvasList = this.draw.getPageList()
+    if (!pageCanvasList || !pageCanvasList.length) return
+
+    const isHorizontal =
+      this.draw.getOptions().paperDirection === PaperDirection.HORIZONTAL
+
+    const doc = new jsPDF({
+      orientation: isHorizontal ? 'landscape' : 'portrait',
+      unit: 'pt',
+      format: 'a4'
+    })
+
+    const pdfWidth = doc.internal.pageSize.getWidth()
+    const pdfHeight = doc.internal.pageSize.getHeight()
+
+    pageCanvasList.forEach((canvas, index) => {
+      if (index > 0) {
+        doc.addPage()
+      }
+      const imgData = canvas.toDataURL('image/jpeg', 0.95)
+      doc.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight)
+    })
+
+    try {
+      doc.save(`${fileName}.pdf`)
+    } catch (e) {
+      console.warn('[exportPdf] 沙箱环境原生下载限制:', e)
+      const blob = doc.output('blob')
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${fileName}.pdf`
+      try {
+        a.click()
+      } catch (err) {
+        console.warn('[exportPdf] 沙箱窗口回退失败:', err)
+        const newWin = window.open(url, '_blank')
+        if (!newWin) {
+          alert('【宿主沙箱提示】受系统 iframe 安全限制未能直接导出 PDF 文件。请在宿主 <iframe sandbox="..."> 标签中添加 allow-downloads 许可。')
+        }
+      }
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url)
+      }, 1000)
+    }
+  }
+
   public replaceImageElement(payload: string) {
     const { startIndex } = this.range.getRange()
     const elementList = this.draw.getElementList()
@@ -1643,20 +1728,23 @@ export class CommandAdapt {
     )
     // 元素信息
     const elementList = this.draw.getElementList()
-    const startElement = pickElementAttr(
-      elementList[isCollapsed ? startIndex : startIndex + 1],
-      {
-        extraPickAttrs: ['id', 'controlComponent']
-      }
-    )
-    const endElement = pickElementAttr(elementList[endIndex], {
+    const startIndexEl =
+      elementList[isCollapsed ? startIndex : startIndex + 1] ||
+      elementList[startIndex] ||
+      elementList[0]
+    const endIndexEl = elementList[endIndex] || elementList[0]
+    const startElement = pickElementAttr(startIndexEl, {
+      extraPickAttrs: ['id', 'controlComponent']
+    })
+    const endElement = pickElementAttr(endIndexEl, {
       extraPickAttrs: ['id', 'controlComponent']
     })
     // 页码信息、行信息
     const rowList = this.draw.getRowList()
     const positionList = this.position.getPositionList()
-    const startPosition = positionList[startIndex]
-    const endPosition = positionList[endIndex]
+    const startPosition = positionList[startIndex] || positionList[0]
+    const endPosition = positionList[endIndex] || positionList[0]
+    if (!startPosition || !endPosition) return null
     const startPageNo = startPosition.pageNo
     const endPageNo = endPosition.pageNo
     const startRowNo = startPosition.rowIndex
@@ -1724,18 +1812,23 @@ export class CommandAdapt {
       }
     } else {
       const positionList = this.position.getPositionList()
-      const position = positionList[endIndex]
-      const {
-        coordinate: { rightTop },
-        pageNo,
-        lineHeight
-      } = position
-      rangeRects.push({
-        x: rightTop[0],
-        y: rightTop[1] + pageNo * (height + pageGap),
-        width: 0,
-        height: lineHeight
-      })
+      const position =
+        positionList[endIndex] ||
+        positionList[positionList.length - 1] ||
+        positionList[0]
+      if (position && position.coordinate) {
+        const {
+          coordinate: { rightTop },
+          pageNo,
+          lineHeight
+        } = position
+        rangeRects.push({
+          x: rightTop[0],
+          y: rightTop[1] + pageNo * (height + pageGap),
+          width: 0,
+          height: lineHeight
+        })
+      }
     }
     // 区域信息
     const zone = this.draw.getZone().getZone()
@@ -1753,13 +1846,17 @@ export class CommandAdapt {
     // 标题信息
     let titleId: string | null = null
     let titleStartPageNo: number | null = null
-    let start = startIndex - 1
-    while (start > 0) {
+    let start = Math.min(startIndex - 1, elementList.length - 1)
+    while (start >= 0) {
       const curElement = elementList[start]
       const preElement = elementList[start - 1]
-      if (curElement.titleId && curElement.titleId !== preElement?.titleId) {
+      if (
+        curElement &&
+        curElement.titleId &&
+        curElement.titleId !== preElement?.titleId
+      ) {
         titleId = curElement.titleId
-        titleStartPageNo = positionList[start].pageNo
+        titleStartPageNo = positionList[start]?.pageNo ?? null
         break
       }
       start--
@@ -2221,6 +2318,10 @@ export class CommandAdapt {
     return this.workerManager.getCatalog()
   }
 
+  public getOriginalElementList(): IElement[] {
+    return this.draw.getOriginalElementList()
+  }
+
   public locationCatalog(titleId: string) {
     const elementList = this.draw.getOriginalElementList()
 
@@ -2573,18 +2674,28 @@ export class CommandAdapt {
     if (isDisabled) return
     const cloneElement = deepClone(payload)
     // 格式化上下文信息
-    const { startIndex } = this.range.getRange()
+    let { startIndex } = this.range.getRange()
     const elementList = this.draw.getElementList()
-    // 仅允许 TEXT 控件作为外层嵌套其他控件
+    if (!~startIndex) {
+      startIndex = elementList.length ? elementList.length - 1 : 0
+      this.range.setRange(startIndex, startIndex)
+    }
+    // 仅允许 TEXT 与 IMAGE 控件作为外层嵌套其他控件，且允许在控件结尾处正常插入
     const anchorElement = elementList[startIndex]
     if (
       anchorElement?.controlId &&
       anchorElement.control?.type !== ControlType.TEXT &&
+      anchorElement.control?.type !== ControlType.IMAGE &&
+      anchorElement.controlComponent !== ControlComponent.POSTFIX &&
+      anchorElement.controlComponent !== ControlComponent.POST_TEXT &&
       cloneElement.type === ElementType.CONTROL
     ) {
       return
     }
-    const copyElement = getAnchorElement(elementList, startIndex)
+    const copyElement =
+      getAnchorElement(elementList, startIndex) ||
+      elementList[startIndex] ||
+      elementList[0]
     if (!copyElement) return
     const cloneAttr = [
       ...TABLE_CONTEXT_ATTR,
@@ -2742,6 +2853,8 @@ export class CommandAdapt {
     }
     return {
       pageNo,
+      index,
+      tdValueIndex,
       element,
       rangeRect,
       tableInfo
@@ -2885,5 +2998,46 @@ export class CommandAdapt {
     const next =
       payload === undefined ? this.draw.getOptions().trace.disabled : payload
     this.draw.setTraceEnabled(next)
+  }
+
+  // 将文档中全量控件节点降维解包为原生的纯文本节点，丢弃所有前缀后缀与占位符
+  public convertControlToText() {
+    const mainList = this.draw.getMainElementList()
+    const headerList = this.draw.getHeaderElementList()
+    const footerList = this.draw.getFooterElementList()
+    const processList = (list: IElement[]) => {
+      if (!Array.isArray(list)) return
+      for (let i = list.length - 1; i >= 0; i--) {
+        const el = list[i]
+        if (el.trList) {
+          el.trList.forEach((tr: any) => {
+            tr.tdList.forEach((td: any) => processList(td.value))
+          })
+        }
+        if (el.controlId || el.controlComponent || el.type === ElementType.CONTROL) {
+          if (
+            el.controlComponent === ControlComponent.PREFIX ||
+            el.controlComponent === ControlComponent.POSTFIX ||
+            el.controlComponent === ControlComponent.PLACEHOLDER ||
+            el.controlComponent === ControlComponent.PRE_TEXT ||
+            el.controlComponent === ControlComponent.POST_TEXT
+          ) {
+            list.splice(i, 1)
+          } else {
+            delete el.control
+            delete el.controlId
+            delete el.controlComponent
+            delete el.type
+          }
+        }
+      }
+    }
+    processList(mainList)
+    processList(headerList)
+    processList(footerList)
+    this.draw.render({
+      isSubmitHistory: false,
+      isSetCursor: false
+    })
   }
 }

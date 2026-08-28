@@ -306,11 +306,14 @@ export class ContextMenu {
     const adjustLeft =
       left + contextMenuWidth > innerWidth ? left - contextMenuWidth : left
     contextMenuContainer.style.left = `${adjustLeft}px`
-    // 下侧空间不足时，以菜单底部作为起始点
+    // 下侧空间不足时，以菜单底部作为起始点；同时避开顶部工具栏区域
     const innerHeight = window.innerHeight
     const contextMenuHeight = contextmenuRect.height
-    const adjustTop =
+    let adjustTop =
       top + contextMenuHeight > innerHeight ? top - contextMenuHeight : top
+    if (adjustTop < 64) {
+      adjustTop = 64
+    }
     contextMenuContainer.style.top = `${adjustTop}px`
     this.contextMenuContainerList.push(contextMenuContainer)
     return contextMenuContainer

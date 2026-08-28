@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { ControlType } from '../../../src/editor/dataset/enum/Control'
 import { ElementType } from '../../../src/editor/dataset/enum/Element'
+import { EditorMode } from '../../../src/editor/dataset/enum/Editor'
 import { createTestEditor } from '../../factories/editor'
 import { CheckboxControl } from '../../../src/editor/core/draw/control/checkbox/CheckboxControl'
 import { hitCheckbox } from '../../../src/editor/core/event/handlers/mousedown'
@@ -136,7 +137,8 @@ describe('控件命令', () => {
     const draw = {
       getControl: () => ({
         getActiveControl: () => activeControl
-      })
+      }),
+      render: () => undefined
     }
 
     hitCheckbox(element, draw as any)
@@ -157,7 +159,7 @@ describe('控件命令', () => {
           }
         }
       ],
-      options: { trace: { disabled: false } }
+      options: { mode: EditorMode.EDIT, trace: { disabled: false } }
     })
 
     ctx.editor.command.executeSetControlValue({
