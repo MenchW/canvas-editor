@@ -6,7 +6,7 @@ This guide provides essential information for agentic coding agents working on t
 
 1. **二次开发定位**：本项目是基于 Canvas Editor 进行了深度二次开发的**结构化病历/报告设计与回显系统**。
 2. **控件设计态操作**：所有数据占位符与控件的插入、配置均通过**【右侧数据控件面板】**（`#editor-aside-right`）及**【占位符与数据字典管理中心】**（`demo/component-management.html`）完成，通过点击或拖拽将绑有 `conceptId / fieldKey / path` 的字段插入编辑器。
-3. **外部宿主与回显通信**：宿主系统（Parent Page）与编辑器的所有交互均通过标准的 SDK 协议（`CanvasEditorHost` / `postMessage`，如 `SET_CONTROL_VALUE`、`GET_CONTROL_VALUE` 等）进行数据下发与提取。
+3. **外部宿主与回显通信**：宿主系统（Parent Page）与编辑器的所有交互均通过标准的 SDK 协议（`EditorClient` / `postMessage`，如 `SET_CONTROL_VALUE`、`GET_CONTROL_VALUE` 等）进行数据下发与提取。
 4. **数据驱动理念**：根据数据源类型（标量、一维数组、对象数组、嵌套数组）自动决定渲染形态（单字段、多段分段列表、多段勾选框、动态循环表格、自动单元格合并及单元格嵌套多图）。
 
 ## Project Overview

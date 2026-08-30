@@ -1,44 +1,48 @@
 import { connect, WindowMessenger } from 'penpal'
 import { EditorMode } from '../editor/dataset/enum/Editor'
 import type {
-  ICanvasEditorHost,
-  ICanvasEditorHostOptions,
+  IEditorClient,
+  IEditorClientOptions,
   IEditorRpcMethods,
-  IControl
+  IControl,
+  IControlDataAuditResult
 } from './types'
 
-import { CanvasDataTransforms } from './transforms'
+import { CanvasDataTransform } from './transforms'
+import { getValueByPath } from '../editor/utils/index'
 
-export { EditorMode, CanvasDataTransforms }
+export { EditorMode, CanvasDataTransform }
 export type {
-  ICanvasEditorHost,
-  ICanvasEditorHostOptions,
+  IEditorClient,
+  IEditorClientOptions,
   IFeatureConfig,
   TEditorMode,
-  IControl
+  IControl,
+  IControlDataAuditResult
 } from './types'
 
 type EventListener = (...args: any[]) => void
 
 /**
- * Canvas Editor 宿主 SDK 类
+ * EditorClient 宿主客户端 SDK 类
  * 用于在父页面嵌入编辑器 iframe 并建立跨窗口通信
  */
-export class CanvasEditorHost implements ICanvasEditorHost {
+export class EditorClient implements IEditorClient {
   /** 快捷数据转换适配工具集 */
-  public static transforms = CanvasDataTransforms
+  public static transform = CanvasDataTransform
 
   private iframeEl: HTMLIFrameElement | null = null
   private editorRpc: IEditorRpcMethods | null = null
   private connection: any = null
-  private options: ICanvasEditorHostOptions
+  private options: IEditorClientOptions
   private eventListeners: Map<string, Set<EventListener>> = new Map()
+  private lastFilledData: Record<string, any> | null = null
 
   /**
    * 构造函数
    * @param options 初始化配置对象，包含 iframe 选择器、数据 Providers 和 Hook 回调
    */
-  constructor(options: ICanvasEditorHostOptions) {
+  constructor(options: IEditorClientOptions) {
     this.options = options
     this.initIframe()
     this.initPenpalConnection()
@@ -58,8 +62,10 @@ export class CanvasEditorHost implements ICanvasEditorHost {
    * 建立跨窗口 RPC 通信
    */
   private async initPenpalConnection() {
-    if (!this.iframeEl) {
-      console.error('[CanvasEditorHost SDK] 未找到指定的 iframe 节点')
+    if (!this.iframeEl || !this.iframeEl.contentWindow) {
+      if (!this.iframeEl) {
+        console.error('[EditorClient SDK] 未找到指定的 iframe 节点')
+      }
       return
     }
 
@@ -120,12 +126,12 @@ export class CanvasEditorHost implements ICanvasEditorHost {
       // 连接成功后自驱动拉取数据并渲染
       await this.fetchAndRender()
     } catch (err) {
-      console.error('[CanvasEditorHost SDK] 与 Editor 建立通信连接失败:', err)
+      console.error('[EditorClient SDK] 与 Editor 建立通信连接失败:', err)
     }
   }
 
   /**
-   * 从宿主 Providers (getTemplate, getData, getComponents) 并发拉取数据并下发给编辑器渲染
+   * 从宿主 Providers 并发拉取数据并下发给编辑器渲染
    */
   private async fetchAndRender(): Promise<void> {
     if (!this.editorRpc) return
@@ -141,6 +147,10 @@ export class CanvasEditorHost implements ICanvasEditorHost {
           : undefined
       ])
 
+      if (businessData && typeof businessData === 'object' && !Array.isArray(businessData)) {
+        this.lastFilledData = businessData
+      }
+
       await this.editorRpc.render({
         template,
         businessData: businessData || {},
@@ -155,8 +165,6 @@ export class CanvasEditorHost implements ICanvasEditorHost {
 
   /**
    * 内部事件触发
-   * @param event 事件名称
-   * @param args 事件回调参数
    */
   private emit(event: string, ...args: any[]): void {
     this.eventListeners.get(event)?.forEach(fn => fn(...args))
@@ -168,7 +176,6 @@ export class CanvasEditorHost implements ICanvasEditorHost {
 
   /**
    * 获取当前编辑器的全文数据 JSON（包含 value 与 options）
-   * @returns 编辑器数据对象，若连接未就绪则返回 null
    */
   public async getValue(): Promise<{ value: any; options: any } | null> {
     return this.editorRpc ? await this.editorRpc.getValue() : null
@@ -176,7 +183,6 @@ export class CanvasEditorHost implements ICanvasEditorHost {
 
   /**
    * 批量填充表单/占位符控件数据
-   * @param data 可为键值对对象、结构化对象或 [{ conceptId, value }] 数组，缺省时自动调用 getData() 获取
    */
   public async setControlValueList(data?: Record<string, any> | any[]): Promise<void> {
     if (!this.editorRpc) return
@@ -187,12 +193,14 @@ export class CanvasEditorHost implements ICanvasEditorHost {
           ? await this.options.getData()
           : this.options.getData
     }
+    if (targetData && typeof targetData === 'object' && !Array.isArray(targetData)) {
+      this.lastFilledData = targetData
+    }
     await this.editorRpc.setControlValueList(targetData)
   }
 
   /**
-   * 获取当前画布中的所有表单/占位符控件列表（提取核心 control 属性配置结构）
-   * @returns 控件对象列表
+   * 获取当前画布中的所有表单/占位符控件列表
    */
   public async getControlList(): Promise<IControl[]> {
     if (!this.editorRpc) return []
@@ -201,6 +209,113 @@ export class CanvasEditorHost implements ICanvasEditorHost {
     return list.map(item => item?.control || item).filter(Boolean)
   }
 
+  /**
+   * 检查宿主业务数据与画布控件列表的字段对齐与假值情况
+   */
+  public async getMissingControlList(data?: Record<string, any>): Promise<IControlDataAuditResult> {
+    const controls = await this.getControlList()
+    if (!controls || controls.length === 0) {
+      return { missingControls: [], falsyControls: [] }
+    }
+
+    const targetData = data || this.lastFilledData
+
+    if (!targetData || typeof targetData !== 'object' || Object.keys(targetData).length === 0) {
+      return { missingControls: [], falsyControls: [] }
+    }
+
+    const missingControls: IControl[] = []
+    const falsyControls: IControl[] = []
+
+    controls.forEach(ctrl => {
+      const conceptId = ctrl.conceptId || ctrl.code
+      if (!conceptId) return
+
+      const hasKey = this.hasFieldInData(targetData, conceptId)
+      if (!hasKey) {
+        missingControls.push(ctrl)
+        return
+      }
+
+      const val = this.getFieldValue(targetData, conceptId)
+      if (this.isFalsyExceptZeroAndFalse(val)) {
+        falsyControls.push(ctrl)
+      }
+    })
+
+    return {
+      missingControls,
+      falsyControls
+    }
+  }
+
+  /**
+   * 判断值是否为除 0 和 false 以外的假值/空值
+   */
+  private isFalsyExceptZeroAndFalse(val: any): boolean {
+    if (val === 0 || val === false) return false
+    if (val === null || val === undefined || val === '') return true
+    if (typeof val === 'number' && isNaN(val)) return true
+    if (typeof val === 'string' && val.trim() === '') return true
+    if (Array.isArray(val) && val.length === 0) return true
+    return false
+  }
+
+  /**
+   * 从数据对象中获取对应字段的值
+   */
+  private getFieldValue(data: any, path: string): any {
+    if (!data || typeof data !== 'object' || !path) return undefined
+    if (path in data) return data[path]
+    const pathVal = getValueByPath(data, path)
+    if (pathVal !== undefined) return pathVal
+    if (path.includes('.')) {
+      const underscoreKey = path.replace(/\./g, '_')
+      if (underscoreKey in data) return data[underscoreKey]
+      const leafKey = path.split('.').pop()!
+      if (leafKey in data) return data[leafKey]
+    }
+    return undefined
+  }
+
+  /**
+   * 检查数据对象中是否存在目标 key / 路径
+   */
+  private hasFieldInData(data: any, path: string): boolean {
+    if (!data || typeof data !== 'object' || !path) return false
+
+    if (path in data) {
+      return true
+    }
+
+    const parts = path.split('.').filter(Boolean)
+    if (parts.length > 1) {
+      let curr = data
+      let exists = true
+      for (const p of parts) {
+        if (curr && typeof curr === 'object' && p in curr) {
+          curr = curr[p]
+        } else {
+          exists = false
+          break
+        }
+      }
+      if (exists) return true
+    }
+
+    if (path.includes('.')) {
+      const underscoreKey = path.replace(/\./g, '_')
+      if (underscoreKey in data) {
+        return true
+      }
+      const leafKey = path.split('.').pop()!
+      if (leafKey in data) {
+        return true
+      }
+    }
+
+    return false
+  }
 
   /**
    * 触发编辑器导出 PDF
@@ -222,8 +337,6 @@ export class CanvasEditorHost implements ICanvasEditorHost {
 
   /**
    * 订阅编辑器事件
-   * @param event 事件名称（如 contentChange, modeChange, export 等）
-   * @param listener 事件回调函数
    */
   public on(event: string, listener: EventListener): void {
     if (!this.eventListeners.has(event)) {
@@ -234,8 +347,6 @@ export class CanvasEditorHost implements ICanvasEditorHost {
 
   /**
    * 取消订阅编辑器事件
-   * @param event 事件名称
-   * @param listener 取消绑定的回调函数
    */
   public off(event: string, listener: EventListener): void {
     this.eventListeners.get(event)?.delete(listener)
@@ -248,3 +359,5 @@ export class CanvasEditorHost implements ICanvasEditorHost {
     this.connection?.destroy()
   }
 }
+
+

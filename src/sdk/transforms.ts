@@ -27,7 +27,7 @@ function parseChecked(val: any): boolean {
  * Canvas Editor 宿主数据转换适配工具集
  * 提供给宿主系统用于快捷将业务异构数据转换为 Canvas Editor 控件所期望的标准结构
  */
-export const CanvasDataTransforms = {
+export const CanvasDataTransform = {
   /**
    * 1. 分段文本转换器（List / List.Text）
    * 
@@ -180,10 +180,10 @@ export const CanvasDataTransforms = {
   },
 
   /**
-   * 3. 选项类转换器（Checkbox / Radio / List.Radio / List.Checkbox / Select）
+   * 3. 单选/多选/选项组转换器（Radio / Checkbox / List.Radio / List.Checkbox）
    *
    * @param data 原始数据（对象数组、选项数组、键值对等）
-   * @param mapper 可选：自定义映射函数，或字段别名元组 ['labelKey', 'codeKey', 'checkedKey?']
+   * @param mapper 可选：自定义映射函数 (item, index, list)，或字段别名元组 ['labelKey', 'codeKey', 'checkedKey?']
    *
    * @example
    * ```typescript

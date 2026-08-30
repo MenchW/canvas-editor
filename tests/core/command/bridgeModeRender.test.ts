@@ -45,7 +45,7 @@ describe('EditorBridge 控件数据填充 (setControlValueList / fillData)', () 
   }
   const businessData = { name: '张三', avatar: 'https://example.com/a.png' }
 
-  it('render 加载模板,setControlValueList 填充数据且不覆盖画布改动', () => {
+  it('render 传入 businessData 时自动回显数据，setControlValueList 可追加补充', () => {
     const { editor, destroy } = createTestEditor({
       data: { main: [{ value: '\n' }] }
     })
@@ -55,22 +55,12 @@ describe('EditorBridge 控件数据填充 (setControlValueList / fillData)', () 
       setCustomConfig: vi.fn()
     }
 
-    // 1. render:仅加载模板
+    // 1. render 携带 businessData 时直接自动回显
     ;(bridge as any).executeRenderPayload(
       { template, businessData },
       rpcOptions
     )
-    let original = (editor.command as any).getOriginalElementList()
-    expect(
-      original.find(
-        (el: any) => el.control?.conceptId === 'avatar'
-      )
-    ).toBeDefined()
-    expect(editor.command.getText().main).not.toContain('张三')
-
-    // 2. setControlValueList: 填充占位符
-    bridge.setControlValueList()
-    original = (editor.command as any).getOriginalElementList()
+    const original = (editor.command as any).getOriginalElementList()
     const imgEls = original.filter(
       (el: any) => el.type === ElementType.IMAGE
     )
@@ -79,12 +69,9 @@ describe('EditorBridge 控件数据填充 (setControlValueList / fillData)', () 
     expect(imgEls[0].controlComponent).toBe(ControlComponent.VALUE)
     expect(editor.command.getText().main).toContain('张三')
 
-    // 3. 重复调用 setControlValueList 仍正常工作
-    bridge.setControlValueList()
-    original = (editor.command as any).getOriginalElementList()
-    expect(
-      original.filter((el: any) => el.type === ElementType.IMAGE).length
-    ).toBe(1)
+    // 2. setControlValueList 可继续追加/覆盖数据
+    bridge.setControlValueList({ name: '李四' })
+    expect(editor.command.getText().main).toContain('李四')
 
     destroy()
   })

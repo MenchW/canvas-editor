@@ -7,7 +7,7 @@
 ### New Features & Modules（新增文件与功能模块）
 
 #### 1. 宿主集成 SDK 与通信协议 (`src/sdk/` & `src/bridge/`)
-- **`src/sdk/CanvasEditorHost.ts`**：提供宿主系统（Parent Page）与 iframe / 容器编辑器通信的 SDK，支持跨窗口命令分发、数据回显、保存/打印调度与事件监听。
+- **`src/sdk/EditorClient.ts`**：提供宿主系统（Parent Page）与 iframe / 容器编辑器通信的 SDK（`EditorClient`），支持跨窗口命令分发、数据回显、保存/打印调度与事件监听。
 - **`src/sdk/transforms.ts` (`CanvasDataTransforms`)**：提供开箱即用的业务数据转换适配工具：
   - `CanvasDataTransforms.list`：将字符串数组或换行文本转换为分段列表格式；
   - `CanvasDataTransforms.images`：将 URL 数组、逗号分隔串或对象数组转换为图片控件数据；

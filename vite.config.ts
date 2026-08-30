@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import typescript from '@rollup/plugin-typescript'
 import cssInjectedByJsPlugin from 'vite-plugin-css-injected-by-js'
 import * as path from 'path'
+import * as fs from 'fs'
 import { fileURLToPath } from 'node:url'
 
 export default defineConfig(({ mode }) => {
@@ -88,9 +89,47 @@ export default defineConfig(({ mode }) => {
   return {
     resolve,
     test,
-    base: `/${name}/`,
+    base: `/`,
+    plugins: [
+      {
+        name: 'flatten-demo-html-plugin',
+        closeBundle() {
+          const distDir = path.resolve(__dirname, 'dist')
+          const demoDistDir = path.resolve(distDir, 'demo')
+
+          // 1. 将 dist/demo/*.html 平铺移动到 dist/*.html 并修复平铺后的资源相对路径
+          if (fs.existsSync(demoDistDir)) {
+            const htmlFiles = fs.readdirSync(demoDistDir)
+            htmlFiles.forEach(file => {
+              if (file.endsWith('.html')) {
+                const srcPath = path.join(demoDistDir, file)
+                let content = fs.readFileSync(srcPath, 'utf-8')
+                content = content.replace(/(src|href)=["']\.\.\/assets\//g, '$1="./assets/')
+                fs.writeFileSync(path.join(distDir, file), content, 'utf-8')
+              }
+            })
+            fs.rmSync(demoDistDir, { recursive: true, force: true })
+          }
+
+          // 2. 完整复制整个 common 目录（api.js, utils.js, mock.js, deps.js, lib等）到 dist/common
+          const srcCommon = path.resolve(__dirname, 'demo/common')
+          const destCommon = path.resolve(distDir, 'common')
+          if (fs.existsSync(srcCommon)) {
+            fs.cpSync(srcCommon, destCommon, { recursive: true, force: true })
+          }
+        }
+      }
+    ],
     build: {
-      emptyOutDir: false
+      emptyOutDir: false,
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          'component-management': path.resolve(__dirname, 'demo/component-management.html'),
+          'template-management': path.resolve(__dirname, 'demo/template-management.html'),
+          'iframe-design': path.resolve(__dirname, 'demo/iframe-design.html')
+        }
+      }
     },
     server: {
       host: '0.0.0.0',

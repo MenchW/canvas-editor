@@ -4,12 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>模板管理中心</title>
-  <!-- Element UI 2.15.14 CSS -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15.14/lib/theme-chalk/index.css">
-  <!-- Vue 2.7.16 -->
-  <script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.js"></script>
-  <!-- Element UI 2.15.14 JS -->
-  <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15.14/lib/index.js"></script>
+  <!-- 公共依赖与脚本 -->
+  <script src="./common/deps.js"></script>
+  <script src="./common/utils.js"></script>
+  <script src="./common/api.js"></script>
 
   <style>
     * { box-sizing: border-box; }
@@ -406,102 +404,6 @@
   </div>
 
   <script>
-    // -------------------------------------------------------------
-    // REST API 客户端
-    // -------------------------------------------------------------
-    const API_BASE = window.API_BASE_URL || '';
-
-    function getAuthToken() {
-      const match = document.cookie.match(/(^|;\s*)Admin-Token=([^;]*)/);
-      return (match && match[2]) ? decodeURIComponent(match[2]) : '';
-    }
-
-    function showErrorMessage(msg) {
-      const displayMsg = typeof msg === 'object' ? JSON.stringify(msg) : String(msg);
-      if (window.ELEMENT && window.ELEMENT.Message) {
-        window.ELEMENT.Message.error(displayMsg);
-      } else if (typeof Vue !== 'undefined' && Vue.prototype && Vue.prototype.$message) {
-        Vue.prototype.$message.error(displayMsg);
-      } else {
-        console.error('[API 错误]', displayMsg);
-      }
-    }
-
-    async function apiRequest(url, options = {}) {
-      const method = options.method || 'GET';
-      let fullUrl = API_BASE + url;
-      const token = getAuthToken();
-      const fetchOptions = {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': 'Bearer ' + token } : {}),
-          ...(options.headers || {})
-        }
-      };
-      if (options.params) {
-        const query = new URLSearchParams(options.params).toString();
-        if (query) fullUrl += (fullUrl.includes('?') ? '&' : '?') + query;
-      }
-      if (options.data && (method === 'POST' || method === 'PUT')) {
-        fetchOptions.body = JSON.stringify(options.data);
-      }
-
-      let response;
-      try {
-        response = await fetch(fullUrl, fetchOptions);
-      } catch (netErr) {
-        const errMsg = `网络连接异常或接口未启动: ${netErr.message || netErr}`;
-        showErrorMessage(errMsg);
-        throw netErr;
-      }
-
-      let resData;
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        try {
-          resData = await response.json();
-        } catch (e) {
-          resData = null;
-        }
-      } else {
-        resData = await response.text();
-      }
-
-      if (!response.ok) {
-        const errorMsg =
-          (resData && typeof resData === 'object' && (resData.msg || resData.message || resData.res)) ||
-          (typeof resData === 'string' && resData) ||
-          `HTTP ${response.status} ${response.statusText}`;
-        const displayMsg = typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : String(errorMsg);
-        showErrorMessage(displayMsg);
-        throw new Error(displayMsg);
-      }
-
-      if (resData && typeof resData === 'object' && resData.code !== undefined && resData.code !== 200) {
-        const errorMsg =
-          resData.msg ||
-          resData.message ||
-          resData.res ||
-          (typeof resData === 'string' ? resData : JSON.stringify(resData));
-        const displayMsg = typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : String(errorMsg);
-        showErrorMessage(displayMsg);
-        throw new Error(displayMsg);
-      }
-
-      return resData;
-    }
-
-    // 模板管理 API 服务
-    const templateApi = {
-      listSystem: (query) => apiRequest('/system/system/list', { method: 'GET', params: { pageNum: 1, pageSize: 1000, ...(query || {}) } }),
-      listTemplate: (query) => apiRequest('/system/report-template/list', { method: 'GET', params: query }),
-      getTemplate: (id) => apiRequest(`/system/report-template/${id}`, { method: 'GET' }),
-      addTemplate: (data) => apiRequest('/system/report-template', { method: 'POST', data }),
-      updateTemplate: (data) => apiRequest('/system/report-template', { method: 'PUT', data }),
-      delTemplate: (ids) => apiRequest(`/system/report-template/${ids}`, { method: 'DELETE' })
-    };
-
     new Vue({
       el: '#app',
       data() {
@@ -549,23 +451,9 @@
       },
 
       methods: {
-        /* 获取系统标签样式 */
+        /* 获取系统标签样式 (调用公共 utils.js) */
         getSystemStyle(sys) {
-          const colorList = [
-            { color: '#1d4ed8', background: '#eff6ff', borderColor: '#bfdbfe' },
-            { color: '#047857', background: '#ecfdf5', borderColor: '#a7f3d0' },
-            { color: '#6d28d9', background: '#f5f3ff', borderColor: '#ddd6fe' },
-            { color: '#b45309', background: '#fffbeb', borderColor: '#fde68a' },
-            { color: '#0e7490', background: '#ecfeff', borderColor: '#a5f3fc' },
-            { color: '#334155', background: '#f1f5f9', borderColor: '#cbd5e1' }
-          ];
-          const str = String(sys || 'sys');
-          let hash = 0;
-          for (let i = 0; i < str.length; i++) {
-            hash = (hash << 5) - hash + str.charCodeAt(i);
-          }
-          const s = colorList[Math.abs(hash) % colorList.length];
-          return { color: s.color, background: s.background, borderColor: s.borderColor };
+          return window.getSystemStyle ? window.getSystemStyle(sys) : {};
         },
 
         /* 加载所属系统选项 */

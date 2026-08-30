@@ -13,7 +13,7 @@ export interface IBridgeOptions {
 }
 
 /** 宿主 SDK 初始化选项 */
-export interface ICanvasEditorHostOptions extends IHostHooks {
+export interface IEditorClientOptions extends IHostHooks {
   /** 编辑器 iframe DOM 元素引用或 CSS 选择器 */
   iframe: HTMLIFrameElement | string
 
@@ -43,10 +43,20 @@ export interface ICanvasEditorHostOptions extends IHostHooks {
     | TComponentList
 }
 
+
+
+/** 控件与业务数据对齐及值有效性校验结果 */
+export interface IControlDataAuditResult {
+  /** 字段 Key 缺失的控件列表（画布控件中存在，但宿主数据中完全未声明该 Key） */
+  missingControls: IControl[]
+  /** 字段 Key 存在但值为假值（排除 0 和 false，如 null, undefined, '', 空数组等）的控件列表 */
+  falsyControls: IControl[]
+}
+
 /**
  * SDK暴露给宿主调用的公开 API
  */
-export interface ICanvasEditorHost {
+export interface IEditorClient {
   /**
    * 获取当前编辑器的全文数据 JSON（包含 value 与 options）
    */
@@ -62,6 +72,13 @@ export interface ICanvasEditorHost {
    * 获取当前画布中的所有表单/占位符控件列表（提取控件核心配置结构）
    */
   getControlList(): Promise<IControl[]>
+
+  /**
+   * 检查宿主业务数据与画布控件列表的字段对齐及值有效性情况
+   * @param data 待校验的业务数据对象，缺省时自动使用 getData()
+   * @returns 包含 missingControls (字段缺失) 和 falsyControls (除0和false外的假值) 的结果对象
+   */
+  getMissingControlList(data?: Record<string, any>): Promise<IControlDataAuditResult>
 
 
   /**
@@ -83,6 +100,8 @@ export interface ICanvasEditorHost {
    */
   destroy(): void
 }
+
+
 
 /** 宿主配置的细粒度功能控制开关 */
 export interface IFeatureConfig {

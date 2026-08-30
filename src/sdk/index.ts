@@ -1,3 +1,7 @@
 export * from './types'
-export { CanvasEditorHost, EditorMode, CanvasDataTransforms } from './CanvasEditorHost'
-export { CanvasDataTransforms as transforms } from './transforms'
+export {
+  EditorClient,
+  EditorMode,
+  CanvasDataTransform
+} from './editor-client'
+export { CanvasDataTransform as transform } from './transforms'

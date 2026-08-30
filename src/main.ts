@@ -75,12 +75,12 @@ window.onload = function () {
     save: true,
     print: true,
     export: true,
-    control: true,
+    control: false,
     asidePanel: true,
-    modeSwitch: true,
-    comment: true,
+    modeSwitch: false,
+    comment: false,
     signature: true,
-    macro: true
+    macro: false
   }
 
   let activeFeatureConfig = { ...DEFAULT_FEATURE_CONFIG }
@@ -101,16 +101,17 @@ window.onload = function () {
     }
     if (typeof features === 'object' && features !== null) {
       const isAll = Boolean(features.all)
+      const hasAll = features.all !== undefined
       return {
-        save: features.save ?? isAll,
-        print: features.print ?? true,
-        export: features.export ?? isAll,
-        control: features.control ?? isAll,
-        asidePanel: features.asidePanel ?? isAll,
-        modeSwitch: features.modeSwitch ?? isAll,
-        comment: features.comment ?? isAll,
-        signature: features.signature ?? isAll,
-        macro: features.macro ?? isAll
+        save: features.save !== undefined ? Boolean(features.save) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.save,
+        print: features.print !== undefined ? Boolean(features.print) : true,
+        export: features.export !== undefined ? Boolean(features.export) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.export,
+        control: features.control !== undefined ? Boolean(features.control) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.control,
+        asidePanel: features.asidePanel !== undefined ? Boolean(features.asidePanel) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.asidePanel,
+        modeSwitch: features.modeSwitch !== undefined ? Boolean(features.modeSwitch) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.modeSwitch,
+        comment: features.comment !== undefined ? Boolean(features.comment) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.comment,
+        signature: features.signature !== undefined ? Boolean(features.signature) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.signature,
+        macro: features.macro !== undefined ? Boolean(features.macro) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.macro
       }
     }
     return { ...DEFAULT_FEATURE_CONFIG }
@@ -1800,6 +1801,9 @@ window.onload = function () {
   modeOptionsElement.querySelectorAll<HTMLLIElement>('li').forEach(li => {
     li.classList.toggle('active', li.dataset.mode === currentMode)
   })
+  if (!activeFeatureConfig.modeSwitch) {
+    modeElement.classList.add('disabled')
+  }
 
   // 留痕记录开关（仅 "留痕模式" 行可见；留痕查看模式下禁用）
   const traceToggleDom = document.querySelector<HTMLInputElement>(
@@ -1821,15 +1825,33 @@ window.onload = function () {
 
     instance.command.executeMode(mode as EditorMode)
 
-    // 右侧占位符面板:仅编辑/设计模式自动显示,其他模式默认隐藏
-    // (宿主显式关闭面板功能走 setCustomConfig 的 features.asidePanel 开关)
-    const isPanelMode = mode === EditorMode.EDIT || mode === EditorMode.DESIGN
+    // 右侧占位符面板与图标入口:
+    // 1. 无痕编辑模式 (PREVIEW_EDIT) 下彻底不显示右侧面板及底部图标入口
+    // 2. 仅编辑/设计模式且 features.asidePanel 开启时自动显示, 其他模式 (如只读/打印/留痕等) 隐藏
+    const isPreviewEdit = mode === EditorMode.PREVIEW_EDIT
+    const isPanelMode =
+      !isPreviewEdit &&
+      (mode === EditorMode.EDIT || mode === EditorMode.DESIGN) &&
+      activeFeatureConfig.asidePanel
+
     if (isPanelMode) {
       asidePanelDom?.classList.remove('hidden')
-      if (asideToggleDom) asideToggleDom.style.display = 'flex'
+      asidePanelDom?.classList.add('open')
+      if (asideToggleDom) {
+        asideToggleDom.style.display = 'flex'
+        asideToggleDom.classList.add('active')
+      }
     } else {
       asidePanelDom?.classList.add('hidden')
-      if (asideToggleDom) asideToggleDom.style.display = 'none'
+      asidePanelDom?.classList.remove('open')
+      if (asideToggleDom) {
+        asideToggleDom.style.display = isPreviewEdit
+          ? 'none'
+          : activeFeatureConfig.asidePanel
+          ? 'flex'
+          : 'none'
+        asideToggleDom.classList.remove('active')
+      }
     }
     // 上报宿主模式变更(宿主可据此同步自身 UI 状态)
     bridge.notifyModeChange(mode)
@@ -3665,11 +3687,24 @@ window.onload = function () {
     }
   })
 
-  // 初始默认展开右侧占位符面板
-  if (asidePanelDom) {
+  // 初始默认展开右侧占位符面板 (无痕编辑模式下彻底隐藏面板及图标入口)
+  const initialMode = instance.command.getOptions().mode
+  if (initialMode === EditorMode.PREVIEW_EDIT) {
+    if (asidePanelDom) {
+      asidePanelDom.classList.add('hidden')
+      asidePanelDom.classList.remove('open')
+    }
+    if (asideToggleDom) {
+      asideToggleDom.style.display = 'none'
+      asideToggleDom.classList.remove('active')
+    }
+  } else if (asidePanelDom) {
     asidePanelDom.classList.remove('hidden')
     asidePanelDom.classList.add('open')
-    if (asideToggleDom) asideToggleDom.classList.add('active')
+    if (asideToggleDom) {
+      asideToggleDom.classList.add('active')
+      asideToggleDom.style.display = 'flex'
+    }
   }
 
   // 底部 Toolbox 占位符图标点击展开/收起面板
@@ -3949,16 +3984,25 @@ window.onload = function () {
       }
 
       // 4. 右侧占位符面板显隐
-      const isAsideVisible = activeFeatureConfig.asidePanel
+      const currentEditorMode = instance.command.getOptions().mode
+      const isPreviewEdit =
+        mode === EditorMode.PREVIEW_EDIT ||
+        (typeof mode === 'object' && mode?.current === EditorMode.PREVIEW_EDIT) ||
+        currentEditorMode === EditorMode.PREVIEW_EDIT
+      const isAsideVisible = activeFeatureConfig.asidePanel && !isPreviewEdit
       if (asidePanelDom) {
         if (isAsideVisible) {
           asidePanelDom.classList.remove('hidden')
         } else {
           asidePanelDom.classList.add('hidden')
+          asidePanelDom.classList.remove('open')
         }
       }
       if (asideToggleDom) {
-        asideToggleDom.style.display = isAsideVisible ? 'inline-block' : 'none'
+        asideToggleDom.style.display = isAsideVisible ? 'flex' : 'none'
+        if (!isAsideVisible) {
+          asideToggleDom.classList.remove('active')
+        }
       }
 
       // 自动收尾清理连续分割线
@@ -3983,12 +4027,18 @@ window.onload = function () {
 
     // C. 兼容显式 asidePanel 选项
     if (asidePanel?.visible !== undefined) {
-      if (asidePanel.visible === false) {
+      const currentEditorMode = instance.command.getOptions().mode
+      const isPreviewEdit =
+        mode === EditorMode.PREVIEW_EDIT ||
+        (typeof mode === 'object' && mode?.current === EditorMode.PREVIEW_EDIT) ||
+        currentEditorMode === EditorMode.PREVIEW_EDIT
+      if (asidePanel.visible === false || isPreviewEdit) {
         asidePanelDom?.classList.add('hidden')
+        asidePanelDom?.classList.remove('open')
         if (asideToggleDom) asideToggleDom.style.display = 'none'
       } else {
         asidePanelDom?.classList.remove('hidden')
-        if (asideToggleDom) asideToggleDom.style.display = 'inline-block'
+        if (asideToggleDom) asideToggleDom.style.display = 'flex'
       }
     }
 

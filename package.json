@@ -36,7 +36,7 @@
   "scripts": {
     "dev": "vite",
     "lib": "node scripts/clean.js && eslint . && tsc && vitest run && vite build --mode lib",
-    "build:sdk": "vite build --mode sdk",
+    "build:sdk": "vite build --mode sdk --emptyOutDir=false",
     "build": "node scripts/clean.js && eslint . && tsc && vitest run && vite build --mode app && npm run build:sdk",
     "serve": "vite preview",
     "lint": "eslint . && tsc --noEmit && vitest run",

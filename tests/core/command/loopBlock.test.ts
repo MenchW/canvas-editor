@@ -85,18 +85,12 @@ describe('EditorBridge 循环块展开(合并单元格)', () => {
       ]
     }
 
+    // 传入 businessData 时直接在 render 时完成循环块展开与回显
     ;(bridge as any).executeRenderPayload(
       { template, businessData },
       { updateComponents: vi.fn(), setCustomConfig: vi.fn() }
     )
-    // 渲染阶段不回显
     let original = (editor.command as any).getOriginalElementList()
-    const table = original.find((el: any) => el.type === ElementType.TABLE)
-    expect(table.trList.length).toBe(3)
-
-    // 点击回显:循环块(2行)复制 2 份 → 表头1 + 2份×2行 = 5 行
-    bridge.setControlValueList()
-    original = (editor.command as any).getOriginalElementList()
     const tableAfter = original.find(
       (el: any) => el.type === ElementType.TABLE
     )
@@ -107,6 +101,13 @@ describe('EditorBridge 循环块展开(合并单元格)', () => {
     // 文本回显
     expect(editor.command.getText().main).toContain('阿莫西林')
     expect(editor.command.getText().main).toContain('布洛芬')
+
+    // 重复调用 setControlValueList 保证幂等防二次展开
+    bridge.setControlValueList()
+    original = (editor.command as any).getOriginalElementList()
+    expect(
+      original.find((el: any) => el.type === ElementType.TABLE).trList.length
+    ).toBe(5)
 
     // 重复 fillData 幂等(仍 5 行)
     bridge.setControlValueList()
