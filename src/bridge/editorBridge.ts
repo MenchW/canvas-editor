@@ -1,10 +1,15 @@
 import { connect, WindowMessenger } from 'penpal'
 import type Editor from '../editor'
 import type { IBridgeOptions, IHostRpcMethods } from '../sdk/types'
-import { getValueByPath, deepClone, getUUID, splitText } from '../editor/utils/index'
+import {
+  getValueByPath,
+  deepClone,
+  getUUID,
+  splitText
+} from '../editor/utils/index'
 import { applyDeclaredSameMerge } from '../editor/utils/dataEngine'
 
-/** 将 KV 对象结构化数据转换为 Canvas Editor 原生 executeSetControlValueList 填值数据 */
+/** 对象数据转控件设值列表 */
 function toControlValueList(data: Record<string, any>, prefix = ''): any[] {
   if (!data || typeof data !== 'object') return []
   const result: any[] = []
@@ -14,10 +19,8 @@ function toControlValueList(data: Record<string, any>, prefix = ''): any[] {
     if (val === null || val === undefined) {
       result.push({ conceptId: fullPath, value: '' })
     } else if (Array.isArray(val)) {
-      // 数组型集合数据（List.Text / List.Radio / List.Checkbox / List.Image）直接原样下发，由原生 Control 体系处理
       result.push({ conceptId: fullPath, value: val })
     } else if (typeof val === 'object') {
-      // 嵌套对象递归展平
       result.push(...toControlValueList(val, fullPath))
     } else {
       result.push({ conceptId: fullPath, value: String(val) })
@@ -26,10 +29,10 @@ function toControlValueList(data: Record<string, any>, prefix = ''): any[] {
   return result
 }
 
-// 记录克隆后重新分配 ID 并收集的文本控件值列表
+// 收集克隆控件值列表
 const collectedValues: { id: string; value: any }[] = []
 
-/** 递归展开循环明细表并填充子控件 */
+/** 展开循环表格 */
 function expandLoopTables(
   elementList: any[],
   businessData: any,
@@ -68,25 +71,25 @@ function expandLoopTables(
           !nextTr.loopConfig.isGroupHeader
 
         if (isGroupHeaderWithChild) {
-          // 复合嵌套分组：依次渲染每个 group 的大标题行 + 组内子明细行
+          // 分组标题与组内明细循环
           const datasetId = loopConfig.datasetId
           const listData = getValueByPath(parentContext || businessData, datasetId)
           const groups = Array.isArray(listData) && listData.length > 0 ? listData : [null]
           const detailTr = nextTr
 
           groups.forEach((groupItem: any) => {
-            // 1. 克隆并填充大标题行
+            // 克隆分组行
             const clonedHeaderTr = deepClone(tr)
             delete clonedHeaderTr.loopConfig
             clonedHeaderTr.id = getUUID()
             clonedHeaderTr.tdList.forEach((td: any) => {
               td.id = getUUID()
             })
-            remapControlIdsAndCollect(clonedHeaderTr, groupItem)
+            remapControlIdsAndCollect(clonedHeaderTr, groupItem, true)
             walkTd(clonedHeaderTr.tdList, groupItem)
             newTrList.push(clonedHeaderTr)
 
-            // 2. 展开该 group 内的子明细行
+            // 展开明细行
             const subData =
               groupItem && typeof groupItem === 'object'
                 ? groupItem.children ||
@@ -110,7 +113,7 @@ function expandLoopTables(
             })
           })
 
-          r++ // 跳过已配对展开的明细行
+          r++
         } else {
           const datasetId = loopConfig.datasetId
           const blockEnd = Math.max(
@@ -176,6 +179,21 @@ function getItemValue(itemData: any, conceptId: string): any {
   // 1. 直接按原始键名取值
   if (itemData[conceptId] !== undefined && itemData[conceptId] !== null) {
     return itemData[conceptId]
+  }
+
+  // 逐级剥离循环前缀别名（例如 item.userName -> userName，order.detail.price -> detail.price -> price）
+  if (conceptId.includes('.')) {
+    const parts = conceptId.split('.')
+    for (let i = 1; i < parts.length; i++) {
+      const subKey = parts.slice(i).join('.')
+      if (itemData[subKey] !== undefined && itemData[subKey] !== null) {
+        return itemData[subKey]
+      }
+      const subVal = getValueByPath(itemData, subKey)
+      if (subVal !== undefined && subVal !== null) {
+        return subVal
+      }
+    }
   }
 
   // 2. 将 [] 转换为通配符 [*] 后按路径取值
@@ -265,7 +283,11 @@ function evaluateWhenCondition(expr: string, itemData: any): boolean {
   }
 }
 
-function remapControlIdsAndCollect(tr: any, itemData: any) {
+function remapControlIdsAndCollect(
+  tr: any,
+  itemData: any,
+  isGroupHeader = false
+) {
   const idMap = new Map<string, string>()
 
   tr.tdList.forEach((td: any) => {
@@ -332,8 +354,6 @@ function remapControlIdsAndCollect(tr: any, itemData: any) {
       }
       if (matchingIndices.length === 0) continue
 
-      const baseNode = td.value[matchingIndices[0]]
-
       if (isImgField) {
         // 多图 / 单图列表渲染
         const rawUrls =
@@ -367,27 +387,35 @@ function remapControlIdsAndCollect(tr: any, itemData: any) {
         }
         td.value.splice(firstIdx, 0, ...newNodes)
         i = firstIdx + newNodes.length - 1
-      } else {
-        // 普通文本 / 数值字段直接展开为字符流
+      } else if (isGroupHeader) {
+        // 大标题行：直接展开为加粗标题文本
         const strVal = val !== undefined && val !== null ? String(val) : ''
+        const baseNode = td.value[matchingIndices[0]]
         const newNodes =
           strVal.length > 0
             ? splitText(strVal).map((ch: string) => ({
                 ...baseNode,
                 value: ch,
+                bold: true,
                 type: undefined,
                 control: undefined,
                 controlId: undefined,
                 controlComponent: undefined
               }))
-            : [{ ...baseNode, value: '', type: undefined, control: undefined, controlId: undefined }]
-
+            : []
         const firstIdx = matchingIndices[0]
         for (let m = matchingIndices.length - 1; m >= 0; m--) {
           td.value.splice(matchingIndices[m], 1)
         }
         td.value.splice(firstIdx, 0, ...newNodes)
         i = firstIdx + newNodes.length - 1
+      } else {
+        // 普通文本 / 数值字段：保留克隆控件结构，收集 ID 与值，由原生 executeSetControlValueList 统一渲染与模式联动
+        processedControlIds.add(targetControlId)
+        collectedValues.push({
+          id: targetControlId,
+          value: val !== undefined && val !== null ? val : ''
+        })
       }
     }
   })
@@ -530,9 +558,14 @@ export class EditorBridge {
           this.instance.command.executeSetValue(data)
         }
 
-        // 3. 暂存业务数据
-        if (payload.businessData) {
+        // 3. 填充并回显业务数据 (若下发了非空 businessData 对象则立即驱动回显)
+        if (
+          payload.businessData &&
+          typeof payload.businessData === 'object' &&
+          Object.keys(payload.businessData).length > 0
+        ) {
           this.lastBusinessData = payload.businessData
+          this.setControlValueList(payload.businessData)
         }
 
         // 4. 更新右侧组件列表
