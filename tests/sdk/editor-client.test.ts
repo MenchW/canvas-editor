@@ -11,7 +11,8 @@ describe('EditorClient - getMissingControlList', () => {
     ]
 
     const client = new EditorClient({
-      iframe: document.createElement('iframe')
+      iframe: document.createElement('iframe'),
+      onSave: vi.fn()
     })
 
     // Mock getControlList
@@ -37,7 +38,8 @@ describe('EditorClient - getMissingControlList', () => {
     ]
 
     const client = new EditorClient({
-      iframe: document.createElement('iframe')
+      iframe: document.createElement('iframe'),
+      onSave: vi.fn()
     })
 
     vi.spyOn(client, 'getControlList').mockResolvedValue(mockControls as any)
@@ -62,7 +64,8 @@ describe('EditorClient - getMissingControlList', () => {
     ]
 
     const client = new EditorClient({
-      iframe: document.createElement('iframe')
+      iframe: document.createElement('iframe'),
+      onSave: vi.fn()
     })
 
     vi.spyOn(client, 'getControlList').mockResolvedValue(mockControls as any)
@@ -91,7 +94,8 @@ describe('EditorClient - getMissingControlList', () => {
     ]
 
     const client = new EditorClient({
-      iframe: document.createElement('iframe')
+      iframe: document.createElement('iframe'),
+      onSave: vi.fn()
     })
 
     vi.spyOn(client, 'getControlList').mockResolvedValue(mockControls as any)
@@ -123,7 +127,8 @@ describe('EditorClient - getMissingControlList', () => {
 
     const client = new EditorClient({
       iframe: document.createElement('iframe'),
-      getData: mockGetData
+      getData: mockGetData,
+      onSave: vi.fn()
     })
 
     const mockControls = [
@@ -143,7 +148,8 @@ describe('EditorClient - getMissingControlList', () => {
 
   it('直接调用不传参时：若已填充数据，则自动比对已填充的业务数据', async () => {
     const client = new EditorClient({
-      iframe: document.createElement('iframe')
+      iframe: document.createElement('iframe'),
+      onSave: vi.fn()
     })
 
     const mockControls = [

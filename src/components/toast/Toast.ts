@@ -40,7 +40,7 @@ const ICONS: Record<ToastType, string> = {
   `
 }
 
-class ToastManager {
+export class ToastManager {
   private container: HTMLDivElement | null = null
 
   private initContainer() {

@@ -180,10 +180,28 @@ export interface IComponentGroup {
 /** 右侧占位符面板数据：分组数组或平铺字段数组 */
 export type TComponentList = (IComponentGroup | IComponentField)[]
 
+/** Toast 消息提示组件接口 */
+export interface IToast {
+  show(
+    options:
+      | {
+          message: string
+          type?: 'success' | 'error' | 'warning' | 'info' | 'loading'
+          duration?: number
+        }
+      | string
+  ): () => void
+  success(message: string, duration?: number): () => void
+  error(message: string, duration?: number): () => void
+  warning(message: string, duration?: number): () => void
+  info(message: string, duration?: number): () => void
+  loading(message: string, duration?: number): () => void
+}
+
 /** 宿主系统响应 Hooks */
 export interface IHostHooks {
-  /** 保存回调 Hook */
-  onSave?: (documentJson: any) => Promise<void> | void
+  /** 保存回调 Hook (必传，支持接收全文 JSON 与 toast 消息提示工具) */
+  onSave: (documentJson: any, toast: IToast) => Promise<void> | void
   /** 打印回调 Hook (返回 false 可阻止编辑器默认打印) */
   onPrint?: (e?: any) => Promise<boolean | void> | boolean | void
   /** 导出回调 Hook */
@@ -194,9 +212,19 @@ export interface IHostHooks {
   onUploadImage?: (base64: string) => Promise<string> | string
 }
 
-/** 宿主系统暴露给编辑器子窗口调用的方法 */
-export interface IHostRpcMethods extends IHostHooks {
+/** 宿主系统暴露给编辑器子窗口调用的方法 (跨 iframe Penpal RPC 通道) */
+export interface IHostRpcMethods {
   [key: string]: any
+  /** 保存回调 */
+  onSave?: (documentJson: any) => Promise<void> | void
+  /** 打印回调 (返回 false 可阻止编辑器默认打印) */
+  onPrint?: (e?: any) => Promise<boolean | void> | boolean | void
+  /** 导出回调 */
+  onExport?: (type: string) => Promise<void> | void
+  /** 模式切换回调 */
+  onModeChange?: (mode: string) => void
+  /** 图片/签名上传 Hook */
+  onUploadImage?: (base64: string) => Promise<string> | string
   /** 编辑器点击错误遮罩重新加载时触发 */
   onRetry?: () => Promise<void> | void
   /** 编辑器内部通用事件代理分发 */

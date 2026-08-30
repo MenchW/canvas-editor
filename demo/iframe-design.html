@@ -128,7 +128,8 @@
     ></iframe>
   </div>
 
-  <!-- 公共 Mock 数据与 Provider -->
+  <!-- 公共 API 与 Mock 数据 -->
+  <script src="./common/api.js"></script>
   <script src="./common/mock.js"></script>
 
   <!-- 宿主系统引入 4KB 独立打包产物 SDK -->
@@ -173,14 +174,36 @@
       getComponents: async () => await window.mockFetchComponentListApi(),
 
       // 保存 Hook
-      onSave: async (documentJson) => {
+      onSave: async (documentJson, toast) => {
         console.log('[宿主系统] 收到 Editor 提交保存 JSON:', documentJson);
-        updateStatus('已保存文档');
+        const savePayload = documentJson.savePayload || {
+          appId: 'c377fb213ad9703',
+          reportData: JSON.stringify(documentJson)
+        };
+        const closeLoading = toast.loading('文档保存中...');
+        try {
+          console.log('[宿主系统] 开始请求后端保存接口...', savePayload);
+          // 使用统一 API 客户端（已内置 Content-Type: application/json、Token 及状态码校验）
+          await window.apiRequest('/system/report-template', {
+            method: 'POST',
+            data: savePayload
+          });
+          updateStatus('已成功保存文档及模板数据');
+          toast.success('保存成功');
+        } catch (err) {
+          console.error('[宿主系统] 保存异常:', err);
+          updateStatus(`保存失败：${err.message || '网络或服务异常'}`);
+          toast.error(err.message || '保存失败');
+        } finally {
+          closeLoading();
+        }
       },
 
       // 打印 Hook
       onPrint: async (e) => {
         console.log('[宿主系统] 收到 Editor 打印 Hook 通知');
+        alert('拦截打印')
+        return false
       },
 
       // 图片/签名上传 Hook

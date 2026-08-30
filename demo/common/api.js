@@ -57,34 +57,44 @@
 
   async function apiRequest(url, options = {}) {
     const method = options.method || 'GET'
-    let fullUrl = API_BASE + url
     const token = getAuthToken()
-    const fetchOptions = {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: 'Bearer ' + token } : {}),
-        ...(options.headers || {})
-      }
+    let fullUrl = API_BASE + url
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: 'Bearer ' + token } : {}),
+      ...(options.headers || {})
     }
     if (options.params) {
       const query = new URLSearchParams(options.params).toString()
       if (query) fullUrl += (fullUrl.includes('?') ? '&' : '?') + query
     }
-    if (options.data && (method === 'POST' || method === 'PUT')) {
-      fetchOptions.body = JSON.stringify(options.data)
+    let body = undefined
+    if (options.data !== undefined && options.data !== null && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+      if (typeof FormData !== 'undefined' && options.data instanceof FormData) {
+        body = options.data
+        delete headers['Content-Type']
+      } else if (typeof options.data === 'string') {
+        body = options.data
+      } else {
+        body = JSON.stringify(options.data)
+      }
+    }
+    const fetchOptions = {
+      method,
+      headers,
+      body
     }
 
     let response
     try {
       response = await fetch(fullUrl, fetchOptions)
     } catch (netErr) {
-      const errMsg = `网络连接异常或接口未启动: ${netErr.message || netErr}`
+      const errMsg = `网络连接异常或服务未启动: ${netErr.message || netErr}`
       showErrorMessage(errMsg)
       throw netErr
     }
 
-    let resData
+    let resData = null
     const contentType = response.headers.get('content-type') || ''
     if (contentType.includes('application/json')) {
       try {
@@ -93,35 +103,41 @@
         resData = null
       }
     } else {
-      resData = await response.text()
+      try {
+        const text = await response.text()
+        // 尝试判断是否可被解析为 JSON
+        resData = JSON.parse(text)
+      } catch {
+        resData = null
+      }
     }
 
     // 1. HTTP 状态码非 2xx 校验
     if (!response.ok) {
-      const errorMsg =
-        (resData &&
-          typeof resData === 'object' &&
-          (resData.msg || resData.message || resData.res)) ||
-        (typeof resData === 'string' && resData) ||
-        `HTTP ${response.status} ${response.statusText}`
-      const displayMsg =
-        typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : String(errorMsg)
+      let displayMsg = ''
+      if (resData && typeof resData === 'object') {
+        displayMsg = resData.msg || resData.message || resData.res || JSON.stringify(resData)
+      } else if (response.status === 502 || response.status === 504) {
+        displayMsg = `后端服务无法连接 (${response.status} ${response.statusText})，请检查后端服务是否启动或代理地址配置`
+      } else {
+        displayMsg = `请求失败 (${response.status} ${response.statusText})`
+      }
       showErrorMessage(displayMsg)
       throw new Error(displayMsg)
     }
 
-    // 2. 统一业务 code 校验：若 code 不是 200，则自动统一提示错误信息
+    // 2. 统一业务 code 校验：若 code 存在且不为 200，则自动统一提示错误信息并抛出异常
     if (
       resData &&
       typeof resData === 'object' &&
       resData.code !== undefined &&
-      resData.code !== 200
+      Number(resData.code) !== 200
     ) {
       const errorMsg =
         resData.msg ||
         resData.message ||
         resData.res ||
-        (typeof resData === 'string' ? resData : JSON.stringify(resData))
+        `业务请求失败 (code: ${resData.code})`
       const displayMsg =
         typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : String(errorMsg)
       showErrorMessage(displayMsg)

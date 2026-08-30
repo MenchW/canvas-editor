@@ -1,6 +1,7 @@
 import { connect, WindowMessenger } from 'penpal'
 import { EditorMode } from '../editor/dataset/enum/Editor'
 import type {
+  IToast,
   IEditorClient,
   IEditorClientOptions,
   IEditorRpcMethods,
@@ -10,9 +11,11 @@ import type {
 
 import { CanvasDataTransform } from './transforms'
 import { getValueByPath } from '../editor/utils/index'
+import { toast } from '../components/toast/Toast'
 
-export { EditorMode, CanvasDataTransform }
+export { toast, EditorMode, CanvasDataTransform }
 export type {
+  IToast,
   IEditorClient,
   IEditorClientOptions,
   IFeatureConfig,
@@ -30,6 +33,8 @@ type EventListener = (...args: any[]) => void
 export class EditorClient implements IEditorClient {
   /** 快捷数据转换适配工具集 */
   public static transform = CanvasDataTransform
+  /** 全局 Toast 提示工具 */
+  public static toast: IToast = toast
 
   private iframeEl: HTMLIFrameElement | null = null
   private editorRpc: IEditorRpcMethods | null = null
@@ -86,7 +91,7 @@ export class EditorClient implements IEditorClient {
         },
         // 保存 Hook
         onSave: async (documentJson: any) => {
-          await this.options.onSave?.(documentJson)
+          await this.options.onSave(documentJson, toast)
         },
         // 导出 Hook
         onExport: async (type: string) => {

@@ -40,20 +40,9 @@ import {
 } from './utils'
 
 // 配置统一的 RuoYi 鉴权请求拦截器
-const DEFAULT_AUTH_TOKEN =
-  'eyJhbGciOiJIUzUxMiJ9.eyJ1c2VyX2lkIjoxLCJ1c2VyX2tleSI6IjY2OGFmODE3LTQ3OGUtNGZiMy04NTUyLWRiNWNlZjE3NDk5MiIsInVzZXJuYW1lIjoiaG50Y19jZW50ZXIifQ.2e4vihsGf4NapJr61s3yxPXs-AdMtcOO00fdv0JO6p_1q6XMD4XRh1YyBbBo0V0qrhZLBu5IGOLP5VQUDpWpZw'
-
 function getAuthToken() {
   const match = document.cookie.match(/(^|;\s*)Admin-Token=([^;]*)/)
-  if (match && match[2]) {
-    return decodeURIComponent(match[2])
-  }
-  const storageToken =
-    localStorage.getItem('Admin-Token') || localStorage.getItem('token')
-  if (storageToken) {
-    return storageToken
-  }
-  return DEFAULT_AUTH_TOKEN
+  return match?.[2] ? decodeURIComponent(match[2]) : '' 
 }
 
 http.addRequestInterceptor((url, options) => {
@@ -4063,38 +4052,13 @@ window.onload = function () {
   // 统一的保存触发器（绑定工具栏图标与 Ctrl+S 快捷键）
   const handleTriggerSave = async (payload: any) => {
     console.log('[Trigger Save] elementList:', payload)
-    const reportData = instance.command.getValue()
-    const optionsData = instance.command.getOptions()
-    const savePayload = {
-      appId: currentAppId,
-      templateName: urlParams.get('templateName') || '测试报告',
-      reportData: JSON.stringify(reportData)
-    }
-
-    const closeLoading = toast.loading('正在保存报告模板...')
     try {
-      console.log('[保存报告模板] 开始请求接口 /system/report-template ...', savePayload)
-      const res: any = await http.post('/system/report-template', savePayload)
-      closeLoading()
-      console.log('[保存报告模板] 接口响应成功:', res)
-      if (res && (res.code === 200 || res.status === 200 || res.success)) {
-        toast.success(res.msg || res.message || '保存报告模板成功！')
-      } else {
-        toast.success((res && (res.msg || res.message)) || '保存成功！')
-      }
+      // 触发宿主保存回调（保存状态与提示交由宿主自主控制）
+      await bridge.notifySave(instance.command.getValue())
     } catch (err: any) {
-      closeLoading()
-      console.error('[保存报告模板] 接口请求异常:', err)
-      toast.error(`保存失败：${err.message || '网络或服务异常'}`)
+      console.error('[保存文档] 触发宿主保存异常:', err)
+      toast.error('保存失败')
     }
-
-    // 同步上报宿主环境（若在 iframe 模式中）
-    const documentJson = {
-      value: reportData,
-      options: optionsData,
-      savePayload
-    }
-    await bridge.notifySave(documentJson)
   }
 
   const saveDom = document.querySelector<HTMLDivElement>('.menu-item__save')

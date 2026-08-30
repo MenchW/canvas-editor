@@ -96,14 +96,21 @@ class HttpClient {
 
     const finalUrl = this.buildURL(targetUrl, mergedOptions.params, mergedOptions.baseURL)
 
-    // 构建 RequestInit
-    const { timeout, data, responseType = 'json', ...fetchOptions } = mergedOptions
+    const { timeout, data, responseType = 'json', headers: userHeaders, ...fetchOptions } = mergedOptions
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), timeout)
 
+    const finalHeaders: Record<string, any> = {
+      'Content-Type': 'application/json',
+      ...userHeaders
+    }
+
     let body: BodyInit | undefined = undefined
     if (data !== undefined && data !== null) {
-      if (typeof data === 'string' || data instanceof FormData || data instanceof Blob || data instanceof ArrayBuffer) {
+      if (typeof FormData !== 'undefined' && data instanceof FormData) {
+        body = data
+        delete finalHeaders['Content-Type']
+      } else if (typeof data === 'string' || data instanceof Blob || data instanceof ArrayBuffer) {
         body = data
       } else {
         body = JSON.stringify(data)
@@ -113,6 +120,7 @@ class HttpClient {
     try {
       const response = await fetch(finalUrl, {
         ...fetchOptions,
+        headers: finalHeaders,
         body,
         signal: controller.signal
       })
@@ -148,9 +156,26 @@ class HttpClient {
           default: {
             const text = await processedResponse.text()
             try {
-              return (text ? JSON.parse(text) : null) as T
-            } catch {
-              return text as unknown as T
+              const resData = text ? JSON.parse(text) : null
+              if (
+                resData &&
+                typeof resData === 'object' &&
+                resData.code !== undefined &&
+                Number(resData.code) !== 200
+              ) {
+                const errorMsg =
+                  resData.msg ||
+                  resData.message ||
+                  resData.res ||
+                  `业务请求失败 (code: ${resData.code})`
+                throw new Error(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : String(errorMsg))
+              }
+              return resData as T
+            } catch (err: any) {
+              if (err instanceof SyntaxError) {
+                return text as unknown as T
+              }
+              throw err
             }
           }
         }
