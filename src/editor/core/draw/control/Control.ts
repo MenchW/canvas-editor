@@ -1433,13 +1433,26 @@ export class Control {
           controlRule
         )
 
+        // 控件操作后（增删元素后）动态重新定位当前控件范围与下一控件起始索引
+        let nextI = i
+        while (
+          nextI < elementList.length &&
+          elementList[nextI]?.controlId === element.controlId
+        ) {
+          nextI++
+        }
+        controlContext.range = {
+          startIndex: i,
+          endIndex: Math.max(i, nextI - 1)
+        }
+
         // 控件值变更事件
         this.emitControlContentChange({
           context: controlContext
         })
         // 模拟控件激活后销毁
         this.activeControl = null
-        i = currentEndIndex
+        i = nextI
       }
     }
     const data = [
@@ -1568,13 +1581,42 @@ export class Control {
   }
 
   private formatControlTextValue(value: any): IElement[] {
-    const formatValue = Array.isArray(value)
-      ? value
-      : value !== null && value !== undefined && value !== ''
-        ? splitText(String(value)).map(ch => ({
-            value: ch === '\n' ? ZERO : ch
-          }))
-        : []
+    let formatValue: IElement[] = []
+    if (Array.isArray(value)) {
+      // 检查数组元素是否已经是底层合法的 IElement 单字符节点
+      const isElementList = value.every(
+        item =>
+          typeof item === 'object' &&
+          item !== null &&
+          typeof item.value === 'string' &&
+          !item.label &&
+          !item.code &&
+          !item.name
+      )
+      if (isElementList) {
+        formatValue = value
+      } else {
+        // 容错处理：业务对象数组或字符串数组，提取文本并按换行拼接
+        const textParts = value.map(item => {
+          if (typeof item === 'string') return item
+          if (typeof item === 'object' && item !== null) {
+            return String(
+              item.label ?? item.text ?? item.value ?? item.content ?? item.name ?? ''
+            )
+          }
+          return String(item ?? '')
+        })
+        const fullText = textParts.join('\n')
+        formatValue = splitText(fullText).map(ch => ({
+          value: ch === '\n' ? ZERO : ch
+        }))
+      }
+    } else if (value !== null && value !== undefined && value !== '') {
+      formatValue = splitText(String(value)).map(ch => ({
+        value: ch === '\n' ? ZERO : ch
+      }))
+    }
+
     if (formatValue.length) {
       formatElementList(formatValue, {
         isHandleFirstElement: false,

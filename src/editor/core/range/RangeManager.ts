@@ -684,8 +684,12 @@ export class RangeManager {
           const nextElement = elementList[index]
           if (
             nextElement.controlId !== startElement.controlId ||
-            nextElement.controlComponent === ControlComponent.VALUE
+            nextElement.controlComponent === ControlComponent.POSTFIX
           ) {
+            range.startIndex = startIndex
+            break
+          }
+          if (nextElement.controlComponent === ControlComponent.VALUE) {
             range.startIndex = index - 1
             break
           } else if (
@@ -705,8 +709,12 @@ export class RangeManager {
           const preElement = elementList[index]
           if (
             preElement.controlId !== startElement.controlId ||
-            preElement.controlComponent === ControlComponent.VALUE
+            preElement.controlComponent === ControlComponent.PREFIX
           ) {
+            range.endIndex = range.startIndex
+            break
+          }
+          if (preElement.controlComponent === ControlComponent.VALUE) {
             range.endIndex = index
             break
           } else if (

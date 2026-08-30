@@ -143,16 +143,35 @@ export class TextControl implements IControlInstance {
         this.control.destroyControl({ isEmitEvent: true })
       }
     }
-    // 移除选区元素
-    if (startIndex !== endIndex) {
-      draw.deleteElementList(
+    // 移除选区元素（严格只移除 PREFIX 与 POSTFIX 之间的旧值或占位符，绝不删除 POSTFIX）
+    const deleteStartIndex = startIndex + 1
+    let deleteCount = endIndex - startIndex
+    const endElement = elementList[endIndex]
+    if (
+      startElement?.controlId &&
+      endElement?.controlId === startElement.controlId &&
+      startElement.controlComponent === ControlComponent.PREFIX &&
+      endElement.controlComponent === ControlComponent.POSTFIX
+    ) {
+      deleteCount = Math.max(0, endIndex - startIndex - 1)
+    }
+
+    if (deleteCount > 0) {
+      const remainingCount = this.control.removePlaceholderInRange(
         elementList,
-        startIndex + 1,
-        endIndex - startIndex,
-        {
-          isIgnoreDeletedRule: options.isIgnoreDeletedRule
-        }
+        deleteStartIndex,
+        deleteCount
       )
+      if (remainingCount > 0) {
+        draw.deleteElementList(
+          elementList,
+          deleteStartIndex,
+          remainingCount,
+          {
+            isIgnoreDeletedRule: options.isIgnoreDeletedRule
+          }
+        )
+      }
     } else {
       // 移除空白占位符
       this.control.removePlaceholder(startIndex, context)
@@ -247,35 +266,85 @@ export class TextControl implements IControlInstance {
     context: IControlContext = {},
     options: IControlRuleOption = {}
   ): number {
+    const { isIgnoreDisabledRule = false, isAddPlaceholder = true } = options
     // 校验是否可以设置
     if (
-      !options.isIgnoreDisabledRule &&
+      !isIgnoreDisabledRule &&
       this.control.getIsDisabledControl(context)
     ) {
       return -1
     }
     const elementList = context.elementList || this.control.getElementList()
     const range =
-      context.range || this.control.getValueRange() || this.control.getRange()
-    const { startIndex, endIndex } = range
+      context.range || this.control.getValueRange(context) || this.control.getRange()
+    let { startIndex, endIndex } = range
+    if (!~startIndex || !~endIndex) return -1
+
+    // 确保 startIndex 精准定位到 PREFIX
+    const startElement = elementList[startIndex]
+    if (startElement?.controlId && startElement.controlComponent !== ControlComponent.PREFIX) {
+      let pre = startIndex
+      while (pre >= 0 && elementList[pre]?.controlId === startElement.controlId) {
+        if (elementList[pre].controlComponent === ControlComponent.PREFIX) {
+          startIndex = pre
+          break
+        }
+        pre--
+      }
+    }
+
+    // 确保 endIndex 精准定位到 POSTFIX
+    const currentControlId = elementList[startIndex]?.controlId
+    if (currentControlId) {
+      let next = startIndex + 1
+      while (next < elementList.length) {
+        if (
+          elementList[next]?.controlId === currentControlId &&
+          elementList[next]?.controlComponent === ControlComponent.POSTFIX
+        ) {
+          endIndex = next
+          break
+        }
+        if (elementList[next]?.controlId !== currentControlId) {
+          endIndex = next - 1
+          break
+        }
+        next++
+      }
+    }
+
+    // 删除区间严格位于 PREFIX 与 POSTFIX 之间
     const deleteStartIndex = startIndex + 1
+    const rawDeleteCount = Math.max(0, endIndex - startIndex - 1)
+
     const deleteCount = this.control.removePlaceholderInRange(
       elementList,
       deleteStartIndex,
-      endIndex - startIndex
+      rawDeleteCount
     )
-    this.control
-      .getDraw()
-      .deleteElementList(elementList, deleteStartIndex, deleteCount, {
-        isIgnoreDeletedRule: options.isIgnoreDeletedRule
-      })
-    const value = this.getValue({
-      range,
-      elementList
-    })
-    if (!value.length) {
+    if (deleteCount > 0) {
+      this.control
+        .getDraw()
+        .deleteElementList(elementList, deleteStartIndex, deleteCount, {
+          isIgnoreDeletedRule: options.isIgnoreDeletedRule
+        })
+    }
+
+    // 增加占位符
+    if (isAddPlaceholder) {
       this.control.addPlaceholder(startIndex, context)
     }
+
+    this.control.setControlProperties(
+      {
+        value: null
+      },
+      {
+        elementList,
+        range: { startIndex, endIndex: startIndex }
+      }
+    )
+
     return startIndex
   }
 

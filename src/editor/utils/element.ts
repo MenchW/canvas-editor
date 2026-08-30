@@ -991,7 +991,8 @@ export function zipElementList(
             controlId,
             trace: element.trace
           }
-          controlElement.control!.value = zipElementList(valueList, options)
+          const zippedValue = zipElementList(valueList, options)
+          controlElement.control!.value = zippedValue.length ? zippedValue : null
           element = pickElementAttr(controlElement, { extraPickAttrs })
           // 控件元素数量 - 1（当前元素）
           e += start - e - 1
