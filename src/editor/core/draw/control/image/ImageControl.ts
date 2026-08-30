@@ -84,8 +84,8 @@ export class ImageControl implements IControlInstance {
           {
             type: ElementType.IMAGE,
             value: url,
-            width: control?.width || 120,
-            height: control?.height || 120
+            width: Number(data.width) || control?.width || 120,
+            height: Number(data.height) || control?.height || 120
           }
         ]
       }

@@ -58,17 +58,17 @@ export class ListImageControl extends ImageControl {
 
     let newNodes: IElement[] = []
     if (Array.isArray(data) && data.length > 0) {
-      const imgWidth = control?.width || 80
-      const imgHeight = control?.height || 80
       data.forEach((img: any, idx: number) => {
         const url = typeof img === 'string' ? img : img?.url || img?.src || ''
         if (url) {
+          const itemWidth = Number(img?.width) || control?.width || 80
+          const itemHeight = Number(img?.height) || control?.height || 80
           newNodes.push({
             ...anchorElement,
             type: ElementType.IMAGE,
             value: url,
-            width: imgWidth,
-            height: imgHeight,
+            width: itemWidth,
+            height: itemHeight,
             controlComponent: ControlComponent.VALUE
           })
           const shouldWrap =
