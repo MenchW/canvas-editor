@@ -46,12 +46,11 @@ export default defineConfig(({ mode }) => {
         outDir: 'dist/sdk',
         emptyOutDir: false,
         lib: {
-          name: 'CanvasEditorHost',
-          fileName: 'report-design-sdk',
+          name: 'EditorClient',
+          fileName: 'editor-client',
           entry: path.resolve(__dirname, 'src/sdk/index.ts'),
           formats: ['es', 'umd']
         },
-        sourcemap: true
       }
     }
   }

@@ -9,6 +9,7 @@ export default tseslint.config(
       'dist/**',
       'dist1/**',
       'index.html',
+      'demo/common/lib/**',
       'docs/.vitepress/cache/**',
       'docs/.vitepress/dist/**'
     ]
