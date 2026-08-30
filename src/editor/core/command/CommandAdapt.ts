@@ -1478,11 +1478,22 @@ export class CommandAdapt {
   }
 
   public async exportPdf(fileName = 'CanvasEditor文档') {
-    const pageCanvasList = this.draw.getPageList()
-    if (!pageCanvasList || !pageCanvasList.length) return
+    const { scale, printPixelRatio, paperDirection } = this.options
+    if (scale !== 1) {
+      this.draw.setPageScale(1)
+    }
+    const base64List = await this.draw.getDataURL({
+      pixelRatio: printPixelRatio,
+      mode: EditorMode.PRINT
+    })
+    if (!base64List || !base64List.length) {
+      if (scale !== 1) {
+        this.draw.setPageScale(scale)
+      }
+      return
+    }
 
-    const isHorizontal =
-      this.draw.getOptions().paperDirection === PaperDirection.HORIZONTAL
+    const isHorizontal = paperDirection === PaperDirection.HORIZONTAL
 
     const doc = new jsPDF({
       orientation: isHorizontal ? 'landscape' : 'portrait',
@@ -1493,13 +1504,16 @@ export class CommandAdapt {
     const pdfWidth = doc.internal.pageSize.getWidth()
     const pdfHeight = doc.internal.pageSize.getHeight()
 
-    pageCanvasList.forEach((canvas, index) => {
+    base64List.forEach((imgData, index) => {
       if (index > 0) {
         doc.addPage()
       }
-      const imgData = canvas.toDataURL('image/jpeg', 0.95)
       doc.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight)
     })
+
+    if (scale !== 1) {
+      this.draw.setPageScale(scale)
+    }
 
     try {
       doc.save(`${fileName}.pdf`)
@@ -1516,7 +1530,9 @@ export class CommandAdapt {
         console.warn('[exportPdf] 沙箱窗口回退失败:', err)
         const newWin = window.open(url, '_blank')
         if (!newWin) {
-          alert('【宿主沙箱提示】受系统 iframe 安全限制未能直接导出 PDF 文件。请在宿主 <iframe sandbox="..."> 标签中添加 allow-downloads 许可。')
+          console.warn(
+            '【宿主沙箱提示】受系统 iframe 安全限制未能直接导出 PDF 文件。请在宿主 <iframe sandbox="..."> 标签中添加 allow-downloads 许可。'
+          )
         }
       }
       setTimeout(() => {

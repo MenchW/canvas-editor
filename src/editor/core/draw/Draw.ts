@@ -2315,6 +2315,21 @@ export class Draw {
       // 每页页眉/页脚禁用状态可能不同，按页计算外部占位高度
       let pageHeight = this.getMainOuterHeight(0)
       let prevColumnIndex: number | undefined = undefined
+      const isRowEmpty = (r?: IRow) => {
+        if (!r || r.isPageBreak || r.tableFragment) return false
+        return r.elementList.every(el => {
+          if (el.type && el.type !== ElementType.TEXT) return false
+          if (el.control || el.controlComponent) return false
+          if (el.underline || el.strikeout || el.highlight) return false
+          return !el.value || el.value === '\n' || el.value === '\r'
+        })
+      }
+      const isRemainingRowsEmpty = (startIndex: number) => {
+        for (let j = startIndex; j < this.rowList.length; j++) {
+          if (!isRowEmpty(this.rowList[j])) return false
+        }
+        return true
+      }
       for (let i = 0; i < this.rowList.length; i++) {
         const row = this.rowList[i]
         const rowOffsetY = row.offsetY || 0
@@ -2331,6 +2346,17 @@ export class Draw {
           row.height + rowOffsetY + pageHeight > height ||
           this.rowList[i - 1]?.isPageBreak
         ) {
+          // 如果当前行及后续所有行均为空白换行（且非显式分页符），且当前已有页面，
+          // 则不再新建空白页，直接容纳在当前页末尾，避免末尾换行导致产生多余空白页
+          const isExplicitBreak = !!this.rowList[i - 1]?.isPageBreak
+          if (
+            !isExplicitBreak &&
+            pageRowList[pageNo].length > 0 &&
+            isRemainingRowsEmpty(i)
+          ) {
+            pageRowList[pageNo].push(row)
+            continue
+          }
           if (Number.isInteger(maxPageNo) && pageNo >= maxPageNo!) {
             // 跨页表格片段共享元素索引：按片段边界裁剪表格，
             // 保留已展示片段内容，不能直接按共享索引整体截断
@@ -2359,6 +2385,59 @@ export class Draw {
           pageRowList[pageNo].push(row)
         }
         prevColumnIndex = row.columnIndex
+      }
+      // 过滤末尾纯空白页（因末尾换行符、空控件、微小高度溢出导致的无实质内容空白页）
+      while (pageRowList.length > 1) {
+        const lastPageRows = pageRowList[pageRowList.length - 1]
+        const prevPageRows = pageRowList[pageRowList.length - 2]
+        const lastRowOfPrevPage = prevPageRows[prevPageRows.length - 1]
+        // 若前一页末尾为显式分页符，则保留用户显式要求的新页
+        if (lastRowOfPrevPage?.isPageBreak) {
+          break
+        }
+        const isPageEmpty = lastPageRows.every(r => {
+          if (r.isPageBreak) return false
+          if (r.tableFragment) {
+            const frag = r.tableFragment
+            // 表格片段无内容或高度为0视为空
+            if (frag.startTrIndex >= frag.endTrIndex && !frag.endSplitTrHeight) {
+              return true
+            }
+            return false
+          }
+          return r.elementList.every(el => {
+            if (el.hide || (el.area?.hide && !this.isAreaHideDisabled())) {
+              return true
+            }
+            if (
+              el.type === ElementType.IMAGE ||
+              el.type === ElementType.LATEX ||
+              el.type === ElementType.BLOCK ||
+              el.type === ElementType.SEPARATOR ||
+              el.type === ElementType.CHECKBOX ||
+              el.type === ElementType.RADIO ||
+              el.type === ElementType.TABLE
+            ) {
+              return false
+            }
+            if (el.underline || el.strikeout || el.highlight) {
+              return false
+            }
+            const val = el.value
+            return (
+              !val ||
+              val === '\n' ||
+              val === '\r' ||
+              val === ZERO ||
+              val.trim() === ''
+            )
+          })
+        })
+        if (isPageEmpty) {
+          pageRowList.pop()
+        } else {
+          break
+        }
       }
     }
     return pageRowList
