@@ -7,7 +7,7 @@
   <!-- 公共依赖与脚本 -->
   <script src="./common/deps.js"></script>
   <script src="./common/utils.js"></script>
-  <script src="./common/api.js"></script>
+  <script src="./common/mock.js"></script>
 
   <style>
     * {
@@ -362,6 +362,9 @@
         <el-form-item>
           <el-button type="primary" icon="el-icon-search" :loading="isSyncing" @click="handleSearch">查 询</el-button>
           <el-button icon="el-icon-refresh-right" @click="handleResetSearch">重 置</el-button>
+          <el-popconfirm title="确定恢复为默认组件字典预设？这会覆盖本地缓存修改" @confirm="handleRestoreDefaultDictionary">
+            <el-button slot="reference" type="warning" icon="el-icon-refresh" style="margin-left: 10px;">恢复默认预设</el-button>
+          </el-popconfirm>
         </el-form-item>
       </el-form>
     </div>
@@ -1035,41 +1038,94 @@
           const hit = this.systemOptions.find(s => s.value === val || s.label === val || s.appId === val);
           return hit ? hit.label : val;
         },
-        async fetchSystemOptions() {
+        fetchSystemOptions() {
+          // 从当前分组提取所有出现过的系统名称作为下拉选项
+          const defaultSystems = [
+            { label: 'HIS电子病历系统', value: 'HIS电子病历系统' },
+            { label: 'LIS检验系统', value: 'LIS检验系统' },
+            { label: 'EMR质控系统', value: 'EMR质控系统' },
+            { label: 'LIS复合检验系统', value: 'LIS复合检验系统' },
+            { label: '食品安全监管系统', value: '食品安全监管系统' }
+          ];
+          const sysMap = new Map();
+          defaultSystems.forEach(s => sysMap.set(s.value, s));
+          if (Array.isArray(this.groups)) {
+            this.groups.forEach(g => {
+              const name = g.systemName || g.appId;
+              if (name && !sysMap.has(name)) {
+                sysMap.set(name, { label: name, value: name });
+              }
+            });
+          }
+          this.systemOptions = Array.from(sysMap.values());
+        },
+        saveGroupsToStorage() {
           try {
-            const res = await componentApi.listSystem();
-            const rows = res?.rows || res?.data?.rows || res?.data || (Array.isArray(res) ? res : []);
-            if (Array.isArray(rows)) {
-              this.systemOptions = rows.map(item => ({
-                label: item.systemName || item.appId || '',
-                value: item.appId || item.systemName || '',
-                systemName: item.systemName || '',
-                appId: item.appId || ''
-              }));
-            }
+            const rawList = this.groups.map(g => ({
+              id: g.id,
+              groupName: g.groupName || g.name || '',
+              systemName: g.systemName || '',
+              description: g.description || '',
+              children: (g.children || []).map(f => ({
+                id: f.id,
+                name: f.name || f.fieldName || '',
+                fieldName: f.name || f.fieldName || '',
+                conceptId: f.conceptId || f.fieldKey || '',
+                fieldKey: f.conceptId || f.fieldKey || '',
+                type: f.type || f.fieldType || 'text',
+                fieldType: f.type || f.fieldType || 'text',
+                listType: f.listType,
+                layout: f.layout,
+                gridCols: f.gridCols,
+                description: f.description || f.fieldDesc || '',
+                fieldDesc: f.description || f.fieldDesc || '',
+                pagingRepeat: f.pagingRepeat,
+                htmlTemplate: f.htmlTemplate
+              }))
+            }));
+            localStorage.setItem('CE_COMPONENT_DICTIONARY', JSON.stringify(rawList));
+            this.fetchSystemOptions();
           } catch (e) {
-            console.warn('[fetchSystemOptions] 获取系统列表失败:', e);
+            console.error('[saveGroupsToStorage] 保存到本地缓存失败:', e);
           }
         },
-        async handleSearch() {
-          const params = {};
-          if (this.searchForm.systemName) {
-            params.systemName = this.searchForm.systemName;
-            params.appId = this.searchForm.systemName;
+        handleRestoreDefaultDictionary() {
+          try {
+            localStorage.removeItem('CE_COMPONENT_DICTIONARY');
+            this.loadData();
+            this.$message.success('已恢复为默认组件字典预设！');
+          } catch (e) {
+            this.$message.error('恢复失败: ' + String(e));
           }
-          if (this.searchForm.groupName && this.searchForm.groupName.trim()) {
-            params.groupName = this.searchForm.groupName.trim();
-          }
-          if (this.searchForm.fieldName && this.searchForm.fieldName.trim()) {
-            params.fieldName = this.searchForm.fieldName.trim();
-          }
-          if (this.searchForm.fieldDesc && this.searchForm.fieldDesc.trim()) {
-            params.fieldDesc = this.searchForm.fieldDesc.trim();
-          }
-          this.currentGroupIndex = 0;
-          await this.loadData(params);
         },
-        async handleResetSearch() {
+        handleSearch() {
+          const sys = this.searchForm.systemName;
+          const gName = (this.searchForm.groupName || '').trim().toLowerCase();
+          const fName = (this.searchForm.fieldName || '').trim().toLowerCase();
+
+          // 读取全量数据后再进行内存过滤
+          let list = this.readStorageOrFallback();
+          if (sys) {
+            list = list.filter(g => (g.systemName || g.appId) === sys);
+          }
+          if (gName) {
+            list = list.filter(g => (g.groupName || '').toLowerCase().includes(gName));
+          }
+          if (fName) {
+            list = list.filter(g => {
+              const children = g.children || [];
+              return children.some(f => 
+                (f.name || f.fieldName || '').toLowerCase().includes(fName) ||
+                (f.conceptId || f.fieldKey || '').toLowerCase().includes(fName)
+              );
+            });
+          }
+          this.groups = list.map(normalizeGroup);
+          if (this.currentGroupIndex >= this.groups.length || this.currentGroupIndex < 0) {
+            this.currentGroupIndex = 0;
+          }
+        },
+        handleResetSearch() {
           this.searchForm = {
             systemName: '',
             groupName: '',
@@ -1077,69 +1133,39 @@
             fieldDesc: ''
           };
           this.currentGroupIndex = 0;
-          await this.loadData();
+          this.loadData();
         },
-        async loadData(query = null) {
-          this.isSyncing = true;
-          // 纯接口驱动：直接从 REST API 接口获取分组列表 (按需加载：不预先拉取所有 field-tree)
+        readStorageOrFallback() {
           try {
-            const res = await componentApi.listGroup(query || undefined);
-            const groupList = res?.data?.rows || res?.data || res?.rows || (Array.isArray(res) ? res : null);
-            if (Array.isArray(groupList) && groupList.length > 0) {
-              this.groups = groupList.map(g => normalizeGroup({
-                ...g,
-                children: g.children || g.fieldList || g.fields || [],
-                _loaded: Boolean(g.children && g.children.length > 0)
-              }));
-              if (this.currentGroupIndex >= this.groups.length || this.currentGroupIndex < 0) {
-                this.currentGroupIndex = 0;
+            const cached = localStorage.getItem('CE_COMPONENT_DICTIONARY');
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                return parsed;
               }
-              this.isSyncing = false;
-              // 自动触发当前选中分组的字段懒加载
-              if (this.groups.length > 0) {
-                this.fetchGroupFields(this.currentGroupIndex);
-              }
-              return;
             }
-          } catch (apiErr) {
-            console.warn('[component-management] 后端接口请求失败:', apiErr);
+          } catch (e) {
+            console.warn('[readStorageOrFallback] 读取缓存异常，回退到默认预设:', e);
           }
-
-          this.groups = [];
-          this.isSyncing = false;
+          const defaultData = window.DEFAULT_COMPONENT_DATA || [];
+          return JSON.parse(JSON.stringify(defaultData));
         },
-        async fetchGroupFields(groupIndex, forceRefresh = false) {
-          if (groupIndex < 0 || groupIndex >= this.groups.length) return;
-          const targetGroup = this.groups[groupIndex];
-          if (!targetGroup) return;
-
-          // 若已加载且非强刷，直接使用
-          if (targetGroup._loaded && !forceRefresh && targetGroup.children && targetGroup.children.length > 0) {
-            return;
+        loadData() {
+          this.isSyncing = true;
+          const rawGroups = this.readStorageOrFallback();
+          this.groups = rawGroups.map(g => normalizeGroup({
+            ...g,
+            children: g.children || g.fieldList || g.fields || [],
+            _loaded: true
+          }));
+          if (this.currentGroupIndex >= this.groups.length || this.currentGroupIndex < 0) {
+            this.currentGroupIndex = 0;
           }
-
-          // 具备服务端 id 时发起懒加载请求
-          if (targetGroup.id) {
-            this.isFieldLoading = true;
-            try {
-              const treeRes = await componentApi.getFieldTree(targetGroup.id);
-              const treeData = treeRes?.data || treeRes?.rows || (Array.isArray(treeRes) ? treeRes : []);
-              if (Array.isArray(treeData)) {
-                this.$set(targetGroup, 'children', treeData.map(normalizeField));
-                targetGroup._loaded = true;
-              }
-            } catch (err) {
-              console.error('[fetchGroupFields] 懒加载分组字段树失败:', err);
-            } finally {
-              this.isFieldLoading = false;
-            }
-          } else {
-            targetGroup._loaded = true;
-          }
+          this.fetchSystemOptions();
+          this.isSyncing = false;
         },
         handleSelectGroup(origIdx) {
           this.currentGroupIndex = origIdx;
-          this.fetchGroupFields(origIdx);
         },
         // ----------------- 对话框关闭清空重置事件 -----------------
         handleGroupDialogClosed() {
@@ -1220,51 +1246,44 @@
             if (this.$refs.groupFormRef) this.$refs.groupFormRef.clearValidate();
           });
         },
-        async handleSaveGroup() {
-          this.$refs.groupFormRef.validate(async valid => {
+        handleSaveGroup() {
+          this.$refs.groupFormRef.validate(valid => {
             if (!valid) return;
             const selectedSys = this.systemOptions.find(s => s.value === this.groupForm.systemName);
-            const payload = {
-              groupName: this.groupForm.groupName,
-              systemName: selectedSys ? selectedSys.label : this.groupForm.systemName,
-              appId: selectedSys ? selectedSys.value : this.groupForm.systemName,
-              description: this.groupForm.description
-            };
+            const sysName = selectedSys ? selectedSys.label : this.groupForm.systemName;
 
-            try {
-              if (this.groupDialogMode === 'add') {
-                const res = await componentApi.addGroup(payload);
-                if (res && res.code === 200) {
-                  this.$message.success(res.msg || res.message || '新增分组成功');
-                  this.groupDialogVisible = false;
-                  await this.loadData();
-                }
-              } else {
-                const res = await componentApi.updateGroup({ id: this.groupForm.id, ...payload });
-                if (res && res.code === 200) {
-                  this.$message.success(res.msg || res.message || '修改分组成功');
-                  this.groupDialogVisible = false;
-                  await this.loadData();
-                }
+            if (this.groupDialogMode === 'add') {
+              const newGroup = normalizeGroup({
+                id: `grp_${Date.now().toString(36)}`,
+                groupName: this.groupForm.groupName,
+                systemName: sysName,
+                description: this.groupForm.description,
+                children: [],
+                _loaded: true
+              });
+              this.groups.push(newGroup);
+              this.currentGroupIndex = this.groups.length - 1;
+              this.$message.success('新增分组成功');
+            } else {
+              const target = this.groups[this.editGroupIndex];
+              if (target) {
+                target.groupName = this.groupForm.groupName;
+                target.systemName = sysName;
+                target.description = this.groupForm.description;
+                this.$message.success('修改分组成功');
               }
-            } catch (err) {
-              console.warn('[handleSaveGroup] 保存失败:', err);
             }
+            this.saveGroupsToStorage();
+            this.groupDialogVisible = false;
           });
         },
-        async handleDeleteGroup(origIdx) {
-          const target = this.groups[origIdx];
-          if (target && target.id) {
-            try {
-              const res = await componentApi.delGroup(target.id);
-              if (res && res.code === 200) {
-                this.$message.success(res.msg || res.message || '删除分组成功');
-                await this.loadData();
-              }
-            } catch (err) {
-              console.warn('[handleDeleteGroup] 接口删除失败:', err);
-            }
+        handleDeleteGroup(origIdx) {
+          this.groups.splice(origIdx, 1);
+          if (this.currentGroupIndex >= this.groups.length) {
+            this.currentGroupIndex = Math.max(0, this.groups.length - 1);
           }
+          this.saveGroupsToStorage();
+          this.$message.success('删除分组成功');
         },
         // ----------------- 基础字段操作 -----------------
         handleOpenAddField() {
@@ -1350,11 +1369,19 @@
             this.$message.success('已载入基础预设！');
           }
         },
-        async handleSaveField() {
-          this.$refs.fieldFormRef.validate(async valid => {
+        handleSaveField() {
+          this.$refs.fieldFormRef.validate(valid => {
             if (!valid) return;
+            if (!this.currentGroup) {
+              this.$message.warning('请先选择一个分组');
+              return;
+            }
+            if (!Array.isArray(this.currentGroup.children)) {
+              this.$set(this.currentGroup, 'children', []);
+            }
+
             const fieldItem = normalizeField({
-              id: this.fieldDialogMode === 'add' ? undefined : this.fieldForm.id,
+              id: this.fieldDialogMode === 'add' ? `fld_${Date.now().toString(36)}` : this.fieldForm.id,
               name: this.fieldForm.name,
               fieldName: this.fieldForm.name,
               conceptId: this.fieldForm.conceptId,
@@ -1365,29 +1392,21 @@
               layout: this.fieldForm.type === 'list' ? (this.fieldForm.layout || 'vertical') : undefined,
               gridCols: this.fieldForm.type === 'list' && this.fieldForm.layout === 'grid' ? (this.fieldForm.gridCols || 2) : undefined,
               description: this.fieldForm.description,
-              fieldDesc: this.fieldForm.description,
-              groupId: this.currentGroup?.id
+              fieldDesc: this.fieldForm.description
             });
 
-            try {
-              if (this.fieldDialogMode === 'add') {
-                const res = await componentApi.addField(fieldItem);
-                if (res && res.code === 200) {
-                  this.$message.success(res.msg || res.message || '新增占位符成功');
-                  this.fieldDialogVisible = false;
-                  await this.fetchGroupFields(this.currentGroupIndex, true);
-                }
-              } else {
-                const res = await componentApi.updateField(fieldItem);
-                if (res && res.code === 200) {
-                  this.$message.success(res.msg || res.message || '修改占位符成功');
-                  this.fieldDialogVisible = false;
-                  await this.fetchGroupFields(this.currentGroupIndex, true);
-                }
+            if (this.fieldDialogMode === 'add') {
+              this.currentGroup.children.push(fieldItem);
+              this.$message.success('新增占位符成功');
+            } else {
+              if (this.editFieldIndex >= 0 && this.editFieldIndex < this.currentGroup.children.length) {
+                this.$set(this.currentGroup.children, this.editFieldIndex, fieldItem);
+                this.$message.success('修改占位符成功');
               }
-            } catch (err) {
-              console.warn('[handleSaveField] 保存失败:', err);
             }
+
+            this.saveGroupsToStorage();
+            this.fieldDialogVisible = false;
           });
         },
         // ----------------- 结构化表格专属操作 -----------------
@@ -1519,15 +1538,24 @@
           formatted = formatted.replace(/([ \t]*<(?:th|td)[^>]*>)\n[ \t]*([^\n<]+)\n[ \t]*(<\/(?:th|td)>)/gi, '$1$2$3');
           return formatted;
         },
-        async handleSaveTable() {
-          this.$refs.tableFormRef.validate(async valid => {
+        handleSaveTable() {
+          this.$refs.tableFormRef.validate(valid => {
             if (!valid) return;
+            if (!this.currentGroup) {
+              this.$message.warning('请先选择一个分组');
+              return;
+            }
+            if (!Array.isArray(this.currentGroup.children)) {
+              this.$set(this.currentGroup, 'children', []);
+            }
+
             this.handleCompileTableTemplate();
             const inferredConceptId = (this.compiledTableInfo && this.compiledTableInfo.loopDataset)
               ? this.compiledTableInfo.loopDataset
               : (this.tableForm.conceptId || `table_${Date.now().toString(36)}`);
+
             const tableItem = normalizeField({
-              id: this.tableDialogMode === 'add' ? undefined : this.tableForm.id,
+              id: this.tableDialogMode === 'add' ? `tbl_${Date.now().toString(36)}` : this.tableForm.id,
               name: this.tableForm.name,
               fieldName: this.tableForm.name,
               conceptId: inferredConceptId,
@@ -1537,44 +1565,28 @@
               description: this.tableForm.description,
               fieldDesc: this.tableForm.description,
               pagingRepeat: this.tableForm.pagingRepeat !== false,
-              htmlTemplate: this.tableForm.htmlTemplate,
-              groupId: this.currentGroup?.id
+              htmlTemplate: this.tableForm.htmlTemplate
             });
 
-            try {
-              if (this.tableDialogMode === 'add') {
-                const res = await componentApi.addField(tableItem);
-                if (res && res.code === 200) {
-                  this.$message.success(res.msg || res.message || '新增结构化表格成功');
-                  this.tableDialogVisible = false;
-                  await this.fetchGroupFields(this.currentGroupIndex, true);
-                }
-              } else {
-                const res = await componentApi.updateField(tableItem);
-                if (res && res.code === 200) {
-                  this.$message.success(res.msg || res.message || '修改结构化表格成功');
-                  this.tableDialogVisible = false;
-                  await this.fetchGroupFields(this.currentGroupIndex, true);
-                }
+            if (this.tableDialogMode === 'add') {
+              this.currentGroup.children.push(tableItem);
+              this.$message.success('新增结构化表格成功');
+            } else {
+              if (this.editTableIndex >= 0 && this.editTableIndex < this.currentGroup.children.length) {
+                this.$set(this.currentGroup.children, this.editTableIndex, tableItem);
+                this.$message.success('修改结构化表格成功');
               }
-            } catch (err) {
-              console.warn('[handleSaveTable] 保存表格失败:', err);
             }
+
+            this.saveGroupsToStorage();
+            this.tableDialogVisible = false;
           });
         },
-        async handleDeleteField(origIdx) {
-          const target = this.currentGroup.children[origIdx];
-          if (target && target.id) {
-            try {
-              const res = await componentApi.delField(target.id);
-              if (res && res.code === 200) {
-                this.$message.success(res.msg || res.message || '删除组件成功');
-                await this.fetchGroupFields(this.currentGroupIndex, true);
-              }
-            } catch (err) {
-              console.warn('[handleDeleteField] 接口删除失败:', err);
-            }
-          }
+        handleDeleteField(origIdx) {
+          if (!this.currentGroup || !Array.isArray(this.currentGroup.children)) return;
+          this.currentGroup.children.splice(origIdx, 1);
+          this.saveGroupsToStorage();
+          this.$message.success('删除组件成功');
         },
         getTypeTagStyle(type) {
           const map = {

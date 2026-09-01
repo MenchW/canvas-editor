@@ -103,7 +103,9 @@ export const EDITOR_ELEMENT_ZIP_ATTR: Array<keyof IElement> = [
   'label',
   'labelId',
   'lineWidth',
-  'trace'
+  'trace',
+  'innerLoop',
+  'when'
 ]
 
 export const TABLE_TD_ZIP_ATTR: Array<keyof ITd> = [
@@ -116,7 +118,9 @@ export const TABLE_TD_ZIP_ATTR: Array<keyof ITd> = [
   'borderTypes',
   'slashTypes',
   'disabled',
-  'deletable'
+  'deletable',
+  'when',
+  'mergeSame'
 ]
 
 export const TABLE_CONTEXT_ATTR: Array<keyof IElement> = [
@@ -161,7 +165,8 @@ export const EDITOR_ELEMENT_CONTEXT_ATTR: Array<keyof IElement> = [
   ...TABLE_CONTEXT_ATTR,
   ...TITLE_CONTEXT_ATTR,
   ...LIST_CONTEXT_ATTR,
-  ...AREA_CONTEXT_ATTR
+  ...AREA_CONTEXT_ATTR,
+  'innerLoop'
 ]
 
 export const TEXTLIKE_ELEMENT_TYPE: ElementType[] = [

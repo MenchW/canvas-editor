@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>宿主系统集成 Canvas Editor SDK 本地联调入口</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: #f1f5f9;
+    }
+    .parent-header {
+      height: 54px;
+      background: #0f172a;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      z-index: 10;
+      position: relative;
+    }
+    .parent-header .left-panel {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .parent-header .title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .parent-header .title span.badge {
+      font-size: 11px;
+      background: #3b82f6;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+    .parent-header .status {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn {
+      height: 32px;
+      padding: 0 12px;
+      font-size: 13px;
+      border: 1px solid #334155;
+      background: #1e293b;
+      color: #e2e8f0;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      background: #334155;
+      color: #ffffff;
+      border-color: #475569;
+    }
+    .btn-primary {
+      background: #2563eb;
+      border-color: #2563eb;
+      color: #ffffff;
+    }
+    .btn-primary:hover {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+    }
+    .main-container {
+      width: 100%;
+      height: calc(100% - 54px);
+      display: flex;
+      position: relative;
+    }
+    iframe#canvas-editor-iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #ffffff;
+    }
+  </style>
+  <script src="./common/mock.js"></script>
+</head>
+<body>
+  <header class="parent-header">
+    <div class="left-panel">
+      <div class="title">
+        <span>宿主集成平台</span>
+        <span class="badge">本地纯净版</span>
+      </div>
+      <div id="status-text" class="status">系统准备就绪 (纯本地 Mock 模式)</div>
+    </div>
+    <div class="actions">
+      <button id="btn-fill-data" class="btn btn-primary">
+        <span>📥</span> 填充业务数据
+      </button>
+      <button id="btn-get-control-list" class="btn">
+        <span>📋</span> 控件列表
+      </button>
+      <button id="btn-check-missing" class="btn">
+        <span>🔍</span> 数据完整性审计
+      </button>
+      <button id="btn-get-value" class="btn">
+        <span>📄</span> 导出文档 JSON
+      </button>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <iframe
+      id="canvas-editor-iframe"
+      src="../index.html"
+      allow="clipboard-read; clipboard-write"
+    ></iframe>
+  </main>
+
+  <script type="module">
+    import { EditorClient } from '../src/sdk/editor-client.ts';
+    window.EditorClient = EditorClient;
+
+    const statusText = document.getElementById('status-text');
+    const btnFillData = document.getElementById('btn-fill-data');
+    const btnGetControlList = document.getElementById('btn-get-control-list');
+    const btnCheckMissing = document.getElementById('btn-check-missing');
+    const btnGetValue = document.getElementById('btn-get-value');
+
+    function updateStatus(msg) {
+      if (statusText) statusText.textContent = msg;
+    }
+
+    const editorClient = new EditorClient({
+      iframe: '#canvas-editor-iframe',
+      appId: 'c377fb213ad9703',
+
+      config: {
+        mode: 'edit',
+        exportFileName: '全能报告单',
+        features: {
+          save: true,
+          asidePanel: true,
+          modeSwitch: true,
+          comment: true,
+          signature: true,
+          header: true,
+          footer: true,
+          pageNumber: true,
+          watermark: true,
+          print: true,
+          export: true
+        }
+      },
+
+      // 纯本地数据与模板 Provider
+      getTemplate: async () => await window.mockFetchTemplateApi(),
+      getComponents: async () => await window.mockFetchComponentListApi(),
+
+      // 保存 Hook (纯本地模式)
+      onSave: async (documentJson, toast) => {
+        console.log('[宿主系统] 收到 Editor 保存请求，当前完整 JSON:', documentJson);
+        updateStatus('已成功保存文档（纯本地）');
+        toast.success('本地保存成功！可在 F12 控制台查看 JSON 数据');
+      },
+
+      // 打印拦截 Hook
+      onPrint: async () => {
+        console.log('[宿主系统] 收到 Editor 打印通知');
+        return false;
+      },
+
+      // 图片上传 Hook
+      onUploadImage: async (base64) => {
+        console.log('[宿主系统] 模拟上传图片 Base64 成功');
+        return base64;
+      }
+    });
+
+    // 绑定本地调试操作按钮
+    btnFillData?.addEventListener('click', async () => {
+      updateStatus('正在加载本地 Mock 数据并回显...');
+      const data = await window.mockFetchBusinessDataApi();
+      await editorClient.setControlValueList(data);
+      updateStatus('已成功填充占位符数据');
+    });
+
+    btnGetControlList?.addEventListener('click', async () => {
+      const list = await editorClient.getControlList();
+      console.log('[宿主] 当前文档全部控件列表:', list);
+    });
+
+    btnCheckMissing?.addEventListener('click', async () => {
+      const auditResult = await editorClient.getMissingControlList();
+      console.log('[宿主] 控件数据完整性审计结果:', auditResult);
+    });
+
+    btnGetValue?.addEventListener('click', async () => {
+      const doc = await editorClient.getValue();
+      console.log('[宿主] 当前文档完整 JSON:', doc);
+    });
+  </script>
+</body>
+</html>

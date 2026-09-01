@@ -24,6 +24,7 @@ export interface IElementBasic {
   value: string
   extension?: unknown
   externalId?: string
+  when?: string
 }
 
 export interface IElementStyle {
@@ -213,6 +214,18 @@ export interface ILabelElement {
   }
 }
 
+export interface IInnerLoopConfig {
+  isLoop?: boolean
+  datasetId?: string
+  itemAlias?: string
+  isBlock?: boolean
+  loopBlockId?: string
+}
+
+export interface IInnerLoopElement {
+  innerLoop?: IInnerLoopConfig
+}
+
 export type IElement = IElementBasic &
   IElementStyle &
   IElementRule &
@@ -232,7 +245,8 @@ export type IElement = IElementBasic &
   ITitleElement &
   IListElement &
   IAreaElement &
-  ILabelElement
+  ILabelElement &
+  IInnerLoopElement
 
 export interface IElementMetrics {
   width: number

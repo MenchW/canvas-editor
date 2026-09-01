@@ -75,6 +75,8 @@ export interface IGetImageOption {
   pixelRatio?: number
   mode?: EditorMode
   snapDomFunction?: (iframe: HTMLIFrameElement) => Promise<string>
+  imageType?: string
+  imageQuality?: number
 }
 
 export interface IComputeRowListPayload {

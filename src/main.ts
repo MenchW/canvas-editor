@@ -2,6 +2,7 @@ import { commentList, data, options } from './mock'
 import './style.css'
 import prism from 'prismjs'
 import docxPlugin from './plugins/docx'
+import pdfPlugin from './plugins/pdf'
 import { EditorBridge } from './bridge'
 import Editor, {
   BlockType,
@@ -42,7 +43,7 @@ import {
 // 配置统一的 RuoYi 鉴权请求拦截器
 function getAuthToken() {
   const match = document.cookie.match(/(^|;\s*)Admin-Token=([^;]*)/)
-  return match?.[2] ? decodeURIComponent(match[2]) : '' 
+  return match?.[2] ? decodeURIComponent(match[2]) : ''
 }
 
 http.addRequestInterceptor((url, options) => {
@@ -92,15 +93,55 @@ window.onload = function () {
       const isAll = Boolean(features.all)
       const hasAll = features.all !== undefined
       return {
-        save: features.save !== undefined ? Boolean(features.save) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.save,
+        save:
+          features.save !== undefined
+            ? Boolean(features.save)
+            : hasAll
+              ? isAll
+              : DEFAULT_FEATURE_CONFIG.save,
         print: features.print !== undefined ? Boolean(features.print) : true,
-        export: features.export !== undefined ? Boolean(features.export) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.export,
-        control: features.control !== undefined ? Boolean(features.control) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.control,
-        asidePanel: features.asidePanel !== undefined ? Boolean(features.asidePanel) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.asidePanel,
-        modeSwitch: features.modeSwitch !== undefined ? Boolean(features.modeSwitch) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.modeSwitch,
-        comment: features.comment !== undefined ? Boolean(features.comment) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.comment,
-        signature: features.signature !== undefined ? Boolean(features.signature) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.signature,
-        macro: features.macro !== undefined ? Boolean(features.macro) : hasAll ? isAll : DEFAULT_FEATURE_CONFIG.macro
+        export:
+          features.export !== undefined
+            ? Boolean(features.export)
+            : hasAll
+              ? isAll
+              : DEFAULT_FEATURE_CONFIG.export,
+        control:
+          features.control !== undefined
+            ? Boolean(features.control)
+            : hasAll
+              ? isAll
+              : DEFAULT_FEATURE_CONFIG.control,
+        asidePanel:
+          features.asidePanel !== undefined
+            ? Boolean(features.asidePanel)
+            : hasAll
+              ? isAll
+              : DEFAULT_FEATURE_CONFIG.asidePanel,
+        modeSwitch:
+          features.modeSwitch !== undefined
+            ? Boolean(features.modeSwitch)
+            : hasAll
+              ? isAll
+              : DEFAULT_FEATURE_CONFIG.modeSwitch,
+        comment:
+          features.comment !== undefined
+            ? Boolean(features.comment)
+            : hasAll
+              ? isAll
+              : DEFAULT_FEATURE_CONFIG.comment,
+        signature:
+          features.signature !== undefined
+            ? Boolean(features.signature)
+            : hasAll
+              ? isAll
+              : DEFAULT_FEATURE_CONFIG.signature,
+        macro:
+          features.macro !== undefined
+            ? Boolean(features.macro)
+            : hasAll
+              ? isAll
+              : DEFAULT_FEATURE_CONFIG.macro
       }
     }
     return { ...DEFAULT_FEATURE_CONFIG }
@@ -142,6 +183,7 @@ window.onload = function () {
   const container = document.querySelector<HTMLDivElement>('.editor')!
   const instance = new Editor(container, initialData, initialOptions)
   instance.use(docxPlugin)
+  instance.use(pdfPlugin)
   console.log('实例: ', instance)
 
   Reflect.set(window, 'editor', instance)
@@ -1499,17 +1541,27 @@ window.onload = function () {
     document.querySelector<HTMLDivElement>('.catalog-mode')!
   const catalogHeaderCloseDom = document.querySelector<HTMLDivElement>(
     '.catalog__header__close'
-  )!
+  )
   const switchCatalog = () => {
     isCatalogShow = !isCatalogShow
-    catalogDom.classList.toggle('hidden', !isCatalogShow)
-    catalogDom.classList.toggle('open', isCatalogShow)
+    if (catalogDom) {
+      catalogDom.classList.toggle('hidden', !isCatalogShow)
+      catalogDom.classList.toggle('open', isCatalogShow)
+    }
+    if (catalogModeDom) {
+      catalogModeDom.classList.toggle('active', isCatalogShow)
+    }
     if (isCatalogShow) {
       updateCatalog()
     }
   }
-  if (catalogModeDom) catalogModeDom.onclick = switchCatalog
-  if (catalogHeaderCloseDom) catalogHeaderCloseDom.onclick = switchCatalog
+  if (catalogModeDom) {
+    catalogModeDom.classList.toggle('active', isCatalogShow)
+    catalogModeDom.onclick = switchCatalog
+  }
+  if (catalogHeaderCloseDom) {
+    catalogHeaderCloseDom.onclick = switchCatalog
+  }
 
   const pageModeDom = document.querySelector<HTMLDivElement>('.page-mode')!
   const pageModeOptionsDom =
@@ -1837,8 +1889,8 @@ window.onload = function () {
         asideToggleDom.style.display = isPreviewEdit
           ? 'none'
           : activeFeatureConfig.asidePanel
-          ? 'flex'
-          : 'none'
+            ? 'flex'
+            : 'none'
         asideToggleDom.classList.remove('active')
       }
     }
@@ -2635,11 +2687,7 @@ window.onload = function () {
     if (fType === 'date') {
       control.dateFormat = comp.dateFormat
     }
-    if (
-      fType === 'select' ||
-      fType === 'checkbox' ||
-      fType === 'radio'
-    ) {
+    if (fType === 'select' || fType === 'checkbox' || fType === 'radio') {
       control.code = null
       const opts = comp.options || comp.children || []
       const isVertical =
@@ -2661,7 +2709,9 @@ window.onload = function () {
                   : String(opt.value ?? opt.fieldKey ?? '')
           const shouldWrap =
             (isVertical && optIdx < opts.length - 1) ||
-            (isGrid && (optIdx + 1) % gridCols === 0 && optIdx < opts.length - 1)
+            (isGrid &&
+              (optIdx + 1) % gridCols === 0 &&
+              optIdx < opts.length - 1)
 
           if (shouldWrap && !labelText.endsWith('\n')) {
             labelText += '\n'
@@ -2712,15 +2762,12 @@ window.onload = function () {
 
     let tableElement: any = null
     if (comp.htmlCode || comp.htmlTemplate) {
-      tableElement = parseTableHtml(
-        comp.htmlCode || comp.htmlTemplate,
-        {
-          defaultConceptId: datasetId,
-          name: tableName,
-          availableWidth: getAvailableEditorWidth(),
-          pagingRepeat: comp.pagingRepeat !== false
-        }
-      )
+      tableElement = parseTableHtml(comp.htmlCode || comp.htmlTemplate, {
+        defaultConceptId: datasetId,
+        name: tableName,
+        availableWidth: getAvailableEditorWidth(),
+        pagingRepeat: comp.pagingRepeat !== false
+      })
     } else if (comp.trList) {
       const cleanTrs = sanitizeTrList(comp.trList)
       let maxCols = 1
@@ -2976,14 +3023,14 @@ window.onload = function () {
               tr.closest('tbody')?.getAttribute('loop')
             )
             const cells = Array.from(tr.querySelectorAll('th, td')).map(
-              cell => ({
-                colspan: parseInt(cell.getAttribute('colspan') || '1', 10),
-                text:
-                  (cell.textContent?.trim() || '')
-                    .replace(/\{\{.*?\}\}/g, '···')
-                    .slice(0, 7) || '···',
-                isTh: cell.tagName.toLowerCase() === 'th' || isHeader
-              })
+              cell => {
+                return {
+                  colspan: parseInt(cell.getAttribute('colspan') || '1', 10),
+                  text:
+                    (cell.textContent?.trim() || '') || '···',
+                  isTh: cell.tagName.toLowerCase() === 'th' || isHeader
+                }
+              }
             )
             return { isHeader, isLoop, cells }
           })
@@ -2992,19 +3039,21 @@ window.onload = function () {
         // ignore
       }
     } else if (comp.trList && Array.isArray(comp.trList)) {
-      rowsData = comp.trList.slice(0, 4).map((tr: any) => ({
-        isHeader: !!tr.isHeader,
-        isLoop: !!tr.loopConfig?.isLoopRow,
-        cells: (tr.tdList || []).map((td: any) => ({
-          colspan: td.colspan || 1,
-          text:
-            (td.value || [])
-              .map((v: any) => v.value || (v.control ? '···' : ''))
-              .join('')
-              .slice(0, 7) || '···',
-          isTh: !!tr.isHeader
-        }))
-      }))
+      rowsData = comp.trList.slice(0, 4).map((tr: any) => {
+        return {
+          isHeader: !!tr.isHeader,
+          isLoop: !!tr.loopConfig?.isLoopRow,
+          cells: (tr.tdList || []).map((td: any) => ({
+            colspan: td.colspan || 1,
+            text:
+              (td.value || [])
+                .map((v: any) => v.value || (v.control ? '···' : ''))
+                .join('')
+                .slice(0, 7) || '···',
+            isTh: !!tr.isHeader
+          }))
+        }
+      })
     }
 
     if (rowsData.length) {
@@ -3141,7 +3190,9 @@ window.onload = function () {
 
     const tabScalar = document.getElementById('aside-tab-scalar')
     const tabTable = document.getElementById('aside-tab-table')
-    const searchInput = document.getElementById('aside-search-input') as HTMLInputElement | null
+    const searchInput = document.getElementById(
+      'aside-search-input'
+    ) as HTMLInputElement | null
     const searchClear = document.getElementById('aside-search-clear')
 
     if (tabScalar && tabTable) {
@@ -3191,23 +3242,39 @@ window.onload = function () {
   // -------------------------------------------------------------
   const isTableField = (field: any): boolean => {
     const fType = (field.fieldType || field.type || 'text').toLowerCase()
-    if (fType === 'table' || fType === 'business_table' || field.trList || field.htmlTemplate) {
+    if (
+      fType === 'table' ||
+      fType === 'business_table' ||
+      field.trList ||
+      field.htmlTemplate
+    ) {
       return true
     }
     if (fType === 'array') {
-      const children: any[] = field.children || field.fieldList || field.fields || []
+      const children: any[] =
+        field.children || field.fieldList || field.fields || []
       const hasTablePattern = !!field.tablePattern
       const isMultiColTable =
         children.length > 1 &&
         children.some((c: any) => {
           const ct = (c.fieldType || c.type || 'text').toLowerCase()
-          return ct === 'array' || ct === 'image' || ct === 'number' || ct === 'date'
+          return (
+            ct === 'array' || ct === 'image' || ct === 'number' || ct === 'date'
+          )
         })
       const hasDistinctKeys =
         children.length > 1 &&
-        new Set(children.map((c: any) => (c.fieldKey || c.conceptId || '').split('.').pop())).size > 1
+        new Set(
+          children.map((c: any) =>
+            (c.fieldKey || c.conceptId || '').split('.').pop()
+          )
+        ).size > 1
 
-      return hasTablePattern || isMultiColTable || (children.length > 1 && hasDistinctKeys)
+      return (
+        hasTablePattern ||
+        isMultiColTable ||
+        (children.length > 1 && hasDistinctKeys)
+      )
     }
     return false
   }
@@ -3217,7 +3284,9 @@ window.onload = function () {
     const name = (item.name || item.fieldName || '').toLowerCase()
     const key = (item.conceptId || item.fieldKey || '').toLowerCase()
     const desc = (item.description || '').toLowerCase()
-    return name.includes(keyword) || key.includes(keyword) || desc.includes(keyword)
+    return (
+      name.includes(keyword) || key.includes(keyword) || desc.includes(keyword)
+    )
   }
 
   const renderGroupContent = (container: HTMLElement, fields: any[]) => {
@@ -3235,7 +3304,8 @@ window.onload = function () {
       if (isTableField(field)) {
         tableFields.push(field)
       } else if (fType === 'object') {
-        const objChildren = field.children || field.fieldList || field.fields || []
+        const objChildren =
+          field.children || field.fieldList || field.fields || []
         objChildren.forEach((child: any) => scalarFields.push(child))
       } else {
         scalarFields.push(field)
@@ -3244,7 +3314,9 @@ window.onload = function () {
 
     if (currentAsideTab === 'scalar') {
       // 普通控件 Tab
-      const filtered = scalarFields.filter(f => matchesSearch(f, asideSearchKeyword))
+      const filtered = scalarFields.filter(f =>
+        matchesSearch(f, asideSearchKeyword)
+      )
       if (!filtered.length) {
         container.innerHTML =
           '<div class="aside-component-empty">无匹配的普通控件</div>'
@@ -3258,7 +3330,9 @@ window.onload = function () {
       container.appendChild(grid)
     } else {
       // 表格控件 Tab (一行两个展示)
-      const filtered = tableFields.filter(t => matchesSearch(t, asideSearchKeyword))
+      const filtered = tableFields.filter(t =>
+        matchesSearch(t, asideSearchKeyword)
+      )
       if (!filtered.length) {
         container.innerHTML =
           '<div class="aside-component-empty">无匹配的表格控件</div>'
@@ -3277,28 +3351,32 @@ window.onload = function () {
   // 31.5 全量更新占位符/控件面板与徽章计数
   // -------------------------------------------------------------
   function updateComponents(components: any) {
-    currentComponentsData = components || []
+    let rawGroups: any[] = []
+    if (!Array.isArray(components) && typeof components === 'object' && components !== null) {
+      rawGroups = [components]
+    } else if (Array.isArray(components)) {
+      rawGroups = components
+    }
+
+    if (rawGroups.length > 0) {
+      sanitizeGroupDictionary(rawGroups)
+    }
+
+    currentComponentsData = rawGroups
     bindAsideToolbarEvents()
 
     if (!asideContainer) return
-    if (!components) {
+    if (!rawGroups.length) {
       asideContainer.innerHTML =
         '<div class="aside-component-empty">暂无可用控件</div>'
+      const badgeScalar = document.getElementById('aside-badge-scalar')
+      const badgeTable = document.getElementById('aside-badge-table')
+      if (badgeScalar) badgeScalar.innerText = '0'
+      if (badgeTable) badgeTable.innerText = '0'
       return
     }
 
-    let groups: any[] = []
-    if (!Array.isArray(components) && typeof components === 'object') {
-      groups = [components]
-    } else if (Array.isArray(components)) {
-      groups = components
-    }
-
-    if (!groups.length) {
-      asideContainer.innerHTML =
-        '<div class="aside-component-empty">暂无可用控件</div>'
-      return
-    }
+    const groups = rawGroups
 
     // 统计各 Tab 数量
     let totalScalars = 0
@@ -3383,165 +3461,6 @@ window.onload = function () {
     }
   }
 
-  // -------------------------------------------------------------
-  // 31.5 默认组件字典预设 (作为没有后端/缓存时的 Mock 数据源)
-  // -------------------------------------------------------------
-  const DEFAULT_COMPONENT_DATA = [
-    {
-      groupName: '就诊与诊断基础信息',
-      systemName: 'HIS电子病历系统',
-      description: '患者基本登记信息、门诊知情条款与临床诊断列表',
-      children: [
-        { conceptId: 'patient.name', name: '患者姓名', type: 'text', description: '就诊患者真实姓名' },
-        { conceptId: 'patient.age', name: '患者年龄', type: 'text', description: '就诊时实际年龄' },
-        { conceptId: 'patient.dept', name: '就诊科室', type: 'text', description: '接诊科室名称' },
-        {
-          conceptId: 'patient.gender',
-          name: '患者性别 (List.Radio)',
-          type: 'list',
-          listType: 'radio',
-          layout: 'horizontal',
-          description: '单选选项组，宿主下发选项数组并驱动互斥勾选'
-        },
-        {
-          conceptId: 'diagnose.diagnosis_items',
-          name: '临床诊断列表 (List.Text)',
-          type: 'list',
-          listType: 'text',
-          layout: 'vertical',
-          description: '多行分段列表，宿主下发 [{label, code}] 自动格式化多行'
-        },
-        {
-          conceptId: 'surgery.consent_clauses',
-          name: '知情同意条款 (List.Checkbox)',
-          type: 'list',
-          listType: 'checkbox',
-          layout: 'vertical',
-          description: '多段复选框列表，宿主下发条款选项并驱动多项勾选'
-        },
-        {
-          conceptId: 'exam.report_images',
-          name: '检查影像多图 (List.Image)',
-          type: 'list',
-          listType: 'image',
-          layout: 'grid',
-          gridCols: 3,
-          description: '影像报告多图集合，自适应网格排列渲染'
-        }
-      ]
-    },
-    {
-      groupName: '医疗质控评分考核表',
-      systemName: 'EMR质控系统',
-      description: '医疗质量考核打分：含固定表头、明细动态循环行及表尾合并合计行',
-      children: [
-        {
-          conceptId: 'score_sheet',
-          name: '评分汇总表 (含表尾合并合计行)',
-          type: 'table',
-          pagingRepeat: false,
-          description: '前置表头 + 动态明细循环 + 表尾合并合计行 (colspan=2)',
-          htmlTemplate: `<table border="1">
-  <!-- 1. 表头行 -->
-  <tr>
-    <th>序号</th>
-    <th>评审项目</th>
-    <th>满分分值</th>
-    <th>实际得分</th>
-  </tr>
-
-  <!-- 2. 动态明细循环行 (loop 声明循环源) -->
-  <tr loop="item in score_sheet.items">
-    <td>{{ item.index }}</td>
-    <td>{{ item.item_name }}</td>
-    <td>{{ item.max_score }}</td>
-    <td>{{ item.actual_score }}</td>
-  </tr>
-
-  <!-- 3. 表尾固定合计行 (colspan=2 合并 + 汇总字段) -->
-  <tr>
-    <td colspan="2" align="center"><b>合 计</b></td>
-    <td>{{ score_sheet.total_max }}</td>
-    <td>{{ score_sheet.total_actual }}</td>
-  </tr>
-</table>`
-        }
-      ]
-    },
-    {
-      groupName: 'LIS常规检验明细表',
-      systemName: 'LIS检验系统',
-      description: '检验科血液生化结果明细，支持根据首列相邻相同数据自动纵向合并(Rowspan)',
-      children: [
-        {
-          conceptId: 'lis.adjacent_merge_table',
-          name: 'LIS常规检验明细表 (合并同类项 merge-same)',
-          type: 'table',
-          pagingRepeat: false,
-          description: '首列使用 merge-same 指令声明相同检验大类自动纵向合并，其余列正常循环',
-          htmlTemplate: `<table border="1">
-  <tr>
-    <th>检验大类</th>
-    <th>检测项目</th>
-    <th>结果数值</th>
-    <th>单位</th>
-    <th>参考范围</th>
-  </tr>
-  <tr loop="item in lis.records">
-    <!-- merge-same 声明此列遇到连续相同内容时自动纵向合并单元格 -->
-    <td merge-same>{{ item.category_name }}</td>
-    <td>{{ item.lab_item_name }}</td>
-    <td>{{ item.lab_item_value }}</td>
-    <td>{{ item.lab_item_unit }}</td>
-    <td>{{ item.lab_item_ref }}</td>
-  </tr>
-</table>`
-        }
-      ]
-    },
-    {
-      groupName: '大标题复合检验影像报告',
-      systemName: 'LIS复合检验系统',
-      description: '多级复合结构：外层循环大标题通栏合并(Colspan=4)，内层循环表格明细，单元格内嵌套多图',
-      children: [
-        {
-          conceptId: 'composite.grouped_report',
-          name: '大标题复合检验报告集 (通栏合并+多图)',
-          type: 'table',
-          pagingRepeat: false,
-          description: '大标题通栏合并(Colspan=4)，内层指标明细，单元格嵌套多图',
-          htmlTemplate: `<table border="1">
-  <!-- 1. 固定表头行 -->
-  <thead>
-    <tr>
-      <th>检测项目</th>
-      <th>结果数值</th>
-      <th>参考范围</th>
-      <th>化验报告影像 (多图)</th>
-    </tr>
-  </thead>
-
-  <!-- 2. 外层循环大标题分组 (tbody 循环外层数组) -->
-  <tbody loop="group in composite.grouped_report">
-    <!-- 组内大标题通栏行 -->
-    <tr>
-      <td colspan="4" align="left" style="background:#F2F4F8;"><b>■ {{ group.title }}</b></td>
-    </tr>
-
-    <!-- 组内具体的明细循环行 (循环 group.children 数组) -->
-    <tr loop="item in group.children">
-      <td>{{ item.itemName }}</td>
-      <td>{{ item.result }}</td>
-      <td>{{ item.reference }}</td>
-      <td>{{ item.imgList }}</td>
-    </tr>
-  </tbody>
-</table>`
-        }
-      ]
-    }
-  ]
-
   const sanitizeGroupDictionary = (list: any[]) => {
     if (!Array.isArray(list)) return
     list.forEach((g: any) => {
@@ -3570,67 +3489,9 @@ window.onload = function () {
   }
 
   // -------------------------------------------------------------
-  // 31.6 组件字典加载体系 (优先级: main.ts接口 > iframe-design宿主 > 本地缓存/DEFAULT_DATA)
+  // 31.5 组件字典加载体系 (数据驱动：完全由宿主 SDK getComponents 下发)
   // -------------------------------------------------------------
-  async function loadComponentDictionary() {
-    // 优先级 1: 优先直接请求后端接口
-    try {
-      console.log('[loadComponentDictionary] 正在尝试请求后端组件字典接口...')
-      const res: any = await http.get('/system/component-dictionary/group/list')
-      const groups =
-        res?.data?.rows ||
-        res?.data ||
-        res?.rows ||
-        (Array.isArray(res) ? res : null)
-      if (Array.isArray(groups) && groups.length > 0) {
-        // 并发拉取各个分组下的 field-tree
-        const fullGroups = await Promise.all(
-          groups.map(async (g: any) => {
-            const groupId = g.id || g.groupId
-            let children: any[] = g.children || g.fieldList || []
-            if (groupId && (!children || children.length === 0)) {
-              try {
-                const treeRes: any = await http.get(
-                  `/system/component-dictionary/group/${groupId}/field-tree`
-                )
-                const treeData =
-                  treeRes?.data ||
-                  treeRes?.rows ||
-                  (Array.isArray(treeRes) ? treeRes : [])
-                if (Array.isArray(treeData) && treeData.length > 0) {
-                  children = treeData
-                }
-              } catch {
-                // ignore single group tree error
-              }
-            }
-            return {
-              ...g,
-              groupName: g.groupName || g.name,
-              systemName: g.systemName,
-              description: g.description,
-              children
-            }
-          })
-        )
-
-        sanitizeGroupDictionary(fullGroups)
-        updateComponents(fullGroups)
-        localStorage.setItem(
-          'CE_COMPONENT_DICTIONARY',
-          JSON.stringify(fullGroups)
-        )
-        console.log('[loadComponentDictionary] 成功从后端接口加载组件字典！')
-        return
-      }
-    } catch (err) {
-      console.warn(
-        '[loadComponentDictionary] 接口请求未通，转入宿主下发与本地降级流程:',
-        err
-      )
-    }
-
-    // 优先级 2: 宿主 iframe-design.html 下发数据
+  function loadComponentDictionary() {
     if (
       currentComponentsData &&
       Array.isArray(currentComponentsData) &&
@@ -3638,62 +3499,30 @@ window.onload = function () {
     ) {
       sanitizeGroupDictionary(currentComponentsData)
       updateComponents(currentComponentsData)
-      return
-    }
-
-    // 优先级 3: 本地 localStorage 缓存或默认 DEFAULT_COMPONENT_DATA
-    try {
-      const cached = localStorage.getItem('CE_COMPONENT_DICTIONARY')
-      let list: any[] = []
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached)
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            list = parsed
-          }
-        } catch (e) {
-          console.warn('[loadComponentDictionary] 解析 localStorage 缓存失败', e)
-        }
-      }
-
-      if (!list || list.length === 0) {
-        list = JSON.parse(JSON.stringify(DEFAULT_COMPONENT_DATA))
-      }
-
-      sanitizeGroupDictionary(list)
-      updateComponents(list)
-    } catch (err: any) {
-      console.error('[获取组件字典] 本地兜底加载异常:', err)
+    } else {
       updateComponents([])
     }
   }
 
-  // 监听跨页面 / component-management.html 的数据保存事件，实现实时热同步
-  window.addEventListener('storage', e => {
-    if (e.key === 'CE_COMPONENT_DICTIONARY') {
-      console.log('[StorageEvent] 检测到占位符字典发生变更，自动重新加载面板')
-      loadComponentDictionary()
-    }
-  })
-
-  // 初始默认展开右侧占位符面板 (无痕编辑模式下彻底隐藏面板及图标入口)
+  // 初始依据当前模式判定右侧占位符面板显隐状态：
+  // 仅在 EDIT / DESIGN 模式且 features.asidePanel 开启时展开；只读模式 (READONLY) 等其他模式下默认隐藏
   const initialMode = instance.command.getOptions().mode
-  if (initialMode === EditorMode.PREVIEW_EDIT) {
-    if (asidePanelDom) {
-      asidePanelDom.classList.add('hidden')
-      asidePanelDom.classList.remove('open')
-    }
-    if (asideToggleDom) {
-      asideToggleDom.style.display = 'none'
-      asideToggleDom.classList.remove('active')
-    }
-  } else if (asidePanelDom) {
-    asidePanelDom.classList.remove('hidden')
-    asidePanelDom.classList.add('open')
-    if (asideToggleDom) {
-      asideToggleDom.classList.add('active')
-      asideToggleDom.style.display = 'flex'
-    }
+  const isInitialPanelOpen =
+    (initialMode === EditorMode.EDIT || initialMode === EditorMode.DESIGN) &&
+    activeFeatureConfig.asidePanel
+
+  if (asidePanelDom) {
+    asidePanelDom.classList.toggle('hidden', !isInitialPanelOpen)
+    asidePanelDom.classList.toggle('open', isInitialPanelOpen)
+  }
+  if (asideToggleDom) {
+    asideToggleDom.style.display =
+      initialMode === EditorMode.PREVIEW_EDIT
+        ? 'none'
+        : activeFeatureConfig.asidePanel
+          ? 'flex'
+          : 'none'
+    asideToggleDom.classList.toggle('active', isInitialPanelOpen)
   }
 
   // 底部 Toolbox 占位符图标点击展开/收起面板
@@ -3723,8 +3552,6 @@ window.onload = function () {
       if (asideToggleDom) asideToggleDom.classList.remove('active')
     }
   }
-
-
 
   // 查看数据结构按钮点击事件 (弹窗展示 JSON)
   if (asideViewDataBtnDom) {
@@ -3857,7 +3684,6 @@ window.onload = function () {
           }
         }
 
-
         if (comp.type === 'table') {
           const tableElement = buildTableElement(comp)
           if (tableElement) {
@@ -3907,8 +3733,13 @@ window.onload = function () {
     })
   }
 
-  // 动态导出文件名配置（支持字符串或闭包函数）
+  // 动态导出文件名与模板名称配置（支持字符串或闭包函数）
   let customExportFileName: string | (() => string) | undefined
+  let customTemplateName: string | undefined =
+    urlParams.get('templateName') ||
+    urlParams.get('name') ||
+    urlParams.get('title') ||
+    undefined
 
   function getExportFileName(defaultPrefix = '报告'): string {
     let name: any = customExportFileName
@@ -3922,13 +3753,25 @@ window.onload = function () {
     if (typeof name === 'string' && name.trim()) {
       return name.trim()
     }
+    if (typeof customTemplateName === 'string' && customTemplateName.trim()) {
+      return customTemplateName.trim()
+    }
     return `${defaultPrefix}_${new Date().getTime()}`
   }
 
   // 应用宿主侧动态配置（来自 setConfig 调用）
   function setCustomConfig(config: any) {
     if (!config || typeof config !== 'object') return
-    const { mode, asidePanel, toolbar, features, exportFileName, appId } = config
+    const {
+      mode,
+      asidePanel,
+      toolbar,
+      features,
+      exportFileName,
+      templateName,
+      name,
+      appId
+    } = config
 
     if (appId && typeof appId === 'string') {
       const isChanged = currentAppId !== appId
@@ -3940,6 +3783,10 @@ window.onload = function () {
 
     if (exportFileName !== undefined) {
       customExportFileName = exportFileName
+    }
+
+    if (templateName !== undefined || name !== undefined) {
+      customTemplateName = templateName || name
     }
 
     // A. 细粒度 Feature 开关控制 (使用顶层安全的 resolveFeatureConfig 解析)
@@ -3976,7 +3823,8 @@ window.onload = function () {
       const currentEditorMode = instance.command.getOptions().mode
       const isPreviewEdit =
         mode === EditorMode.PREVIEW_EDIT ||
-        (typeof mode === 'object' && mode?.current === EditorMode.PREVIEW_EDIT) ||
+        (typeof mode === 'object' &&
+          mode?.current === EditorMode.PREVIEW_EDIT) ||
         currentEditorMode === EditorMode.PREVIEW_EDIT
       const isAsideVisible = activeFeatureConfig.asidePanel && !isPreviewEdit
       if (asidePanelDom) {
@@ -4019,7 +3867,8 @@ window.onload = function () {
       const currentEditorMode = instance.command.getOptions().mode
       const isPreviewEdit =
         mode === EditorMode.PREVIEW_EDIT ||
-        (typeof mode === 'object' && mode?.current === EditorMode.PREVIEW_EDIT) ||
+        (typeof mode === 'object' &&
+          mode?.current === EditorMode.PREVIEW_EDIT) ||
         currentEditorMode === EditorMode.PREVIEW_EDIT
       if (asidePanel.visible === false || isPreviewEdit) {
         asidePanelDom?.classList.add('hidden')
@@ -4081,9 +3930,19 @@ window.onload = function () {
 
   // 统一绑定模板文件导入点击行为与解析逻辑 (.docx / .json)
   const importDom = document.querySelector<HTMLDivElement>('.menu-item__import')
-  const importInput =
-    document.querySelector<HTMLInputElement>('#import-file-input')
-  if (importDom && importInput) {
+  if (importDom) {
+    let importInput = document.querySelector<HTMLInputElement>('#import-file-input')
+    if (!importInput) {
+      importInput = document.createElement('input')
+      importInput.type = 'file'
+      importInput.id = 'import-file-input'
+      importInput.accept = '.docx,.json'
+      importInput.style.display = 'none'
+      document.body.appendChild(importInput)
+    } else {
+      importInput.accept = '.docx,.json'
+    }
+
     // 居中 loading 遮罩(解析大文档时反馈)
     const showImportLoading = (text: string) => {
       let overlay = document.getElementById('file-import-loading')
@@ -4127,8 +3986,12 @@ window.onload = function () {
       })
     }
 
-    importDom.onclick = () => {
-      importInput.click()
+    importDom.onclick = (e: MouseEvent) => {
+      e.stopPropagation()
+      if (importInput) {
+        importInput.value = ''
+        importInput.click()
+      }
     }
     importInput.onchange = async (e: any) => {
       const file: File = e.target.files?.[0]
@@ -4211,5 +4074,3 @@ window.onload = function () {
     }
   }
 }
-
-

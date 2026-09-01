@@ -202,7 +202,7 @@ export function mergeOption(
   }
 
   return {
-    mode: EditorMode.EDIT,
+    mode: EditorMode.READONLY,
     locale: 'zhCN',
     defaultType: 'TEXT',
     defaultColor: '#000000',

@@ -70,7 +70,10 @@ export function bindDragData(
  */
 export function sanitizePlaceholderText(text: any): string {
   if (typeof text !== 'string') return text || ''
-  return text.replace(/^\{\{\s*/, '').replace(/\s*\}\}$/, '').trim()
+  return text
+    .replace(/^\{\{\s*/, '')
+    .replace(/\s*\}\}$/, '')
+    .trim()
 }
 
 /**
@@ -157,7 +160,12 @@ function parseCellChildNodesToValueList(
   const result: any[] = []
 
   if (node.nodeType === Node.TEXT_NODE) {
-    const rawText = node.textContent || ''
+    let rawText = node.textContent || ''
+    if (!rawText) return result
+
+    // 清理 HTML 模板源码换行格式化产生的首尾多余换行与多余缩进空格
+    rawText = rawText.replace(/^\s*\n\s*/, '').replace(/\n\s*$/, '')
+    rawText = rawText.replace(/[ \t]+/g, ' ')
     if (!rawText) return result
 
     const placeholderRegex = /\{\{\s*([\w\.\-]+)\s*\}\}/g
@@ -194,9 +202,6 @@ function parseCellChildNodesToValueList(
       ) {
         cleanKey = cleanKey.slice(options.parentAlias.length + 1)
       }
-      const fieldName = cleanKey.includes('.')
-        ? cleanKey.split('.').pop()!
-        : cleanKey
 
       result.push({
         type: 'control',
@@ -207,7 +212,7 @@ function parseCellChildNodesToValueList(
         control: {
           type: 'text',
           conceptId: cleanKey,
-          placeholder: sanitizePlaceholderText(fieldName),
+          placeholder: fullKey,
           when: inheritedStyle.when
         }
       })
@@ -272,21 +277,140 @@ function parseCellChildNodesToValueList(
       when: nodeWhen
     }
 
+    if (tagName === 'input') {
+      const inputType = (el.getAttribute('type') || 'text').toLowerCase()
+      if (inputType === 'checkbox') {
+        const isChecked =
+          el.hasAttribute('checked') || (el as HTMLInputElement).checked
+        result.push({
+          type: 'checkbox',
+          value: '',
+          checkbox: {
+            value: isChecked
+          }
+        })
+        return result
+      } else if (inputType === 'radio') {
+        const isChecked =
+          el.hasAttribute('checked') || (el as HTMLInputElement).checked
+        result.push({
+          type: 'radio',
+          value: '',
+          radio: {
+            value: isChecked
+          }
+        })
+        return result
+      }
+    } else if (tagName === 'img') {
+      const srcAttr = (el.getAttribute('src') || '').trim()
+      const widthAttr = el.getAttribute('width') || nodeCss['width'] || ''
+      const heightAttr = el.getAttribute('height') || nodeCss['height'] || ''
+      const imgWidth = widthAttr ? parseInt(widthAttr, 10) : 120
+      const imgHeight = heightAttr ? parseInt(heightAttr, 10) : 80
+
+      // 判断 src 是否是动态占位符，如 {{ rule }} 或 {{ item.picUrl }}
+      const placeholderMatch = srcAttr.match(/^\{\{\s*([\w\.\-]+)\s*\}\}$/)
+      if (placeholderMatch) {
+        const fullKey = placeholderMatch[1]
+        let cleanKey = fullKey
+        if (
+          options.loopItemAlias &&
+          cleanKey.startsWith(options.loopItemAlias + '.')
+        ) {
+          cleanKey = cleanKey.slice(options.loopItemAlias.length + 1)
+        } else if (
+          options.parentAlias &&
+          cleanKey.startsWith(options.parentAlias + '.')
+        ) {
+          cleanKey = cleanKey.slice(options.parentAlias.length + 1)
+        }
+        result.push({
+          type: 'control',
+          value: '',
+          controlId: getUUID(),
+          rowFlex: inheritedStyle.rowFlex as any,
+          when: inheritedStyle.when,
+          control: {
+            type: 'image',
+            conceptId: cleanKey,
+            placeholder: fullKey,
+            width: imgWidth,
+            height: imgHeight,
+            when: inheritedStyle.when
+          }
+        })
+      } else if (srcAttr) {
+        // 静态图片
+        result.push({
+          type: 'image',
+          value: srcAttr,
+          width: imgWidth,
+          height: imgHeight,
+          rowFlex: inheritedStyle.rowFlex as any,
+          when: inheritedStyle.when
+        })
+      }
+      return result
+    }
+
+    const elLoop = el.getAttribute('loop')
+    let innerLoopConfig: any = undefined
+    let childOptions = options
+
+    if (elLoop) {
+      let loopItemAlias = 'item'
+      let loopDataKey = ''
+      const match = elLoop.match(/(?:let|var|const)?\s*(\w+)\s+in\s+([\w\.]+)/)
+      if (match) {
+        loopItemAlias = match[1]
+        loopDataKey = match[2]
+      } else {
+        loopDataKey = elLoop.trim()
+      }
+      innerLoopConfig = {
+        isLoop: true,
+        datasetId: loopDataKey,
+        itemAlias: loopItemAlias,
+        isBlock: tagName === 'div' || tagName === 'p' || tagName === 'li' || tagName === 'tr'
+      }
+      childOptions = {
+        ...options,
+        loopItemAlias: loopItemAlias
+      }
+    }
+
     const children = Array.from(el.childNodes)
+    const childNodesResult: any[] = []
+
     if (children.length === 0 && el.textContent) {
       // 兼容一些自闭合或无 childNodes 元素
-      result.push(
+      childNodesResult.push(
         ...parseCellChildNodesToValueList(
           document.createTextNode(el.textContent),
           childStyle,
-          options
+          childOptions
         )
       )
     } else {
       children.forEach(child => {
-        result.push(...parseCellChildNodesToValueList(child, childStyle, options))
+        childNodesResult.push(
+          ...parseCellChildNodesToValueList(child, childStyle, childOptions)
+        )
       })
     }
+
+    if (innerLoopConfig && childNodesResult.length > 0) {
+      const loopBlockId = getUUID()
+      childNodesResult.forEach(nodeItem => {
+        nodeItem.innerLoop = {
+          ...innerLoopConfig,
+          loopBlockId
+        }
+      })
+    }
+
+    result.push(...childNodesResult)
   }
 
   return result
@@ -329,7 +453,7 @@ export function parseTableHtml(
       const trLoop = tr.getAttribute('loop')
 
       let loopConfig: any = undefined
-      let loopItemAlias = 'item'
+      let loopItemAlias = ''
       let loopDataKey = ''
       let parentAlias = ''
       let parentDataKey = ''
@@ -361,25 +485,41 @@ export function parseTableHtml(
         if (parentAlias && effectiveDatasetId.startsWith(parentAlias + '.')) {
           effectiveDatasetId = effectiveDatasetId.slice(parentAlias.length + 1)
         }
-        loopConfig = { isLoopRow: true, datasetId: effectiveDatasetId }
-        if (!conceptId) conceptId = loopDataKey
-      } else if (tbodyLoop && !trLoop) {
         loopConfig = {
           isLoopRow: true,
-          datasetId: parentDataKey,
-          isGroupHeader: true
+          datasetId: effectiveDatasetId,
+          isDetailRow: Boolean(tbodyLoop),
+          itemAlias: loopItemAlias,
+          sourcePath: loopDataKey
+        }
+        if (!conceptId) conceptId = loopDataKey
+      }
+
+      if (tbodyLoop) {
+        const tbodyTrs = Array.from(parentTbody!.querySelectorAll('tr'))
+        const isFirstTrInTbody = tbodyTrs[0] === tr
+        if (isFirstTrInTbody) {
+          const lastTrInTbody = tbodyTrs[tbodyTrs.length - 1]
+          const lastTrIndexInTable = trEls.indexOf(lastTrInTbody)
+          loopConfig = {
+            ...(loopConfig || {}),
+            isLoopRow: true,
+            datasetId: parentDataKey,
+            endTrIndex: lastTrIndexInTable,
+            isTbodyGroup: true
+          }
         }
       }
 
       const isHeader =
-        rIdx === 0 ||
-        parentThead !== null ||
-        tr.querySelector('th') !== null
+        rIdx === 0 || parentThead !== null || tr.querySelector('th') !== null
 
       const cellEls = Array.from(tr.querySelectorAll('th, td'))
       let rowCols = 0
       let maxCellHeight = 0
       const trCss = parseCssStyle(tr.getAttribute('style') || '')
+
+      const effectiveAlias = loopItemAlias || parentAlias
 
       const tdList = cellEls.map(cell => {
         const colspan = parseCellSpan(cell, 'colspan')
@@ -430,11 +570,11 @@ export function parseTableHtml(
         }
 
         const isBold =
-          isHeader ||
           isCellHeader ||
-          cell.querySelector('b, strong') !== null ||
           cellCss['font-weight'] === 'bold' ||
-          parseInt(cellCss['font-weight'] || '400', 10) >= 700
+          cell.querySelector('b, strong') !== null ||
+          trCss['font-weight'] === 'bold' ||
+          tr.querySelector('b, strong') !== null
 
         const valueList: any[] = parseCellChildNodesToValueList(
           cell,
@@ -448,7 +588,7 @@ export function parseTableHtml(
             when: whenAttr
           },
           {
-            loopItemAlias,
+            loopItemAlias: effectiveAlias,
             parentAlias
           }
         )
@@ -474,14 +614,23 @@ export function parseTableHtml(
 
       const isHeaderRow = isHeader && !loopConfig
       const hasColspan = tdList.some(td => (td.colspan || 1) > 1)
-      const trAttrHeight = tr.getAttribute('height') || (tr.getAttribute('style') || '').match(/(?:^|;)\s*height\s*:\s*(\d+)px/i)?.[1]
-      const customTrHeight = trAttrHeight ? parseInt(trAttrHeight, 10) : maxCellHeight || undefined
+      const trAttrHeight =
+        tr.getAttribute('height') ||
+        (tr.getAttribute('style') || '').match(
+          /(?:^|;)\s*height\s*:\s*(\d+)px/i
+        )?.[1]
+      const customTrHeight = trAttrHeight
+        ? parseInt(trAttrHeight, 10)
+        : maxCellHeight || undefined
+
+      const trWhen = tr.getAttribute('when') || undefined
 
       return {
         id: getUUID(),
         height: customTrHeight || (isHeaderRow ? 35 : hasColspan ? 32 : 36),
         isHeader: isHeaderRow,
         pagingRepeat: isHeaderRow ? options?.pagingRepeat !== false : undefined,
+        when: trWhen,
         loopConfig,
         tdList
       }
@@ -526,5 +675,3 @@ export function parseTableHtml(
 
 export * from './request'
 export * from '../components/toast'
-
-

@@ -1,13 +1,14 @@
 /**
  * 共享 Mock 数据源与 Provider 逻辑
+ * 涵盖：全控件形态、声明式合并与汇总、任意层级树形循环、动态条件过滤、以及模板数据可视化诊断工具
  */
 ;(function (global) {
-  // 默认组件字典预设 (作为没有后端/缓存时的 Mock 数据源)
+  // 默认组件字典预设 (按功能特性系统化组织)
   const DEFAULT_COMPONENT_DATA = [
     {
-      groupName: '就诊与诊断基础信息',
-      systemName: 'HIS电子病历系统',
-      description: '患者基本登记信息、门诊知情条款与临床诊断列表',
+      groupName: '1. 基础字段与独立控件',
+      systemName: 'HIS/EMR基础数据系统',
+      description: '单字段占位符、多段列表、选项组及多图集合',
       children: [
         {
           conceptId: 'patient.name',
@@ -22,14 +23,8 @@
           description: '就诊时实际年龄'
         },
         {
-          conceptId: 'patient.dept',
-          name: '就诊科室',
-          type: 'text',
-          description: '接诊科室名称'
-        },
-        {
           conceptId: 'patient.gender',
-          name: '患者性别 (List.Radio)',
+          name: '患者性别 (Radio单选)',
           type: 'list',
           listType: 'radio',
           layout: 'horizontal',
@@ -63,92 +58,261 @@
       ]
     },
     {
-      groupName: '医疗质控评分考核表',
-      systemName: 'EMR质控系统',
-      description:
-        '医疗质量考核打分：含固定表头、明细动态循环行及表尾合并合计行',
+      groupName: '2. 核心功能型表格模板库 (Feature-Driven)',
+      systemName: '通用数据表格系统',
+      description: '按纯功能特性抽象的标准基准表格，涵盖所有表格渲染形态',
       children: [
         {
-          conceptId: 'score_sheet',
-          name: '评分汇总表 (含表尾合并合计行)',
+          conceptId: 'feature_all_controls_table',
+          name: '功能模板 1：全控件全能渲染表 (All-in-One)',
           type: 'table',
           pagingRepeat: false,
-          description: '前置表头 + 动态明细循环 + 表尾合并合计行 (colspan=2)',
-          htmlTemplate: `<table border="1">
-  <!-- 1. 表头行 -->
-  <tr>
-    <th>序号</th>
-    <th>评审项目</th>
-    <th>满分分值</th>
-    <th>实际得分</th>
-  </tr>
-
-  <!-- 2. 动态明细循环行 (loop 声明循环源) -->
-  <tr loop="item in score_sheet.items">
-    <td>{{ item.index }}</td>
-    <td>{{ item.item_name }}</td>
-    <td>{{ item.max_score }}</td>
-    <td>{{ item.actual_score }}</td>
-  </tr>
-
-  <!-- 3. 表尾固定合计行 (colspan=2 合并 + 汇总字段) -->
-  <tr>
-    <td colspan="2" align="center"><b>合 计</b></td>
-    <td>{{ score_sheet.total_max }}</td>
-    <td>{{ score_sheet.total_actual }}</td>
-  </tr>
+          description: '涵盖纯文本、数值、复选框、单选状态、单元格多图及表尾合并合计行',
+          htmlTemplate: `<table width="100%" cellpadding="5" cellspacing="0" border="1">
+  <thead>
+    <tr>
+      <th width="8%" align="center">序号</th>
+      <th width="24%" align="center">考核项目与要求</th>
+      <th width="14%" align="center">勾选状态</th>
+      <th width="26%" align="center">现场照片 (多图)</th>
+      <th width="14%" align="center">整改建议</th>
+      <th width="14%" align="center">得分</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr loop="item in allControlsData.items">
+      <td align="center">{{ item.index }}</td>
+      <td>
+        <span when="item.isKey"><b>[关键项] </b></span>
+        {{ item.itemName }}
+      </td>
+      <td align="center">
+        <input type="checkbox" checked="{{ item.checked }}" /> {{ item.statusText }}
+      </td>
+      <td align="center">{{ item.images }}</td>
+      <td>{{ item.suggest }}</td>
+      <td align="center">{{ item.score }}</td>
+    </tr>
+    <tr>
+      <td colspan="5" align="center"><b>合 计</b></td>
+      <td align="center"><b>{{ allControlsData.totalScore }}</b></td>
+    </tr>
+  </tbody>
+</table>`
+        },
+        {
+          conceptId: 'feature_merge_summary_table',
+          name: '功能模板 2：声明式动态合并与汇总表 (Merge & Summary)',
+          type: 'table',
+          pagingRepeat: false,
+          description: '首列声明 merge-same 纵向相邻相同数据自动合并，表尾跨列合并合计',
+          htmlTemplate: `<table width="100%" cellpadding="5" cellspacing="0" border="1">
+  <thead>
+    <tr>
+      <th width="20%" align="center">检验大类 (自动合并)</th>
+      <th width="25%" align="center">检测项目</th>
+      <th width="18%" align="center">结果数值</th>
+      <th width="15%" align="center">单位</th>
+      <th width="22%" align="center">参考范围</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr loop="item in mergeSummaryData.records">
+      <td merge-same align="center">{{ item.category }}</td>
+      <td>{{ item.itemName }}</td>
+      <td align="center">{{ item.value }}</td>
+      <td align="center">{{ item.unit }}</td>
+      <td align="center">{{ item.reference }}</td>
+    </tr>
+    <tr>
+      <td colspan="2" align="center"><b>样本检测合格率统计</b></td>
+      <td colspan="3" align="center"><b>{{ mergeSummaryData.summaryRate }}</b></td>
+    </tr>
+  </tbody>
+</table>`
+        },
+        {
+          conceptId: 'feature_hierarchical_loops_table',
+          name: '功能模板 3：多层级树形与单元格内循环表 (Hierarchical Loops)',
+          type: 'table',
+          pagingRepeat: false,
+          description: '遵循“谁写了 loop 就循环谁”第一性原理：tbody loop + tr loop + td 内 span 循环',
+          htmlTemplate: `<table width="100%" cellpadding="5" cellspacing="0" border="1">
+  <thead>
+    <tr>
+      <th width="10%" align="center">序号</th>
+      <th width="28%" align="center">评估项目与标签</th>
+      <th width="22%" align="center">发现问题</th>
+      <th width="24%" align="center">现场照片</th>
+      <th width="16%" align="center">分值</th>
+    </tr>
+  </thead>
+  <tbody loop="project in hierarchicalData">
+    <!-- 一级大类表头 -->
+    <tr>
+      <td colspan="4" align="left" style="background:#e8f4ff;">
+        <b>■ {{ project.projectName }} (满分 {{ project.projectMax }} 分)</b>
+      </td>
+      <td align="center"><b>{{ project.projectActual }}</b></td>
+    </tr>
+    <!-- 二级子类表头 -->
+    <tr loop="content in project.children">
+      <td colspan="4" align="left" style="background:#f2f6fc;">
+        <b>● {{ content.contentName }} (满分 {{ content.contentMax }} 分)</b>
+      </td>
+      <td align="center"><b>{{ content.contentActual }}</b></td>
+    </tr>
+    <!-- 三级明细行 + 单元格内 span loop 多标签循环 -->
+    <tr loop="item in content.children">
+      <td align="center">{{ item.index }}</td>
+      <td>
+        {{ item.title }}<br/>
+        <!-- 单元格内 span 循环多标签 -->
+        <span loop="tag in item.tags" style="background:#f0f0f0; padding:2px 4px; margin-right:4px;">
+          🏷️ {{ tag.name }}
+        </span>
+      </td>
+      <td>{{ item.problem }}</td>
+      <td align="center">{{ item.photos }}</td>
+      <td align="center">{{ item.score }}</td>
+    </tr>
+  </tbody>
+</table>`
+        },
+        {
+          conceptId: 'feature_conditional_when_table',
+          name: '功能模板 4：动态条件与分支过滤表 (Conditional When)',
+          type: 'table',
+          pagingRepeat: false,
+          description: '根据数据字段通过 when 指令实现行级/单元格级/节点级动态分支显隐',
+          htmlTemplate: `<table width="100%" cellpadding="5" cellspacing="0" border="1">
+  <thead>
+    <tr>
+      <th width="12%" align="center">序号</th>
+      <th width="38%" align="center">考核内容与指标</th>
+      <th width="25%" align="center">状态与预警</th>
+      <th width="25%" align="center">得分</th>
+    </tr>
+  </thead>
+  <tbody loop="item in conditionalWhenData">
+    <!-- 一级汇总行 (仅 level === 1 时展示) -->
+    <tr when="item.level === 1">
+      <td colspan="3" align="left" style="background:#f2f4f8;">
+        <b>★ {{ item.title }}</b>
+      </td>
+      <td align="center"><b>{{ item.score }}</b></td>
+    </tr>
+    <!-- 明细行 (仅 level === 2 时展示) -->
+    <tr when="item.level === 2">
+      <td align="center">{{ item.index }}</td>
+      <td>{{ item.title }}</td>
+      <td>
+        <span when="item.isWarning" style="color:red; font-weight:bold;">⚠️ 超标预警: </span>
+        {{ item.statusText }}
+      </td>
+      <td align="center">{{ item.score }}</td>
+    </tr>
+  </tbody>
 </table>`
         }
       ]
     },
     {
-      groupName: 'LIS常规检验明细表',
-      systemName: 'LIS检验系统',
-      description:
-        '检验科血液生化结果明细，支持根据首列相邻相同数据自动纵向合并(Rowspan)',
+      groupName: '3. 经典业务复合表格范式',
+      systemName: '业务综合应用系统',
+      description: '全量保留前期所有经典案例，保证历史模板 100% 兼容',
       children: [
+        {
+          conceptId: 'scoreSheet',
+          name: '食安评分汇总表 (单行明细循环 + 表尾合计行)',
+          type: 'table',
+          pagingRepeat: false,
+          description: '标准单行循环，表尾合计行',
+          htmlTemplate: `<table width="100%" cellpadding="0" cellspacing="0" border="1">
+  <thead>
+    <tr>
+      <th width="16%" align="center">序号</th>
+      <th width="44%" align="center">评审项目</th>
+      <th width="20%" align="center">满分分值</th>
+      <th width="20%" align="center">实际得分</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr loop="item in scoreSheet.items">
+      <td align="center">{{ item.index }}</td>
+      <td>{{ item.itemName }}</td>
+      <td align="center">{{ item.maxScore }}</td>
+      <td align="center">{{ item.actualScore }}</td>
+    </tr>
+    <tr>
+      <td colspan="2" align="center"><b>合 计</b></td>
+      <td align="center">{{ scoreSheet.totalMax }}</td>
+      <td align="center">{{ scoreSheet.totalActual }}</td>
+    </tr>
+  </tbody>
+</table>`
+        },
+        {
+          conceptId: 'riskLevelTable',
+          name: '风险级别评估表 (单元格span循环+复选框)',
+          type: 'table',
+          pagingRepeat: false,
+          description: '单元格内 span 循环与复选框勾选',
+          htmlTemplate: `<table width="100%" cellpadding="0" cellspacing="0" border="1">
+  <tbody>
+    <tr>
+      <td width="20%" align="center">标化分</td>
+      <td width="80%" align="center">{{ standardizedScore }} 分</td>
+    </tr>
+    <tr>
+      <td align="center">风险级别</td>
+      <td>
+        <div loop="item in riskRuleList">
+          <input type="checkbox" checked="{{ item.isChecked }}" /> {{ item.riskLevelName }}：{{ item.desc }}
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td align="center">评估结果</td>
+      <td align="center">经现场及资料评估，该单位食品安全工作存在 {{ riskLevelText }} 。</td>
+    </tr>
+  </tbody>
+</table>`
+        },
         {
           conceptId: 'lis.adjacent_merge_table',
-          name: 'LIS常规检验明细表 (合并同类项 merge-same)',
+          name: 'LIS常规检验明细表 (merge-same 合并同类项)',
           type: 'table',
           pagingRepeat: false,
-          description:
-            '首列使用 merge-same 指令声明相同检验大类自动纵向合并，其余列正常循环',
-          htmlTemplate: `<table border="1">
-  <tr>
-    <th>检验大类</th>
-    <th>检测项目</th>
-    <th>结果数值</th>
-    <th>单位</th>
-    <th>参考范围</th>
-  </tr>
-  <tr loop="item in lis.records">
-    <!-- merge-same 声明此列遇到连续相同内容时自动纵向合并单元格 -->
-    <td merge-same>{{ item.category_name }}</td>
-    <td>{{ item.lab_item_name }}</td>
-    <td>{{ item.lab_item_value }}</td>
-    <td>{{ item.lab_item_unit }}</td>
-    <td>{{ item.lab_item_ref }}</td>
-  </tr>
+          description: '首列使用 merge-same 指令纵向合并',
+          htmlTemplate: `<table border="1" width="100%">
+  <thead>
+    <tr>
+      <th>检验分类</th>
+      <th>检测项目</th>
+      <th>结果数值</th>
+      <th>单位</th>
+      <th>参考范围</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr loop="item in lis.records">
+      <td merge-same align="center">{{ item.category_name }}</td>
+      <td>{{ item.lab_item_name }}</td>
+      <td align="center">{{ item.lab_item_value }}</td>
+      <td align="center">{{ item.lab_item_unit }}</td>
+      <td align="center">{{ item.lab_item_ref }}</td>
+    </tr>
+  </tbody>
 </table>`
-        }
-      ]
-    },
-    {
-      groupName: '大标题复合检验影像报告',
-      systemName: 'LIS复合检验系统',
-      description:
-        '多级复合结构：外层循环大标题通栏合并(Colspan=4)，内层循环表格明细，单元格内嵌套多图',
-      children: [
+        },
         {
           conceptId: 'composite.grouped_report',
-          name: '大标题复合检验报告集 (通栏合并+多图)',
+          name: '大标题复合检验影像报告 (通栏合并 + 单元格多图)',
           type: 'table',
           pagingRepeat: false,
-          description:
-            '大标题通栏合并(Colspan=4)，内层指标明细，单元格嵌套多图',
-          htmlTemplate: `<table border="1">
-  <!-- 1. 固定表头行 -->
+          description: '大标题通栏合并，单元格嵌套多图',
+          htmlTemplate: `<table border="1" width="100%">
   <thead>
     <tr>
       <th>检测项目</th>
@@ -157,20 +321,97 @@
       <th>化验报告影像 (多图)</th>
     </tr>
   </thead>
-
-  <!-- 2. 外层循环大标题分组 (tbody 循环外层数组) -->
   <tbody loop="group in composite.grouped_report">
-    <!-- 组内大标题通栏行 -->
     <tr>
       <td colspan="4" align="left" style="background:#F2F4F8;"><b>■ {{ group.title }}</b></td>
     </tr>
-
-    <!-- 组内具体的明细循环行 (循环 group.children 数组) -->
     <tr loop="item in group.children">
       <td>{{ item.itemName }}</td>
-      <td>{{ item.result }}</td>
-      <td>{{ item.reference }}</td>
-      <td>{{ item.imgList }}</td>
+      <td align="center">{{ item.result }}</td>
+      <td align="center">{{ item.reference }}</td>
+      <td align="center">{{ item.imgList }}</td>
+    </tr>
+  </tbody>
+</table>`
+        },
+        {
+          conceptId: 'groupedData',
+          name: '双层多表头复合分组表 (一级大类 + 二级子类 + 三级明细平铺)',
+          type: 'table',
+          pagingRepeat: false,
+          description: '一级大类 + 二级子类 + 三级明细平铺',
+          htmlTemplate: `<table width="100%" cellpadding="5" cellspacing="0" border="1">
+  <thead>
+    <tr>
+      <th width="8%" align="center">序号</th>
+      <th width="20%" align="center">评估内容</th>
+      <th width="19%" align="center">问题描述</th>
+      <th width="25%" align="center">现场照片</th>
+      <th width="18%" align="center">整改建议</th>
+      <th width="10%" align="center">得分</th>
+    </tr>
+  </thead>
+  <tbody loop="group in groupedData">
+    <tr>
+      <td colspan="5" align="left" style="background:#e8f4ff;">
+        <b>{{ group.projectItemName }} (满分 {{ group.projectScore }} 分)</b>
+      </td>
+      <td align="center"><b>{{ group.projectActualScore }}</b></td>
+    </tr>
+    <tr>
+      <td colspan="5" align="left" style="background:#f2f6fc;">
+        <b>{{ group.contentItemName }} (满分 {{ group.contentScore }} 分)</b>
+      </td>
+      <td align="center"><b>{{ group.contentActualScore }}</b></td>
+    </tr>
+    <tr loop="item in group.children">
+      <td align="center">{{ item.itemIndex }}</td>
+      <td>{{ item.evalContent }}</td>
+      <td>{{ item.problemDesc }}</td>
+      <td align="center">{{ item.images }}</td>
+      <td>{{ item.rectifySuggest }}</td>
+      <td align="center">{{ item.score }}</td>
+    </tr>
+  </tbody>
+</table>`
+        },
+        {
+          conceptId: 'threeLevelNestedData',
+          name: '三层树形嵌套评分表 (一级大类 > 二级子类 > 三级明细)',
+          type: 'table',
+          pagingRepeat: false,
+          description: '三层树形结构嵌套展开',
+          htmlTemplate: `<table width="100%" cellpadding="5" cellspacing="0" border="1">
+  <thead>
+    <tr>
+      <th width="8%" align="center">序号</th>
+      <th width="20%" align="center">评估内容</th>
+      <th width="19%" align="center">问题描述</th>
+      <th width="25%" align="center">现场照片</th>
+      <th width="18%" align="center">整改建议</th>
+      <th width="10%" align="center">得分</th>
+    </tr>
+  </thead>
+  <tbody loop="project in threeLevelNestedData">
+    <tr>
+      <td colspan="5" align="left" style="background:#e8f4ff;">
+        <b>{{ project.projectItemName }} (满分 {{ project.projectScore }} 分)</b>
+      </td>
+      <td align="center"><b>{{ project.projectActualScore }}</b></td>
+    </tr>
+    <tr loop="content in project.children">
+      <td colspan="5" align="left" style="background:#f2f6fc;">
+        <b>{{ content.contentItemName }} (满分 {{ content.contentScore }} 分)</b>
+      </td>
+      <td align="center"><b>{{ content.contentActualScore }}</b></td>
+    </tr>
+    <tr loop="item in content.children">
+      <td align="center">{{ item.itemIndex }}</td>
+      <td>{{ item.evalContent }}</td>
+      <td>{{ item.problemDesc }}</td>
+      <td align="center">{{ item.images }}</td>
+      <td>{{ item.rectifySuggest }}</td>
+      <td align="center">{{ item.score }}</td>
     </tr>
   </tbody>
 </table>`
@@ -179,23 +420,25 @@
     }
   ]
 
-  // 组件字典 Provider：优先读取本地缓存，未设置时回退至 DEFAULT_COMPONENT_DATA 下发
+  const STORAGE_KEY_COMPONENT_DICT = 'CE_COMPONENT_DICTIONARY'
+
+  // 组件字典 Provider
   function mockFetchComponentListApi() {
-    const savedDict = localStorage.getItem('CE_COMPONENT_DICTIONARY')
-    if (savedDict) {
-      try {
+    try {
+      const savedDict = localStorage.getItem(STORAGE_KEY_COMPONENT_DICT)
+      if (savedDict) {
         const parsed = JSON.parse(savedDict)
         if (Array.isArray(parsed) && parsed.length > 0) {
           return Promise.resolve(parsed)
         }
-      } catch (e) {
-        console.warn('[mockFetchComponentListApi] 读取本地字典解析异常', e)
       }
+    } catch (e) {
+      console.warn('[mockFetchComponentListApi] 读取本地字典缓存异常，降级至默认预设:', e)
     }
     return Promise.resolve(DEFAULT_COMPONENT_DATA)
   }
 
-  // 模板数据 Provider (getTemplate)
+  // 模板数据 Provider (包含全部控件类型与三大经典表格范式的全能模板)
   function mockFetchTemplateApi() {
     return new Promise(resolve => {
       setTimeout(() => {
@@ -203,7 +446,9 @@
           data: {
             header: [],
             main: [
+              // ==========================================
               // 1. 文档大标题
+              // ==========================================
               {
                 value: '',
                 type: 'title',
@@ -211,23 +456,31 @@
                 rowFlex: 'center',
                 valueList: [
                   {
-                    value: '结构化临床诊疗与检验综合报告单',
+                    value: '结构化全能诊疗与健康评估综合报告单',
                     size: 20,
                     bold: true
                   }
                 ]
               },
               { value: '\n' },
-              // 2. 患者基础信息行
+
+              // ==========================================
+              // 2. 模块一：患者登记与基础信息 (Text, Number, Radio, Select, Date, Image)
+              // ==========================================
               {
                 value: '',
                 type: 'title',
                 level: 'second',
                 valueList: [
-                  { value: '一、患者登记信息', size: 15, bold: true }
+                  {
+                    value: '一、患者就诊登记与基础信息 (全控件基础形态)',
+                    size: 15,
+                    bold: true
+                  }
                 ]
               },
               { value: '\n' },
+              // 行 1：姓名(Text) + 性别(Radio) + 年龄(Number) + 就诊类型(Select)
               { value: '患者姓名：', bold: true },
               {
                 type: 'control',
@@ -235,11 +488,11 @@
                 control: {
                   conceptId: 'patient.name',
                   type: 'text',
-                  placeholder: '姓名',
-                  value: []
+                  placeholder: '请输入姓名',
+                  value: [{ value: '张建国' }]
                 }
               },
-              { value: '性别 (Radio单选)：', bold: true },
+              { value: '    性别 (Radio)：', bold: true },
               {
                 type: 'control',
                 value: '',
@@ -247,7 +500,7 @@
                   conceptId: 'patient.gender',
                   type: 'radio',
                   value: null,
-                  code: '0',
+                  code: '1',
                   flexDirection: 'row',
                   valueSets: [
                     { value: '男', code: '1' },
@@ -256,67 +509,253 @@
                   ]
                 }
               },
-              { value: '    年龄：', bold: true },
+              { value: '    年龄 (Number)：', bold: true },
               {
                 type: 'control',
                 value: '',
                 control: {
                   conceptId: 'patient.age',
-                  type: 'text',
+                  type: 'number',
                   placeholder: '年龄',
-                  value: []
+                  value: [{ value: '45' }]
                 }
               },
-              { value: '    患者照片：', bold: true },
+              { value: ' 岁    就诊类型 (Select)：', bold: true },
+              {
+                type: 'control',
+                value: '',
+                control: {
+                  conceptId: 'patient.visit_type',
+                  type: 'select',
+                  placeholder: '请选择就诊类型',
+                  value: [{ value: '专家门诊' }],
+                  code: 'expert',
+                  valueSets: [
+                    { value: '普通门诊', code: 'normal' },
+                    { value: '专家门诊', code: 'expert' },
+                    { value: '急诊通道', code: 'emergency' },
+                    { value: '特需医疗', code: 'vip' }
+                  ]
+                }
+              },
+              { value: '\n' },
+              // 行 2：就诊科室(Text) + 门诊号(Text) + 就诊日期(Date)
+              { value: '就诊科室：', bold: true },
+              {
+                type: 'control',
+                value: '',
+                control: {
+                  conceptId: 'patient.dept',
+                  type: 'text',
+                  placeholder: '接诊科室',
+                  value: [{ value: '心血管内科一病区' }]
+                }
+              },
+              { value: '    门诊病历号：', bold: true },
+              {
+                type: 'control',
+                value: '',
+                control: {
+                  conceptId: 'patient.record_no',
+                  type: 'text',
+                  placeholder: '病历号',
+                  value: [{ value: 'EMR202609010088' }]
+                }
+              },
+              { value: '    就诊日期 (Date)：', bold: true },
+              {
+                type: 'control',
+                value: '',
+                control: {
+                  conceptId: 'patient.visit_date',
+                  type: 'date',
+                  dateFormat: 'YYYY-MM-DD',
+                  placeholder: '选择日期',
+                  value: [{ value: '2026-09-01' }]
+                }
+              },
+              { value: '\n' },
+              // 行 3：头像(Image) + 医生签名(Image)
+              { value: '患者头像 (Image)：', bold: true },
               {
                 type: 'control',
                 value: '',
                 control: {
                   conceptId: 'patient.avatar',
                   type: 'image',
-                  placeholder: '头像',
-                  width: 48,
-                  height: 48,
-                  value: []
+                  placeholder: '患者照片',
+                  width: 52,
+                  height: 52,
+                  value: [
+                    {
+                      type: 'image',
+                      value: 'https://picsum.photos/120/120?random=101',
+                      width: 52,
+                      height: 52
+                    }
+                  ]
+                }
+              },
+              { value: '       接诊医师签名章 (Image)：', bold: true },
+              {
+                type: 'control',
+                value: '',
+                control: {
+                  conceptId: 'doctor.signature',
+                  type: 'image',
+                  placeholder: '医生签名',
+                  width: 90,
+                  height: 40,
+                  value: [
+                    {
+                      type: 'image',
+                      value: 'https://picsum.photos/180/80?random=102',
+                      width: 90,
+                      height: 40
+                    }
+                  ]
                 }
               },
               { value: '\n\n' },
-              // 3. 场景一：分段式序号动态列表
+
+              // ==========================================
+              // 3. 模块二：生命体征与生理测量 (Number 数值测量组)
+              // ==========================================
               {
                 value: '',
                 type: 'title',
                 level: 'second',
                 valueList: [
                   {
-                    value: '二、门诊诊断结论 (场景一：分段序号列表)',
+                    value: '二、生命体征与生理测量 (Number 测量数值组)',
                     size: 15,
                     bold: true
                   }
                 ]
               },
               { value: '\n' },
+              { value: '体温 (T)：', bold: true },
               {
                 type: 'control',
                 value: '',
                 control: {
-                  conceptId: 'diagnose.diagnosis_items',
-                  type: 'list',
-                  listType: 'text',
-                  layout: 'vertical',
-                  placeholder:
-                    '点击上方填充数据按钮将自动回显为分段序号列表...',
-                  value: []
+                  conceptId: 'vitals.temperature',
+                  type: 'number',
+                  placeholder: '体温',
+                  value: [{ value: '36.6' }]
                 }
               },
-              { value: '\n\n' },
-              // 4. 场景三：多段以 Checkbox 开始的长文本条款列表
+              { value: ' ℃    收缩压 (SBP)：', bold: true },
+              {
+                type: 'control',
+                value: '',
+                control: {
+                  conceptId: 'vitals.sbp',
+                  type: 'number',
+                  placeholder: '高压',
+                  value: [{ value: '135' }]
+                }
+              },
+              { value: ' mmHg    舒张压 (DBP)：', bold: true },
+              {
+                type: 'control',
+                value: '',
+                control: {
+                  conceptId: 'vitals.dbp',
+                  type: 'number',
+                  placeholder: '低压',
+                  value: [{ value: '88' }]
+                }
+              },
+              { value: ' mmHg    心率 (HR)：', bold: true },
+              {
+                type: 'control',
+                value: '',
+                control: {
+                  conceptId: 'vitals.heart_rate',
+                  type: 'number',
+                  placeholder: '心率',
+                  value: [{ value: '78' }]
+                }
+              },
+              { value: ' 次/分    体重：', bold: true },
+              {
+                type: 'control',
+                value: '',
+                control: {
+                  conceptId: 'vitals.weight',
+                  type: 'number',
+                  placeholder: '体重',
+                  value: [{ value: '68.5' }]
+                }
+              },
+              { value: ' kg\n\n' },
+
+              // ==========================================
+              // 4. 模块三：既往病史与临床诊断 (Checkbox复选 + 多段文本列表)
+              // ==========================================
               {
                 value: '',
                 type: 'title',
                 level: 'second',
                 valueList: [
                   {
-                    value: '三、知情同意与条款声明 (场景三：多段Checkbox)',
+                    value: '三、既往病史与临床诊断 (Checkbox复选 + 多段文本列表)',
+                    size: 15,
+                    bold: true
+                  }
+                ]
+              },
+              { value: '\n' },
+              { value: '既往疾病筛查 (Checkbox 多选)：', bold: true },
+              {
+                type: 'control',
+                value: '',
+                control: {
+                  conceptId: 'patient.past_history',
+                  type: 'checkbox',
+                  value: null,
+                  code: 'hbp,dm',
+                  flexDirection: 'row',
+                  valueSets: [
+                    { value: '原发性高血压', code: 'hbp' },
+                    { value: '2型糖尿病', code: 'dm' },
+                    { value: '冠状动脉粥样硬化', code: 'chd' },
+                    { value: '青霉素/磺胺过敏史', code: 'allergy' },
+                    { value: '慢性支气管炎', code: 'copd' }
+                  ]
+                }
+              },
+              { value: '\n初步门诊诊断结论 (List.Text 分段条目)：\n', bold: true },
+              {
+                type: 'control',
+                value: '',
+                control: {
+                  conceptId: 'diagnose.diagnosis_items',
+                  type: 'text',
+                  placeholder: '临床诊断条目列表',
+                  value: [
+                    { value: '1. ', bold: true },
+                    { value: '高血压2级（中危组，血压控制稳定）\n' },
+                    { value: '2. ', bold: true },
+                    { value: '2型糖尿病（伴轻度周围神经病变）\n' },
+                    { value: '3. ', bold: true },
+                    { value: '高脂血症（高甘油三酯血症，轻度）' }
+                  ]
+                }
+              },
+              { value: '\n\n' },
+
+              // ==========================================
+              // 5. 模块四：知情同意与条款签署 (Checkbox 纵向多段条款)
+              // ==========================================
+              {
+                value: '',
+                type: 'title',
+                level: 'second',
+                valueList: [
+                  {
+                    value: '四、诊疗知情同意与风险告知 (Checkbox 纵向多段条款)',
                     size: 15,
                     bold: true
                   }
@@ -330,37 +769,171 @@
                   conceptId: 'surgery.consent_clauses',
                   type: 'checkbox',
                   value: null,
-                  code: null,
+                  code: 'clause_1,clause_2,clause_3',
                   flexDirection: 'column',
                   valueSets: [
                     {
-                      value:
-                        '患者及家属已知悉本次诊疗方案、操作流程及相关并发症风险。',
+                      value: '患者及代理人已被充分告知治疗方案、预期疗效及可能伴随的不良反应。',
                       code: 'clause_1'
                     },
                     {
-                      value:
-                        '术前已按临床规范完成血常规、凝血功能及传染病八项筛查。',
+                      value: '核实无近期重大创伤手术史、活动性出血倾向及严重麻醉药物过敏史。',
                       code: 'clause_2'
                     },
                     {
-                      value:
-                        '经详细病史核实无已知麻醉药物严重过敏史及绝对手术禁忌症。',
+                      value: '同意严格遵照医嘱按时规范用药，定期进行血糖、血压及肝肾功能随访复查。',
                       code: 'clause_3'
                     }
                   ]
                 }
               },
               { value: '\n\n' },
-              // 4. 场景四：相邻相同数据动态纵向合并表格 (Rowspan)
+
+              // ==========================================
+              // 6. 经典表格示例一：全控件全能渲染考核表 (单行明细循环 + 关键项 + 复选框 + 现场多图 + 表尾合计行)
+              // ==========================================
               {
                 value: '',
                 type: 'title',
                 level: 'second',
                 valueList: [
                   {
-                    value:
-                      '四、LIS临床检验结果 (场景四：相邻相同自动合并表格)',
+                    value: '五、临床医疗质量与安全考核表 (经典示例 1：全控件+表尾合并合计行)',
+                    size: 15,
+                    bold: true
+                  }
+                ]
+              },
+              { value: '\n' },
+              {
+                type: 'table',
+                value: '',
+                conceptId: 'feature_all_controls_table',
+                trList: [
+                  {
+                    height: 32,
+                    tdList: [
+                      { colspan: 1, rowspan: 1, backgroundColor: '#FAFAFA', value: [{ value: '序号', bold: true, rowFlex: 'center' }] },
+                      { colspan: 1, rowspan: 1, backgroundColor: '#FAFAFA', value: [{ value: '质控考核项目与规范', bold: true }] },
+                      { colspan: 1, rowspan: 1, backgroundColor: '#FAFAFA', value: [{ value: '核查状态', bold: true, rowFlex: 'center' }] },
+                      { colspan: 1, rowspan: 1, backgroundColor: '#FAFAFA', value: [{ value: '现场影像佐证 (多图)', bold: true, rowFlex: 'center' }] },
+                      { colspan: 1, rowspan: 1, backgroundColor: '#FAFAFA', value: [{ value: '标准分', bold: true, rowFlex: 'center' }] },
+                      { colspan: 1, rowspan: 1, backgroundColor: '#FAFAFA', value: [{ value: '实得分', bold: true, rowFlex: 'center' }] }
+                    ]
+                  },
+                  {
+                    height: 48,
+                    tdList: [
+                      { colspan: 1, rowspan: 1, value: [{ value: '1', rowFlex: 'center' }] },
+                      {
+                        colspan: 1,
+                        rowspan: 1,
+                        value: [
+                          { value: '[关键项] ', bold: true, color: '#1890FF' },
+                          { value: '严格落实首诊负责制与急危重症抢救制度' }
+                        ]
+                      },
+                      { colspan: 1, rowspan: 1, value: [{ value: '☑ 符合规范', color: '#52C41A', bold: true, rowFlex: 'center' }] },
+                      {
+                        colspan: 1,
+                        rowspan: 1,
+                        value: [
+                          {
+                            type: 'image',
+                            value: 'https://picsum.photos/120/80?random=11',
+                            width: 48,
+                            height: 36
+                          }
+                        ]
+                      },
+                      { colspan: 1, rowspan: 1, value: [{ value: '30', rowFlex: 'center' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '30', rowFlex: 'center', bold: true }] }
+                    ]
+                  },
+                  {
+                    height: 48,
+                    tdList: [
+                      { colspan: 1, rowspan: 1, value: [{ value: '2', rowFlex: 'center' }] },
+                      {
+                        colspan: 1,
+                        rowspan: 1,
+                        value: [
+                          { value: '[核心项] ', bold: true, color: '#FAAD14' },
+                          { value: '三级查房记录在患者入院 24/48 小时内完成' }
+                        ]
+                      },
+                      { colspan: 1, rowspan: 1, value: [{ value: '☑ 符合规范', color: '#52C41A', bold: true, rowFlex: 'center' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '无附件', color: '#999999', rowFlex: 'center' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '30', rowFlex: 'center' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '30', rowFlex: 'center', bold: true }] }
+                    ]
+                  },
+                  {
+                    height: 48,
+                    tdList: [
+                      { colspan: 1, rowspan: 1, value: [{ value: '3', rowFlex: 'center' }] },
+                      {
+                        colspan: 1,
+                        rowspan: 1,
+                        value: [
+                          { value: '[安全项] ', bold: true, color: '#FF4D4F' },
+                          { value: '处方与用药医嘱严格实行双人核对制度' }
+                        ]
+                      },
+                      { colspan: 1, rowspan: 1, value: [{ value: '☑ 符合规范', color: '#52C41A', bold: true, rowFlex: 'center' }] },
+                      {
+                        colspan: 1,
+                        rowspan: 1,
+                        value: [
+                          {
+                            type: 'image',
+                            value: 'https://picsum.photos/120/80?random=12',
+                            width: 48,
+                            height: 36
+                          }
+                        ]
+                      },
+                      { colspan: 1, rowspan: 1, value: [{ value: '40', rowFlex: 'center' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '40', rowFlex: 'center', bold: true }] }
+                    ]
+                  },
+                  {
+                    height: 36,
+                    tdList: [
+                      {
+                        colspan: 4,
+                        rowspan: 1,
+                        backgroundColor: '#F5F5F5',
+                        value: [{ value: '考核汇总得分合计 (满分 100 分)', bold: true, rowFlex: 'center' }]
+                      },
+                      {
+                        colspan: 1,
+                        rowspan: 1,
+                        backgroundColor: '#F5F5F5',
+                        value: [{ value: '100', bold: true, rowFlex: 'center' }]
+                      },
+                      {
+                        colspan: 1,
+                        rowspan: 1,
+                        backgroundColor: '#F5F5F5',
+                        value: [{ value: '100', bold: true, color: '#52C41A', rowFlex: 'center' }]
+                      }
+                    ]
+                  }
+                ]
+              },
+              { value: '\n\n' },
+
+              // ==========================================
+              // 7. 经典表格示例二：生化与血脂检验明细 (首列 merge-same 相邻相同合并)
+              // ==========================================
+              {
+                value: '',
+                type: 'title',
+                level: 'second',
+                valueList: [
+                  {
+                    value: '六、生化与血脂检验明细 (经典示例 2：首列 merge-same 相邻相同合并)',
                     size: 15,
                     bold: true
                   }
@@ -375,68 +948,83 @@
                   {
                     height: 32,
                     tdList: [
-                      {
-                        colspan: 1,
-                        rowspan: 1,
-                        backgroundColor: '#FAFAFA',
-                        value: [{ value: '检验分类', bold: true }]
-                      },
-                      {
-                        colspan: 1,
-                        rowspan: 1,
-                        backgroundColor: '#FAFAFA',
-                        value: [{ value: '检测项目', bold: true }]
-                      },
-                      {
-                        colspan: 1,
-                        rowspan: 1,
-                        backgroundColor: '#FAFAFA',
-                        value: [{ value: '结果数值', bold: true }]
-                      },
-                      {
-                        colspan: 1,
-                        rowspan: 1,
-                        backgroundColor: '#FAFAFA',
-                        value: [{ value: '单位', bold: true }]
-                      },
-                      {
-                        colspan: 1,
-                        rowspan: 1,
-                        backgroundColor: '#FAFAFA',
-                        value: [{ value: '参考区间', bold: true }]
-                      }
+                      { colspan: 1, rowspan: 1, backgroundColor: '#FAFAFA', value: [{ value: '检验分类 (自动纵向合并)', bold: true }] },
+                      { colspan: 1, rowspan: 1, backgroundColor: '#FAFAFA', value: [{ value: '检测项目', bold: true }] },
+                      { colspan: 1, rowspan: 1, backgroundColor: '#FAFAFA', value: [{ value: '结果数值', bold: true }] },
+                      { colspan: 1, rowspan: 1, backgroundColor: '#FAFAFA', value: [{ value: '单位', bold: true }] },
+                      { colspan: 1, rowspan: 1, backgroundColor: '#FAFAFA', value: [{ value: '参考区间', bold: true }] }
                     ]
                   },
                   {
                     height: 36,
                     tdList: [
-                      {
-                        colspan: 1,
-                        rowspan: 1,
-                        value: [{ value: '生化常规检查' }]
-                      },
-                      {
-                        colspan: 1,
-                        rowspan: 1,
-                        value: [{ value: '谷丙转氨酶 (ALT)' }]
-                      },
-                      { colspan: 1, rowspan: 1, value: [{ value: '-' }] },
+                      { colspan: 1, rowspan: 3, value: [{ value: '生化常规检查', bold: true }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '谷丙转氨酶 (ALT)' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '25' }] },
                       { colspan: 1, rowspan: 1, value: [{ value: 'U/L' }] },
                       { colspan: 1, rowspan: 1, value: [{ value: '0-40' }] }
+                    ]
+                  },
+                  {
+                    height: 36,
+                    tdList: [
+                      { colspan: 1, rowspan: 1, value: [{ value: '谷草转氨酶 (AST)' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '19' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: 'U/L' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '0-40' }] }
+                    ]
+                  },
+                  {
+                    height: 36,
+                    tdList: [
+                      { colspan: 1, rowspan: 1, value: [{ value: '总胆红素 (TBIL)' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '12.4' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: 'μmol/L' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '3.4-17.1' }] }
+                    ]
+                  },
+                  {
+                    height: 36,
+                    tdList: [
+                      { colspan: 1, rowspan: 3, value: [{ value: '血脂四项指标', bold: true }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '总胆固醇 (TC)' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '4.2' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: 'mmol/L' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '<5.18' }] }
+                    ]
+                  },
+                  {
+                    height: 36,
+                    tdList: [
+                      { colspan: 1, rowspan: 1, value: [{ value: '甘油三酯 (TG)' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '1.5' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: 'mmol/L' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '<1.70' }] }
+                    ]
+                  },
+                  {
+                    height: 36,
+                    tdList: [
+                      { colspan: 1, rowspan: 1, value: [{ value: '高密度脂蛋白 (HDL-C)' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '1.25' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: 'mmol/L' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '>1.04' }] }
                     ]
                   }
                 ]
               },
               { value: '\n\n' },
-              // 6. 场景五：带跨列大标题通栏 + 明细循环 + 单元格嵌套多图复合表
+
+              // ==========================================
+              // 8. 经典表格示例三：复合影像化验报告集 (大标题通栏合并 + 单元格多图)
+              // ==========================================
               {
                 value: '',
                 type: 'title',
                 level: 'second',
                 valueList: [
                   {
-                    value:
-                      '五、多组复合检验报告 (场景五：大标题通栏+嵌套多图)',
+                    value: '七、复合影像化验报告集 (经典示例 3：大标题通栏合并 + 单元格多图)',
                     size: 15,
                     bold: true
                   }
@@ -451,32 +1039,10 @@
                   {
                     height: 32,
                     tdList: [
-                      {
-                        colspan: 1,
-                        rowspan: 1,
-                        backgroundColor: '#FAFAFA',
-                        value: [{ value: '检测项目', bold: true }]
-                      },
-                      {
-                        colspan: 1,
-                        rowspan: 1,
-                        backgroundColor: '#FAFAFA',
-                        value: [{ value: '结果数值', bold: true }]
-                      },
-                      {
-                        colspan: 1,
-                        rowspan: 1,
-                        backgroundColor: '#FAFAFA',
-                        value: [{ value: '参考范围', bold: true }]
-                      },
-                      {
-                        colspan: 1,
-                        rowspan: 1,
-                        backgroundColor: '#FAFAFA',
-                        value: [
-                          { value: '化验报告影像 (多图)', bold: true }
-                        ]
-                      }
+                      { colspan: 1, rowspan: 1, backgroundColor: '#FAFAFA', value: [{ value: '检测指标', bold: true }] },
+                      { colspan: 1, rowspan: 1, backgroundColor: '#FAFAFA', value: [{ value: '测定数值', bold: true }] },
+                      { colspan: 1, rowspan: 1, backgroundColor: '#FAFAFA', value: [{ value: '参考范围', bold: true }] },
+                      { colspan: 1, rowspan: 1, backgroundColor: '#FAFAFA', value: [{ value: '化验报告影像 (多图)', bold: true }] }
                     ]
                   },
                   {
@@ -486,379 +1052,433 @@
                         colspan: 4,
                         rowspan: 1,
                         backgroundColor: '#F2F4F8',
+                        value: [{ value: '■ 第一组：全血细胞分析与白细胞分类 (WBC/RBC/PLT)', bold: true, size: 13 }]
+                      }
+                    ]
+                  },
+                  {
+                    height: 48,
+                    tdList: [
+                      { colspan: 1, rowspan: 1, value: [{ value: '白细胞计数 (WBC)' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '7.2', color: '#52C41A', bold: true }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '3.5-9.5 ×10^9/L' }] },
+                      {
+                        colspan: 1,
+                        rowspan: 1,
                         value: [
                           {
-                            value: '■ 一、血常规检查组 (WBC/RBC/PLT)',
-                            bold: true,
-                            size: 13
+                            type: 'image',
+                            value: 'https://picsum.photos/120/80?random=21',
+                            width: 42,
+                            height: 42
+                          },
+                          { value: ' ' },
+                          {
+                            type: 'image',
+                            value: 'https://picsum.photos/120/80?random=22',
+                            width: 42,
+                            height: 42
                           }
                         ]
                       }
                     ]
                   },
                   {
-                    height: 44,
+                    height: 38,
+                    tdList: [
+                      { colspan: 1, rowspan: 1, value: [{ value: '红细胞计数 (RBC)' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '4.85' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '4.0-5.5 ×10^12/L' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '-' }] }
+                    ]
+                  },
+                  {
+                    height: 32,
                     tdList: [
                       {
-                        colspan: 1,
+                        colspan: 4,
                         rowspan: 1,
-                        value: [{ value: '白细胞计数 (WBC)' }]
-                      },
-                      { colspan: 1, rowspan: 1, value: [{ value: '-' }] },
-                      {
-                        colspan: 1,
-                        rowspan: 1,
-                        value: [{ value: '4.0-10.0' }]
-                      },
+                        backgroundColor: '#F2F4F8',
+                        value: [{ value: '■ 第二组：血浆凝血功能四项检测 (PT/APTT/FIB)', bold: true, size: 13 }]
+                      }
+                    ]
+                  },
+                  {
+                    height: 48,
+                    tdList: [
+                      { colspan: 1, rowspan: 1, value: [{ value: '纤维蛋白原 (FIB)' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '3.12' }] },
+                      { colspan: 1, rowspan: 1, value: [{ value: '2.0-4.0 g/L' }] },
                       {
                         colspan: 1,
                         rowspan: 1,
                         value: [
                           {
-                            type: 'control',
-                            value: '',
-                            control: {
-                              conceptId: 'imgList[].url',
-                              type: 'image',
-                              placeholder: '[影像多图]',
-                              width: 42,
-                              height: 42,
-                              value: []
-                            }
+                            type: 'image',
+                            value: 'https://picsum.photos/120/80?random=23',
+                            width: 42,
+                            height: 42
                           }
                         ]
                       }
                     ]
                   }
                 ]
-              }
+              },
+              { value: '\n' }
             ],
             footer: []
           },
           options: {
             margins: [80, 100, 80, 100],
-            pageNumber: {
-              format: '第{pageNo}页/共{pageCount}页'
-            }
+            pageNumber: { format: '第{pageNo}页/共{pageCount}页' }
           }
         })
       }, 0)
     })
   }
 
-  // 业务数据 Provider (getData / 回显数据)
+  // 业务数据 Provider (纯净、无冗余、1:1 覆盖所有功能与业务场景)
   function mockFetchBusinessDataApi() {
     return new Promise(resolve => {
       setTimeout(() => {
         resolve({
+          // 基础标量与就诊信息
           patient: {
-            gender: [
-              { label: '男', value: '1', checked: false },
-              { label: '女', value: '2', checked: true },
-              { label: '未知', value: '0', checked: false }
-            ],
-            age: '',
-            avatar:
-              'https://gips0.baidu.com/it/u=163643473,1997243702&fm=3074&app=3074&f=PNG?w=2560&h=1440'
+            name: '张建国',
+            age: '45',
+            dept: '心血管内科一病区',
+            record_no: 'EMR202609010088',
+            visit_date: '2026-09-01',
+            visit_type: 'expert',
+            gender: '1',
+            past_history: 'hbp,dm',
+            avatar: 'https://picsum.photos/120/120?random=101'
           },
-          patient_gender: '2',
-          patient_age: '35岁',
-          patient_avatar:
-            'https://gips0.baidu.com/it/u=163643473,1997243702&fm=3074&app=3074&f=PNG?w=2560&h=1440',
-          score_sheet: {
-            total_max: 250,
-            total_actual: 238,
-            items: [
-              {
-                index: 1,
-                item_name: '入院记录书写时效性与完整度',
-                max_score: 50,
-                actual_score: 48
-              },
-              {
-                index: 2,
-                item_name: '病程记录及主治医师查房意见',
-                max_score: 50,
-                actual_score: 47
-              },
-              {
-                index: 3,
-                item_name: '术前讨论与知情同意签署规范',
-                max_score: 50,
-                actual_score: 49
-              },
-              {
-                index: 4,
-                item_name: '辅助检查及化验结果分析合理性',
-                max_score: 50,
-                actual_score: 46
-              },
-              {
-                index: 5,
-                item_name: '出院小结及随访用药指导方案',
-                max_score: 50,
-                actual_score: 48
-              }
-            ]
+          doctor: {
+            signature: 'https://picsum.photos/180/80?random=102'
           },
+          // 生命体征数值
+          vitals: {
+            temperature: '36.6',
+            sbp: '135',
+            dbp: '88',
+            heart_rate: '78',
+            weight: '68.5'
+          },
+          standardizedScore: 92.5,
+          riskLevelText: '一般风险',
+
+          // 列表与选项组
           diagnose: {
             diagnosis_items: [
-              {
-                label: '1. 高血压3级（极高危，收缩压≥180mmHg）',
-                code: 'item_1'
-              },
-              {
-                label:
-                  '2. 冠状动脉粥样硬化性心脏病（劳力性心绞痛，CCS II级）',
-                code: 'item_2'
-              },
-              {
-                label: '3. 2型糖尿病（伴周围神经病变与微量白蛋白尿）',
-                code: 'item_3'
-              },
-              {
-                label: '4. 高脂血症（混合型高胆固醇与甘油三酯血症）',
-                code: 'item_4'
-              }
+              { label: '1. 高血压2级（中危组，血压控制稳定）', code: 'I10.001' },
+              { label: '2. 2型糖尿病（伴轻度周围神经病变）', code: 'E11.900' },
+              { label: '3. 高脂血症（高甘油三酯血症，轻度）', code: 'E78.100' }
             ]
           },
           surgery: {
             consent_clauses: [
-              {
-                label:
-                  '1. 患者及家属已知悉本次诊疗方案、操作流程及相关并发症风险。',
-                value: 'clause_1',
-                checked: true
-              },
-              {
-                label:
-                  '2. 术前已按临床规范完成血常规、凝血功能及传染病八项筛查。',
-                value: 'clause_2',
-                checked: false
-              },
-              {
-                label:
-                  '3. 经详细病史核实无已知麻醉药物严重过敏史及绝对手术禁忌症。',
-                value: 'clause_3',
-                checked: true
-              }
+              { label: '患者及代理人已被充分告知治疗方案、预期疗效及可能伴随的不良反应。', checked: true },
+              { label: '核实无近期重大创伤手术史、活动性出血倾向及严重麻醉药物过敏史。', checked: true },
+              { label: '同意严格遵照医嘱按时规范用药，定期进行血糖、血压及肝肾功能随访复查。', checked: true }
             ]
           },
           exam: {
             report_images: [
-              'https://gips0.baidu.com/it/u=163643473,1997243702&fm=3074&app=3074&f=PNG?w=2560&h=1440',
-              'https://gips0.baidu.com/it/u=163643473,1997243702&fm=3074&app=3074&f=PNG?w=2560&h=1440',
-              'https://gips0.baidu.com/it/u=163643473,1997243702&fm=3074&app=3074&f=PNG?w=2560&h=1440'
+              'https://picsum.photos/200/200?random=1',
+              'https://picsum.photos/200/200?random=2'
             ]
           },
-          lis: {
-            records: [
+
+          // -------------------------------------------------------------
+          // 功能模板 1 数据源：全控件全能渲染表
+          // -------------------------------------------------------------
+          allControlsData: {
+            items: [
               {
-                category_name: '生化常规检查',
-                lab_item_name: '谷丙转氨酶 (ALT)',
-                lab_item_value: 25,
-                lab_item_unit: 'U/L',
-                lab_item_ref: '0-40'
+                index: 1,
+                itemName: '持有效《食品经营许可证》并醒目悬挂',
+                isKey: true,
+                checked: true,
+                statusText: '符合',
+                images: ['https://picsum.photos/120/80?random=11'],
+                suggest: '规范完好',
+                score: 10
               },
               {
-                category_name: '生化常规检查',
-                lab_item_name: '谷草转氨酶 (AST)',
-                lab_item_value: 19,
-                lab_item_unit: 'U/L',
-                lab_item_ref: '0-40'
+                index: 2,
+                itemName: '从严落实直接接触入口食品人员健康证明',
+                isKey: false,
+                checked: true,
+                statusText: '符合',
+                images: [],
+                suggest: '无异常',
+                score: 10
               },
               {
-                category_name: '生化常规检查',
-                lab_item_name: '总胆红素 (TBIL)',
-                lab_item_value: 12.4,
-                lab_item_unit: 'μmol/L',
-                lab_item_ref: '3.4-17.1'
-              },
-              {
-                category_name: '生化常规检查',
-                lab_item_name: '直接胆红素 (DBIL)',
-                lab_item_value: 4.1,
-                lab_item_unit: 'μmol/L',
-                lab_item_ref: '0-6.8'
-              },
-              {
-                category_name: '血脂四项指标',
-                lab_item_name: '总胆固醇 (TC)',
-                lab_item_value: 4.2,
-                lab_item_unit: 'mmol/L',
-                lab_item_ref: '<5.18'
-              },
-              {
-                category_name: '血脂四项指标',
-                lab_item_name: '甘油三酯 (TG)',
-                lab_item_value: 1.5,
-                lab_item_unit: 'mmol/L',
-                lab_item_ref: '<1.70'
-              },
-              {
-                category_name: '血脂四项指标',
-                lab_item_name: '高密度脂蛋白 (HDL-C)',
-                lab_item_value: 1.25,
-                lab_item_unit: 'mmol/L',
-                lab_item_ref: '>1.04'
-              },
-              {
-                category_name: '血脂四项指标',
-                lab_item_name: '低密度脂蛋白 (LDL-C)',
-                lab_item_value: 2.38,
-                lab_item_unit: 'mmol/L',
-                lab_item_ref: '<3.37'
+                index: 3,
+                itemName: '食品原料库房离地离墙、防鼠防虫设施完备',
+                isKey: true,
+                checked: false,
+                statusText: '不符合',
+                images: [
+                  'https://picsum.photos/120/80?random=12',
+                  'https://picsum.photos/120/80?random=13'
+                ],
+                suggest: '防鼠板损坏需立即更换',
+                score: 0
               }
             ],
-            adjacent_merge_table: [
-              {
-                category_name: '生化常规检查',
-                lab_item_name: '谷丙转氨酶 (ALT)',
-                lab_item_value: 25,
-                lab_item_unit: 'U/L',
-                lab_item_ref: '0-40'
-              },
-              {
-                category_name: '生化常规检查',
-                lab_item_name: '谷草转氨酶 (AST)',
-                lab_item_value: 19,
-                lab_item_unit: 'U/L',
-                lab_item_ref: '0-40'
-              },
-              {
-                category_name: '生化常规检查',
-                lab_item_name: '总胆红素 (TBIL)',
-                lab_item_value: 12.4,
-                lab_item_unit: 'μmol/L',
-                lab_item_ref: '3.4-17.1'
-              },
-              {
-                category_name: '生化常规检查',
-                lab_item_name: '直接胆红素 (DBIL)',
-                lab_item_value: 4.1,
-                lab_item_unit: 'μmol/L',
-                lab_item_ref: '0-6.8'
-              },
-              {
-                category_name: '血脂四项指标',
-                lab_item_name: '总胆固醇 (TC)',
-                lab_item_value: 4.2,
-                lab_item_unit: 'mmol/L',
-                lab_item_ref: '<5.18'
-              },
-              {
-                category_name: '血脂四项指标',
-                lab_item_name: '甘油三酯 (TG)',
-                lab_item_value: 1.5,
-                lab_item_unit: 'mmol/L',
-                lab_item_ref: '<1.70'
-              },
-              {
-                category_name: '血脂四项指标',
-                lab_item_name: '高密度脂蛋白 (HDL-C)',
-                lab_item_value: 1.25,
-                lab_item_unit: 'mmol/L',
-                lab_item_ref: '>1.04'
-              },
-              {
-                category_name: '血脂四项指标',
-                lab_item_name: '低密度脂蛋白 (LDL-C)',
-                lab_item_value: 2.38,
-                lab_item_unit: 'mmol/L',
-                lab_item_ref: '<3.37'
-              }
+            totalScore: 20
+          },
+
+          // -------------------------------------------------------------
+          // 功能模板 2 数据源：声明式动态合并与汇总表
+          // -------------------------------------------------------------
+          mergeSummaryData: {
+            records: [
+              { category: '生化常规检查', itemName: '谷丙转氨酶 (ALT)', value: '25', unit: 'U/L', reference: '0-40' },
+              { category: '生化常规检查', itemName: '谷草转氨酶 (AST)', value: '19', unit: 'U/L', reference: '0-40' },
+              { category: '生化常规检查', itemName: '总胆红素 (TBIL)', value: '12.4', unit: 'μmol/L', reference: '3.4-17.1' },
+              { category: '血脂四项指标', itemName: '总胆固醇 (TC)', value: '4.2', unit: 'mmol/L', reference: '<5.18' },
+              { category: '血脂四项指标', itemName: '甘油三酯 (TG)', value: '1.5', unit: 'mmol/L', reference: '<1.70' },
+              { category: '血脂四项指标', itemName: '高密度脂蛋白 (HDL-C)', value: '1.25', unit: 'mmol/L', reference: '>1.04' }
+            ],
+            summaryRate: '98.5% (符合临床质量控制标准)'
+          },
+
+          // -------------------------------------------------------------
+          // 功能模板 3 数据源：多层级树形与单元格内嵌套循环表
+          // -------------------------------------------------------------
+          hierarchicalData: [
+            {
+              projectName: '基础资质与制度体系',
+              projectMax: 50,
+              projectActual: 50,
+              children: [
+                {
+                  contentName: '证照与人员管理',
+                  contentMax: 50,
+                  contentActual: 50,
+                  children: [
+                    {
+                      index: 1,
+                      title: '食堂持有效食品经营许可证且无涂改行为',
+                      tags: [{ name: '关键项' }, { name: '高频核查' }],
+                      problem: '暂无问题',
+                      photos: [],
+                      score: 25
+                    },
+                    {
+                      index: 2,
+                      title: '从业人员健康证均在有效期内',
+                      tags: [{ name: '日常核查' }],
+                      problem: '暂无问题',
+                      photos: [],
+                      score: 25
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              projectName: '加工制作过程安全',
+              projectMax: 50,
+              projectActual: 40,
+              children: [
+                {
+                  contentName: '初加工与烹饪环节',
+                  contentMax: 50,
+                  contentActual: 40,
+                  children: [
+                    {
+                      index: 3,
+                      title: '荤素水产清洗池分开设置且标识清晰',
+                      tags: [{ name: '关键项' }, { name: '硬件设施' }],
+                      problem: '水产清洗池标识脱落',
+                      photos: ['https://picsum.photos/120/80?random=14'],
+                      score: 15
+                    },
+                    {
+                      index: 4,
+                      title: '烹饪食品中心温度达 70℃ 以上',
+                      tags: [{ name: '过程控制' }],
+                      problem: '暂无问题',
+                      photos: [],
+                      score: 25
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+
+          // -------------------------------------------------------------
+          // 功能模板 4 数据源：动态条件与分支过滤表
+          // -------------------------------------------------------------
+          conditionalWhenData: [
+            { level: 1, title: '第一部分：资质证照与合规准入（满分 50 分）', score: '50 分' },
+            { level: 2, index: 1, title: '食品经营许可证有效合法', isWarning: false, statusText: '正常合规', score: 25 },
+            { level: 2, index: 2, title: '承包企业准入退出机制建立健全', isWarning: false, statusText: '正常合规', score: 25 },
+            { level: 1, title: '第二部分：现场卫生与仓储管理（满分 50 分）', score: '35 分' },
+            { level: 2, index: 3, title: '库房防鼠防潮设施完备', isWarning: true, statusText: '挡鼠板高度不足 60cm', score: 15 },
+            { level: 2, index: 4, title: '冷藏冷冻温度达到规定标准', isWarning: false, statusText: '温度正常', score: 20 }
+          ],
+
+          // -------------------------------------------------------------
+          // 经典业务场景数据源 1：食安评分表 (scoreSheet)
+          // -------------------------------------------------------------
+          scoreSheet: {
+            items: [
+              { index: 1, itemName: '基础资质与制度体系', maxScore: 5, actualScore: 5 },
+              { index: 2, itemName: '场所环境卫生与设施设备', maxScore: 10, actualScore: 10 },
+              { index: 3, itemName: '食材采购与溯源管理', maxScore: 10, actualScore: 10 },
+              { index: 4, itemName: '贮存与仓储环境', maxScore: 5, actualScore: 5 },
+              { index: 5, itemName: '加工制作环节', maxScore: 20, actualScore: 20 },
+              { index: 6, itemName: '食品留样与废弃物处置', maxScore: 10, actualScore: 10 },
+              { index: 7, itemName: '餐具消毒与保洁管控', maxScore: 10, actualScore: 10 },
+              { index: 8, itemName: '人员健康管理', maxScore: 10, actualScore: 10 },
+              { index: 9, itemName: '有害生物防制', maxScore: 5, actualScore: 5 },
+              { index: 10, itemName: '制止餐饮浪费', maxScore: 2, actualScore: 2 },
+              { index: 11, itemName: '食品安全管理', maxScore: 13, actualScore: 13 }
+            ],
+            totalMax: 100,
+            totalActual: 100
+          },
+
+          // -------------------------------------------------------------
+          // 经典业务场景数据源 2：风险规则列表 (riskRuleList)
+          // -------------------------------------------------------------
+          riskRuleList: [
+            { riskLevelName: '重大风险', desc: '关键项不符合 ≥ 1项 或 得分 < 70分', isChecked: false },
+            { riskLevelName: '较大风险', desc: '关键项不符合 < 1项 且 得分 介于 70-85分', isChecked: false },
+            { riskLevelName: '一般风险', desc: '关键项不符合 < 1项 且 得分 ≥ 85分', isChecked: true }
+          ],
+
+          // -------------------------------------------------------------
+          // 经典业务场景数据源 3：LIS 常规检验明细 (lis.records)
+          // -------------------------------------------------------------
+          lis: {
+            records: [
+              { category_name: '生化常规检查', lab_item_name: 'ALT (谷丙转氨酶)', lab_item_value: '25', lab_item_unit: 'U/L', lab_item_ref: '0-40' },
+              { category_name: '生化常规检查', lab_item_name: 'AST (谷草转氨酶)', lab_item_value: '19', lab_item_unit: 'U/L', lab_item_ref: '0-40' },
+              { category_name: '生化常规检查', lab_item_name: 'TBIL (总胆红素)', lab_item_value: '12.4', lab_item_unit: 'μmol/L', lab_item_ref: '3.4-17.1' },
+              { category_name: '血脂四项指标', lab_item_name: 'TC (总胆固醇)', lab_item_value: '4.2', lab_item_unit: 'mmol/L', lab_item_ref: '<5.18' },
+              { category_name: '血脂四项指标', lab_item_name: 'TG (甘油三酯)', lab_item_value: '1.5', lab_item_unit: 'mmol/L', lab_item_ref: '<1.70' },
+              { category_name: '血脂四项指标', lab_item_name: 'HDL-C (高密度脂蛋白)', lab_item_value: '1.25', lab_item_unit: 'mmol/L', lab_item_ref: '>1.04' },
+              { category_name: '血脂四项指标', lab_item_name: 'LDL-C (低密度脂蛋白)', lab_item_value: '2.38', lab_item_unit: 'mmol/L', lab_item_ref: '<3.37' }
             ]
           },
+
+          // -------------------------------------------------------------
+          // 经典业务场景数据源 4：大标题复合检验影像报告 (composite)
+          // -------------------------------------------------------------
           composite: {
             grouped_report: [
               {
-                title: '一、血常规检查组 (WBC/RBC/PLT/HGB)',
+                title: '血常规分析检验报告',
                 children: [
-                  {
-                    itemName: '白细胞计数 (WBC)',
-                    result: '11.2 ↑',
-                    reference: '4.0-10.0',
-                    imgList: [
-                      'https://gips0.baidu.com/it/u=163643473,1997243702&fm=3074&app=3074&f=PNG?w=2560&h=1440',
-                      'https://gips1.baidu.com/it/u=3874035412,3044192377&fm=3028&app=3028&f=JPEG?w=1024&h=1024'
-                    ]
-                  },
-                  {
-                    itemName: '红细胞计数 (RBC)',
-                    result: '4.55',
-                    reference: '3.5-5.5',
-                    imgList: []
-                  },
-                  {
-                    itemName: '血红蛋白浓度 (HGB)',
-                    result: '142',
-                    reference: '120-160',
-                    imgList: []
-                  },
-                  {
-                    itemName: '血小板计数 (PLT)',
-                    result: '210',
-                    reference: '100-300',
-                    imgList: [
-                      {
-                        url: 'https://gips2.baidu.com/it/u=1958261546,408422616&fm=3028&app=3028&f=JPEG?w=1024&h=1024'
-                      }
-                    ]
-                  }
+                  { itemName: '白细胞计数 (WBC)', result: '7.2', reference: '3.5-9.5 ×10^9/L', imgList: ['https://picsum.photos/120/80?random=21'] },
+                  { itemName: '红细胞计数 (RBC)', result: '4.85', reference: '4.0-5.5 ×10^12/L', imgList: [] }
                 ]
               },
               {
-                title: '二、尿液常规与沉渣镜检分析组',
+                title: '凝血四项检验报告',
                 children: [
-                  {
-                    itemName: '尿蛋白定性 (PRO)',
-                    result: '阳性 (+)',
-                    reference: '阴性 (-)',
-                    imgList: [
-                      {
-                        url: 'https://gips0.baidu.com/it/u=163643473,1997243702&fm=3074&app=3074&f=PNG?w=2560&h=1440'
-                      }
-                    ]
-                  },
-                  {
-                    itemName: '尿潜血 (BLD)',
-                    result: '阴性 (-)',
-                    reference: '阴性 (-)',
-                    imgList: []
-                  },
-                  {
-                    itemName: '尿白细胞镜检 (WBC-HP)',
-                    result: '2-4 /HP',
-                    reference: '0-5 /HP',
-                    imgList: []
-                  }
-                ]
-              },
-              {
-                title: '三、肝肾代谢与离子生化组',
-                children: [
-                  {
-                    itemName: '血清肌酐 (Cr)',
-                    result: '88.5',
-                    reference: '53-106',
-                    imgList: []
-                  },
-                  {
-                    itemName: '尿素氮 (BUN)',
-                    result: '6.2',
-                    reference: '3.2-7.1',
-                    imgList: []
-                  },
-                  {
-                    itemName: '血清钾 (K+)',
-                    result: '4.15',
-                    reference: '3.5-5.3',
-                    imgList: []
-                  }
+                  { itemName: '凝血酶原时间 (PT)', result: '11.8', reference: '11.0-14.5 秒', imgList: [] },
+                  { itemName: '纤维蛋白原 (FIB)', result: '3.12', reference: '2.0-4.0 g/L', imgList: ['https://picsum.photos/120/80?random=22'] }
                 ]
               }
             ]
-          }
+          },
+
+          // -------------------------------------------------------------
+          // 经典业务场景数据源 5：双层多表头复合分组表 (groupedData)
+          // -------------------------------------------------------------
+          groupedData: [
+            {
+              projectItemName: '资质与制度体系（关键）',
+              projectScore: 100,
+              projectActualScore: 90,
+              contentItemName: '许可管理（关键）',
+              contentScore: 50,
+              contentActualScore: 50,
+              children: [
+                { itemIndex: 1, evalContent: '★ 食堂持有效《食品经营许可证》', problemDesc: '暂无', images: [], score: 10, rectifySuggest: '暂无' },
+                { itemIndex: 2, evalContent: '★ 许可证无涂改、出租等行为', problemDesc: '暂无', images: [], score: 10, rectifySuggest: '暂无' },
+                { itemIndex: 5, evalContent: '★ 建立承包准入退出机制', problemDesc: '暂无', images: [], score: 10, rectifySuggest: '暂无' }
+              ]
+            },
+            {
+              projectItemName: '资质与制度体系（关键）',
+              projectScore: 100,
+              projectActualScore: 90,
+              contentItemName: '信息公示（关键）',
+              contentScore: 50,
+              contentActualScore: 40,
+              children: [
+                { itemIndex: 6, evalContent: '★ 在就餐区醒目位置公示证照', problemDesc: '暂无', images: [], score: 10, rectifySuggest: '暂无' },
+                { itemIndex: 10, evalContent: '★ 公示食品添加剂使用品种与用量', problemDesc: '未完整公示用量', images: ['https://picsum.photos/120/80?random=23'], score: 0, rectifySuggest: '立即补齐' }
+              ]
+            }
+          ],
+
+          // -------------------------------------------------------------
+          // 经典业务场景数据源 6：三层树形嵌套评分表 (threeLevelNestedData)
+          // -------------------------------------------------------------
+          threeLevelNestedData: [
+            {
+              projectItemName: '资质与制度体系（关键）',
+              projectScore: 100,
+              projectActualScore: 90,
+              children: [
+                {
+                  contentItemName: '许可管理（关键）',
+                  contentScore: 50,
+                  contentActualScore: 50,
+                  children: [
+                    { itemIndex: 1, evalContent: '★ 食堂持有效《食品经营许可证》', problemDesc: '暂无', images: [], score: 10, rectifySuggest: '暂无' },
+                    { itemIndex: 5, evalContent: '★ 实施承包经营准入和退出机制', problemDesc: '暂无', images: [], score: 10, rectifySuggest: '暂无' }
+                  ]
+                },
+                {
+                  contentItemName: '信息公示（关键）',
+                  contentScore: 50,
+                  contentActualScore: 40,
+                  children: [
+                    { itemIndex: 6, evalContent: '★ 醒目位置公示从业人员健康证明', problemDesc: '暂无', images: [], score: 10, rectifySuggest: '暂无' },
+                    { itemIndex: 10, evalContent: '★ 公示食品添加剂使用品种和用量', problemDesc: '用量不详', images: [], score: 0, rectifySuggest: '立即整改' }
+                  ]
+                }
+              ]
+            },
+            {
+              projectItemName: '加工制作过程（合理）',
+              projectScore: 100,
+              projectActualScore: 100,
+              children: [
+                {
+                  contentItemName: '初加工（合理）',
+                  contentScore: 50,
+                  contentActualScore: 50,
+                  children: [
+                    { itemIndex: 11, evalContent: '分开设置荤素水产清洗池', problemDesc: '暂无', images: [], score: 10, rectifySuggest: '暂无' }
+                  ]
+                }
+              ]
+            }
+          ],
+
+          // -------------------------------------------------------------
+          // 经典业务场景数据源 7：扁平混合条件表 (flattenedData)
+          // -------------------------------------------------------------
+          flattenedData: [
+            { isCategoryHeader: true, projectItemName: '基础资质与制度体系', projectScore: 5, projectActualScore: 5 },
+            { isCategoryHeader: false, itemIndex: 1, isKeyItem: true, evalContent: '持有效许可证', problemDesc: '暂无', images: [], rectifySuggest: '暂无', score: 5 },
+            { isCategoryHeader: true, projectItemName: '加工制作环节管理', projectScore: 10, projectActualScore: 10 },
+            { isCategoryHeader: false, itemIndex: 2, isKeyItem: false, evalContent: '成品加盖密闭存放', problemDesc: '暂无', images: [], rectifySuggest: '暂无', score: 10 }
+          ]
         })
       }, 0)
     })

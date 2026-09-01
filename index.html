@@ -16,9 +16,9 @@
         <div class="menu-item__save" title="保存">
           <i></i>
         </div>
-        <div class="menu-item__import" title="导入 Word 模板 (.docx)">
+        <div class="menu-item__import" title="导入 Word/JSON 模板 (.docx, .json)">
           <i></i>
-          <input type="file" id="import-word-input" accept=".docx" style="display: none;" />
+          <input type="file" id="import-file-input" accept=".docx,.json" style="display: none;" />
         </div>
         <div class="menu-item__undo no-allow">
           <i></i>
@@ -389,7 +389,7 @@
       <div class="catalog__main"></div>
     </div>
     <div class="editor"></div>
-    <div class="editor-aside-right" id="editor-aside-right">
+    <div class="editor-aside-right hidden" id="editor-aside-right">
       <div class="aside-right__header">
         <div class="aside-right__header-title">
           <div class="aside-right__title-box">

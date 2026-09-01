@@ -1126,7 +1126,7 @@ export class Draw {
   }
 
   public async getDataURL(payload: IGetImageOption = {}): Promise<string[]> {
-    const { pixelRatio, mode, snapDomFunction } = payload
+    const { pixelRatio, mode, snapDomFunction, imageType = 'image/jpeg', imageQuality = 0.9 } = payload
     // 放大像素比
     if (pixelRatio) {
       this.setPagePixelRatio(pixelRatio)
@@ -1148,7 +1148,7 @@ export class Draw {
     if (snapDomFunction) {
       await this.blockParticle.drawIframeToPage(this.pageList, snapDomFunction)
     }
-    const dataUrlList = this.pageList.map(c => c.toDataURL())
+    const dataUrlList = this.pageList.map(c => c.toDataURL(imageType, imageQuality))
     // 还原
     if (pixelRatio) {
       this.setPagePixelRatio(null)

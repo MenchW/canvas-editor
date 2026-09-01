@@ -66,7 +66,12 @@ export class ImageControl implements IControlInstance {
     const targetControlId = this.element.controlId
 
     let formatValue: IElement[] = []
-    if (Array.isArray(data) && data.length > 0 && data[0].type === ElementType.IMAGE) {
+    const firstItem = Array.isArray(data) ? data[0] : data
+    if (
+      Array.isArray(data) &&
+      data.length > 0 &&
+      data[0]?.type === ElementType.IMAGE
+    ) {
       formatValue = data
     } else if (typeof data === 'string' && data) {
       formatValue = [
@@ -77,15 +82,15 @@ export class ImageControl implements IControlInstance {
           height: control?.height || 120
         }
       ]
-    } else if (data && typeof data === 'object') {
-      const url = data.url || data.src || data.value || ''
+    } else if (firstItem && typeof firstItem === 'object') {
+      const url = firstItem.url || firstItem.src || firstItem.value || ''
       if (url) {
         formatValue = [
           {
             type: ElementType.IMAGE,
             value: url,
-            width: Number(data.width) || control?.width || 120,
-            height: Number(data.height) || control?.height || 120
+            width: Number(firstItem.width) || control?.width || 120,
+            height: Number(firstItem.height) || control?.height || 120
           }
         ]
       }
@@ -138,7 +143,8 @@ export class ImageControl implements IControlInstance {
     }
 
     const anchorElement = pickObject(
-      elementList[prefixIndex !== -1 ? prefixIndex : firstIndex] || this.element,
+      elementList[prefixIndex !== -1 ? prefixIndex : firstIndex] ||
+        this.element,
       ['control', 'controlId', ...CONTROL_STYLE_ATTR]
     )
 

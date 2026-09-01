@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>宿主系统集成 Canvas Editor SDK 演示</title>
+  <title></title>
   <style>
     * {
       margin: 0;
@@ -17,69 +17,9 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       background-color: #f1f5f9;
     }
-    .parent-header {
-      height: 54px;
-      background: #0f172a;
-      color: #ffffff;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 20px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-      z-index: 10;
-      position: relative;
-    }
-    .parent-header .left-panel {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .parent-header .title {
-      font-size: 15px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      color: #f8fafc;
-    }
-    .parent-header .badge {
-      font-size: 11px;
-      background: #059669;
-      color: #fff;
-      padding: 2px 8px;
-      border-radius: 4px;
-    }
-    .parent-header .actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .btn {
-      border: none;
-      outline: none;
-      padding: 7px 16px;
-      border-radius: 4px;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .btn-success {
-      background: #059669;
-      color: #ffffff;
-    }
-    .btn-success:hover {
-      background: #047857;
-    }
-    .status-tips {
-      font-size: 12px;
-      color: #38bdf8;
-      margin-left: 8px;
-    }
     .iframe-container {
       width: 100%;
-      height: calc(100% - 54px);
+      height: 100%;
       position: relative;
     }
     .editor-iframe {
@@ -91,72 +31,216 @@
   </style>
 </head>
 <body>
-
-  <!-- 模拟宿主业务系统 Header -->
-  <div class="parent-header">
-    <div class="left-panel">
-      <div class="title">宿主业务系统 - 报告设计器</div>
-      <div class="badge">SDK 集成模式</div>
-      <span class="status-tips" id="status-tips">状态：等待 iframe 子窗口 Ready...</span>
-    </div>
-
-    <div class="actions">
-      <button class="btn btn-success" id="btn-fill-data">
-        🚀 填充占位符数据 (setControlValueList)
-      </button>
-      <button class="btn btn-success" id="btn-get-control-list">
-        🔍 获取控件列表 (getControlList)
-      </button>
-      <button class="btn btn-success" id="btn-check-missing">
-        ⚖️ 检查未对齐控件 (getMissingControlList)
-      </button>
-      <button class="btn btn-success" id="btn-get-value">
-        📄 获取当前文档 JSON 数据 (getValue)
-      </button>
-    </div>
-  </div>
-
-  <!-- iframe 编辑器载入容器 -->
   <div class="iframe-container">
     <iframe
       id="canvas-editor-iframe"
       class="editor-iframe"
-      src="../index.html"
+      src="https://open-web.hnocc.com/canvas-editor/index.html"
       allowfullscreen="true"
       allow="fullscreen"
       sandbox="allow-scripts allow-same-origin allow-modals allow-popups allow-forms allow-downloads"
     ></iframe>
   </div>
+  <script src="https://open-web.hnocc.com/canvas-editor/sdk/editor-client.umd.cjs"></script>
+  <script>
+    // const API_BASE = `https://center.hnocc.com/prod-api`;
+    const API_BASE = ``;
 
-  <!-- 公共 API 与 Mock 数据 -->
-  <script src="./common/api.js"></script>
-  <script src="./common/mock.js"></script>
-
-  <!-- 宿主系统引入 4KB 独立打包产物 SDK -->
-  <script type="module">
-    import { EditorClient } from '../src/sdk';
-
-    const statusEl = document.getElementById('status-tips');
-    const btnGetValue = document.getElementById('btn-get-value');
-    const btnFillData = document.getElementById('btn-fill-data');
-    const btnGetControlList = document.getElementById('btn-get-control-list');
-    const btnCheckMissing = document.getElementById('btn-check-missing');
-
-    const updateStatus = (text) => {
-      if (statusEl) {
-        statusEl.textContent = `状态: ${text}`;
+    function getQueryParam(...keys) {
+      if (typeof window !== 'undefined' && window.location) {
+        const urlParams = new URLSearchParams(window.location.search);
+        for (const key of keys) {
+          const val = urlParams.get(key);
+          if (val) return val;
+        }
       }
+      return '';
+    }
+
+    function getCookie(name) {
+      if (typeof document !== 'undefined' && document.cookie) {
+        const match = document.cookie.match(new RegExp(`(^|;\\s*)${name}=([^;]*)`));
+        if (match && match[2]) {
+          return decodeURIComponent(match[2]);
+        }
+      }
+      return '';
+    }
+
+    function getAppId() {
+      return getQueryParam('appId', 'appid');
+    }
+
+    function getId() {
+      return getQueryParam('id', 'templateId');
+    }
+
+    function getTemplateName() {
+      return getQueryParam('name');
+    }
+
+    function getAuthToken() {
+      return getQueryParam('token', 'Admin-Token') || getCookie('Admin-Token') || getAppId();
+    }
+
+    // -------------------------------------------------------------
+    // 轻量级 Toast 提示组件封装
+    // -------------------------------------------------------------
+    const toast = {
+      container: null,
+      init() {
+        if (!this.container || !document.body.contains(this.container)) {
+          this.container = document.createElement('div');
+          this.container.id = 'demo-toast-container';
+          this.container.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 999999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            pointer-events: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+          `;
+          document.body.appendChild(this.container);
+        }
+      },
+      show(message, type = 'info', duration = 3000) {
+        this.init();
+        const item = document.createElement('div');
+        const colors = {
+          success: { bg: '#f6ffed', border: '#b7eb8f', text: '#52c41a', icon: '✔' },
+          error: { bg: '#fff2f0', border: '#ffccc7', text: '#ff4d4f', icon: '✖' },
+          warning: { bg: '#fffbe6', border: '#ffe58f', text: '#faad14', icon: '⚠' },
+          info: { bg: '#e6f7ff', border: '#91d5ff', text: '#1890ff', icon: 'ℹ' }
+        };
+        const c = colors[type] || colors.info;
+
+        item.style.cssText = `
+          pointer-events: auto;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          background: ${c.bg};
+          border: 1px solid ${c.border};
+          border-radius: 4px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+          color: #333;
+          font-size: 13px;
+          line-height: 1.5;
+          opacity: 0;
+          transform: translateY(-10px);
+          transition: all 0.25s ease-out;
+        `;
+        item.innerHTML = `<span style="color: ${c.text}; font-weight: bold;">${c.icon}</span> <span>${message}</span>`;
+        this.container.appendChild(item);
+
+        // 动画显示
+        requestAnimationFrame(() => {
+          item.style.opacity = '1';
+          item.style.transform = 'translateY(0)';
+        });
+
+        // 自动移除
+        setTimeout(() => {
+          item.style.opacity = '0';
+          item.style.transform = 'translateY(-10px)';
+          setTimeout(() => {
+            if (item.parentNode) item.parentNode.removeChild(item);
+          }, 250);
+        }, duration);
+      },
+      success(msg, duration) { this.show(msg, 'success', duration); },
+      error(msg, duration) { this.show(msg, 'error', duration); },
+      warning(msg, duration) { this.show(msg, 'warning', duration); },
+      info(msg, duration) { this.show(msg, 'info', duration); }
     };
 
-    // -------------------------------------------------------------
-    // 【宿主接入】实例化 EditorClient SDK
-    // -------------------------------------------------------------
-    const editorClient = new EditorClient({
+    async function apiRequest(url, options = {}) {
+      const method = (options.method || 'GET').toUpperCase();
+      const token = getAuthToken();
+      let fullUrl = API_BASE + url;
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: 'Bearer ' + token } : {}),
+        ...(options.headers || {})
+      };
+      if (options.params) {
+        const query = new URLSearchParams(options.params).toString();
+        if (query) fullUrl += (fullUrl.includes('?') ? '&' : '?') + query;
+      }
+      let body = undefined;
+      if (
+        options.data !== undefined &&
+        options.data !== null &&
+        (method === 'POST' || method === 'PUT' || method === 'PATCH')
+      ) {
+        if (typeof FormData !== 'undefined' && options.data instanceof FormData) {
+          body = options.data;
+          delete headers['Content-Type'];
+        } else if (typeof options.data === 'string') {
+          body = options.data;
+        } else {
+          body = JSON.stringify(options.data);
+        }
+      }
+      const fetchOptions = {
+        method,
+        headers,
+        ...(body !== undefined ? { body } : {})
+      };
+
+      try {
+        const res = await fetch(fullUrl, fetchOptions);
+        const resData = await res.json().catch(() => null);
+        if (!res.ok) {
+          const errText = resData?.msg || resData?.message || `HTTP 请求异常 (${res.status})`;
+          toast.error(errText);
+          throw new Error(errText);
+        }
+        if (resData && typeof resData === 'object' && resData.code !== undefined && resData.code != 200) {
+          const errorMsg = resData.msg || resData.message || resData.res || `业务请求失败 (code: ${resData.code})`;
+          const finalErr = typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : String(errorMsg);
+          toast.error(finalErr);
+          throw new Error(finalErr);
+        }
+        return resData;
+      } catch (err) {
+        // 网络不通或跨域等浏览器级别抛错
+        if (err && !err.message?.includes('业务请求失败') && !err.message?.includes('HTTP')) {
+          toast.error(err.message || '网络连接异常，请检查接口或网络！');
+        }
+        throw err;
+      }
+    }
+
+    const componentApi = {
+      listByAppId: (appId) =>
+        apiRequest('/system/component-dictionary/group/listByAppId', {
+          method: 'GET',
+          params: { appId }
+        })
+    };
+
+    const templateApi = {
+      getTemplate: (id) =>
+        apiRequest(`/system/report-template/${id}`, {
+          method: 'GET'
+        })
+    };
+
+    const ClientClass = window.EditorClient?.EditorClient || window.EditorClient;
+    const editorClient = new ClientClass({
       iframe: '#canvas-editor-iframe',
-      appId: 'c377fb213ad9703',
+      appId: getAppId(),
 
       config: {
         mode: 'edit',
+        exportFileName:'报告',
         features: {
           save: true,
           asidePanel: true,
@@ -168,71 +252,68 @@
         }
       },
 
-      // 数据 Providers
-      // getData: async () => await window.mockFetchBusinessDataApi(),
-      getTemplate: async () => await window.mockFetchTemplateApi(),
-      getComponents: async () => await window.mockFetchComponentListApi(),
+      getTemplate: async () => {
+        const id = getId();
+        if (id) {
+          try {
+            const res = await templateApi.getTemplate(id);
+            const templateObj = res?.data || res;
+            if (templateObj) {
+              let reportData = templateObj.reportData || templateObj.data;
+              if (typeof reportData === 'string') {
+                try {
+                  reportData = JSON.parse(reportData);
+                } catch (e) {}
+              }
+              if (reportData && (reportData.data || reportData.main || Array.isArray(reportData))) {
+                return reportData;
+              }
+            }
+          } catch (err) {
+            console.warn(`[宿主系统] 请求模板详情异常:`, err);
+          }
+        }
+      },
+      getComponents: async () => {
+        const appId = getAppId();
+        try {
+          const res = await componentApi.listByAppId(appId);
+          const groups = res?.data || res?.rows || (Array.isArray(res) ? res : []);
+          if (Array.isArray(groups) && groups.length > 0) {
+            return groups;
+          }
+        } catch (err) {
+          console.warn('[宿主系统] 后端组件接口请求异常:', err);
+        }
+        return [];
+      },
 
-      // 保存 Hook
       onSave: async (documentJson, toast) => {
-        console.log('[宿主系统] 收到 Editor 提交保存 JSON:', documentJson);
         const savePayload = documentJson.savePayload || {
-          appId: 'c377fb213ad9703',
+          appId: getAppId(),
           reportData: JSON.stringify(documentJson)
         };
         const closeLoading = toast.loading('文档保存中...');
         try {
-          console.log('[宿主系统] 开始请求后端保存接口...', savePayload);
-          // 使用统一 API 客户端（已内置 Content-Type: application/json、Token 及状态码校验）
-          await window.apiRequest('/system/report-template', {
-            method: 'POST',
+          await apiRequest('/system/report-template', {
+            method: 'PUT',
             data: savePayload
           });
-          updateStatus('已成功保存文档及模板数据');
           toast.success('保存成功');
         } catch (err) {
-          console.error('[宿主系统] 保存异常:', err);
-          updateStatus(`保存失败：${err.message || '网络或服务异常'}`);
           toast.error(err.message || '保存失败');
         } finally {
           closeLoading();
         }
       },
 
-      // 打印 Hook
-      onPrint: async (e) => {
-        console.log('[宿主系统] 收到 Editor 打印 Hook 通知');
-        alert('拦截打印')
-        return false
+      onPrint: async () => {
+        return false;
       },
 
-      // 图片/签名上传 Hook
       onUploadImage: async (base64) => {
-        console.log('[宿主系统] 收到上传 Base64 请求，正在模拟上传至 OSS...');
         return base64;
       }
-    });
-
-    // 绑定演示操作按钮
-    btnFillData?.addEventListener('click', async () => {
-      const data = await window.mockFetchBusinessDataApi();
-      await editorClient.setControlValueList(data);
-      updateStatus('已成功填充占位符数据');
-    });
-
-    btnGetControlList?.addEventListener('click', async () => {
-      const list = await editorClient.getControlList();
-      console.log('[宿主] 当前控件列表:', list);
-    });
-
-    btnCheckMissing?.addEventListener('click', async () => {
-      const auditResult = await editorClient.getMissingControlList();
-      console.log('[宿主] 控件数据审计结果:', auditResult);
-    });
-
-    btnGetValue?.addEventListener('click', async () => {
-      const doc = await editorClient.getValue();
-      console.log('[宿主] 当前文档 JSON:', doc);
     });
   </script>
 </body>

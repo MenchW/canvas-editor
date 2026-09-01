@@ -1,13 +1,21 @@
+import { toast } from '../components/toast/Toast'
+
 export interface RequestOptions extends Omit<RequestInit, 'body'> {
   baseURL?: string
   params?: Record<string, any>
   data?: any
   timeout?: number // 超时时间(ms)，默认 15000
   responseType?: 'json' | 'text' | 'blob' | 'arraybuffer'
+  showErrorToast?: boolean // 是否自动弹出错误 toast 提示，默认 true
 }
 
 export interface RequestInterceptor {
-  (url: string, options: RequestOptions): Promise<{ url: string; options: RequestOptions }> | { url: string; options: RequestOptions }
+  (
+    url: string,
+    options: RequestOptions
+  ):
+    | Promise<{ url: string; options: RequestOptions }>
+    | { url: string; options: RequestOptions }
 }
 
 export interface ResponseInterceptor {
@@ -44,7 +52,11 @@ class HttpClient {
   /**
    * 拼接 query 参数到 URL
    */
-  private buildURL(url: string, params?: Record<string, any>, baseURL?: string): string {
+  private buildURL(
+    url: string,
+    params?: Record<string, any>,
+    baseURL?: string
+  ): string {
     let fullURL = url
     if (baseURL || this.baseURL) {
       const base = (baseURL || this.baseURL).replace(/\/+$/, '')
@@ -70,13 +82,18 @@ class HttpClient {
     const queryString = searchParams.toString()
     if (!queryString) return fullURL
 
-    return fullURL.includes('?') ? `${fullURL}&${queryString}` : `${fullURL}?${queryString}`
+    return fullURL.includes('?')
+      ? `${fullURL}&${queryString}`
+      : `${fullURL}?${queryString}`
   }
 
   /**
    * 发起通用网络请求
    */
-  public async request<T = any>(url: string, options: RequestOptions = {}): Promise<T> {
+  public async request<T = any>(
+    url: string,
+    options: RequestOptions = {}
+  ): Promise<T> {
     let targetUrl = url
     let mergedOptions: RequestOptions = {
       timeout: this.defaultTimeout,
@@ -94,9 +111,20 @@ class HttpClient {
       mergedOptions = result.options
     }
 
-    const finalUrl = this.buildURL(targetUrl, mergedOptions.params, mergedOptions.baseURL)
+    const finalUrl = this.buildURL(
+      targetUrl,
+      mergedOptions.params,
+      mergedOptions.baseURL
+    )
 
-    const { timeout, data, responseType = 'json', headers: userHeaders, ...fetchOptions } = mergedOptions
+    const {
+      timeout,
+      data,
+      responseType = 'json',
+      showErrorToast = true,
+      headers: userHeaders,
+      ...fetchOptions
+    } = mergedOptions
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), timeout)
 
@@ -110,10 +138,24 @@ class HttpClient {
       if (typeof FormData !== 'undefined' && data instanceof FormData) {
         body = data
         delete finalHeaders['Content-Type']
-      } else if (typeof data === 'string' || data instanceof Blob || data instanceof ArrayBuffer) {
+      } else if (
+        typeof data === 'string' ||
+        data instanceof Blob ||
+        data instanceof ArrayBuffer
+      ) {
         body = data
       } else {
         body = JSON.stringify(data)
+      }
+    }
+
+    const notifyError = (msg: string) => {
+      if (showErrorToast) {
+        try {
+          toast.error(msg)
+        } catch {
+          // ignore toast environment failure in non-browser context
+        }
       }
     }
 
@@ -136,13 +178,14 @@ class HttpClient {
       const isResponse =
         processedResponse &&
         (typeof processedResponse.text === 'function' ||
-          (typeof Response !== 'undefined' && processedResponse instanceof Response))
+          (typeof Response !== 'undefined' &&
+            processedResponse instanceof Response))
 
       if (isResponse) {
         if (processedResponse.ok === false) {
-          throw new Error(
-            `HTTP Error ${processedResponse.status || 500}: ${processedResponse.statusText || 'Request Failed'}`
-          )
+          const httpErrorMsg = `HTTP Error ${processedResponse.status || 500}: ${processedResponse.statusText || 'Request Failed'}`
+          notifyError(httpErrorMsg)
+          throw new Error(httpErrorMsg)
         }
 
         switch (responseType) {
@@ -161,14 +204,19 @@ class HttpClient {
                 resData &&
                 typeof resData === 'object' &&
                 resData.code !== undefined &&
-                Number(resData.code) !== 200
+                resData.code != 200
               ) {
                 const errorMsg =
                   resData.msg ||
                   resData.message ||
                   resData.res ||
-                  `业务请求失败 (code: ${resData.code})`
-                throw new Error(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : String(errorMsg))
+                  `请求失败 (code: ${resData.code})`
+                const formattedMsg =
+                  typeof errorMsg === 'object'
+                    ? JSON.stringify(errorMsg)
+                    : String(errorMsg)
+                notifyError(formattedMsg)
+                throw new Error(formattedMsg)
               }
               return resData as T
             } catch (err: any) {
@@ -185,29 +233,51 @@ class HttpClient {
     } catch (error: any) {
       clearTimeout(timeoutId)
       if (error.name === 'AbortError') {
-        throw new Error(`Request timeout after ${timeout}ms: ${finalUrl}`)
+        const timeoutMsg = `Request timeout after ${timeout}ms: ${finalUrl}`
+        notifyError(timeoutMsg)
+        throw new Error(timeoutMsg)
       }
       throw error
     }
   }
 
-  public get<T = any>(url: string, params?: Record<string, any>, options?: Omit<RequestOptions, 'params' | 'method'>): Promise<T> {
+  public get<T = any>(
+    url: string,
+    params?: Record<string, any>,
+    options?: Omit<RequestOptions, 'params' | 'method'>
+  ): Promise<T> {
     return this.request<T>(url, { ...options, method: 'GET', params })
   }
 
-  public post<T = any>(url: string, data?: any, options?: Omit<RequestOptions, 'data' | 'method'>): Promise<T> {
+  public post<T = any>(
+    url: string,
+    data?: any,
+    options?: Omit<RequestOptions, 'data' | 'method'>
+  ): Promise<T> {
     return this.request<T>(url, { ...options, method: 'POST', data })
   }
 
-  public put<T = any>(url: string, data?: any, options?: Omit<RequestOptions, 'data' | 'method'>): Promise<T> {
+  public put<T = any>(
+    url: string,
+    data?: any,
+    options?: Omit<RequestOptions, 'data' | 'method'>
+  ): Promise<T> {
     return this.request<T>(url, { ...options, method: 'PUT', data })
   }
 
-  public delete<T = any>(url: string, params?: Record<string, any>, options?: Omit<RequestOptions, 'params' | 'method'>): Promise<T> {
+  public delete<T = any>(
+    url: string,
+    params?: Record<string, any>,
+    options?: Omit<RequestOptions, 'params' | 'method'>
+  ): Promise<T> {
     return this.request<T>(url, { ...options, method: 'DELETE', params })
   }
 
-  public patch<T = any>(url: string, data?: any, options?: Omit<RequestOptions, 'data' | 'method'>): Promise<T> {
+  public patch<T = any>(
+    url: string,
+    data?: any,
+    options?: Omit<RequestOptions, 'data' | 'method'>
+  ): Promise<T> {
     return this.request<T>(url, { ...options, method: 'PATCH', data })
   }
 }
@@ -219,7 +289,10 @@ export const http = new HttpClient({
 })
 
 // 便捷函数形式
-export const request = <T = any>(url: string, options?: RequestOptions): Promise<T> => {
+export const request = <T = any>(
+  url: string,
+  options?: RequestOptions
+): Promise<T> => {
   return http.request<T>(url, options)
 }
 

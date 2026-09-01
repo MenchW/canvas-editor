@@ -687,7 +687,7 @@
           const id = row.id || '';
           const code = row.templateCode || '';
           const name = encodeURIComponent(row.templateName || '');
-          const url = `./iframe-design.html?templateId=${id}&templateCode=${code}&templateName=${name}`;
+          const url = `./iframe-design.html?id=${id}&code=${code}&name=${name}`;
           window.open(url, '_blank');
         }
       }

@@ -43,6 +43,30 @@ export default defineConfig(({ mode }) => {
     return {
       resolve,
       test,
+      publicDir: false,
+      plugins: [
+        {
+          name: 'sdk-banner-plugin',
+          generateBundle(_options, bundle) {
+            try {
+              const srcFile = path.resolve(__dirname, 'src/sdk/editor-client.ts')
+              const content = fs.readFileSync(srcFile, 'utf-8')
+              const match = content.match(/^\s*(\/\*\*[\s\S]*?\*\/)/)
+              const banner = match ? match[1].trim() : ''
+              if (banner) {
+                for (const fileName in bundle) {
+                  const file = bundle[fileName]
+                  if (file.type === 'chunk') {
+                    file.code = `${banner}\n\n${file.code}`
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('[vite.config.ts] 提取 SDK 顶部注释失败:', e)
+            }
+          }
+        }
+      ],
       build: {
         outDir: 'dist/sdk',
         emptyOutDir: false,
@@ -51,7 +75,7 @@ export default defineConfig(({ mode }) => {
           fileName: 'editor-client',
           entry: path.resolve(__dirname, 'src/sdk/index.ts'),
           formats: ['es', 'umd']
-        },
+        }
       }
     }
   }
@@ -89,33 +113,33 @@ export default defineConfig(({ mode }) => {
   return {
     resolve,
     test,
-    base: `/`,
+    base: mode == 'development' ? `/` : name,
     plugins: [
       {
-        name: 'flatten-demo-html-plugin',
+        name: 'copy-iframe-design-plugin',
         closeBundle() {
           const distDir = path.resolve(__dirname, 'dist')
+          const demoIframeDist = path.resolve(
+            distDir,
+            'demo/iframe-design.html'
+          )
           const demoDistDir = path.resolve(distDir, 'demo')
 
-          // 1. 将 dist/demo/*.html 平铺移动到 dist/*.html 并修复平铺后的资源相对路径
-          if (fs.existsSync(demoDistDir)) {
-            const htmlFiles = fs.readdirSync(demoDistDir)
-            htmlFiles.forEach(file => {
-              if (file.endsWith('.html')) {
-                const srcPath = path.join(demoDistDir, file)
-                let content = fs.readFileSync(srcPath, 'utf-8')
-                content = content.replace(/(src|href)=["']\.\.\/assets\//g, '$1="./assets/')
-                fs.writeFileSync(path.join(distDir, file), content, 'utf-8')
-              }
-            })
-            fs.rmSync(demoDistDir, { recursive: true, force: true })
+          if (fs.existsSync(demoIframeDist)) {
+            let content = fs.readFileSync(demoIframeDist, 'utf-8')
+            content = content.replace(
+              /(src|href)=["']\.\.\/assets\//g,
+              '$1="./assets/'
+            )
+            fs.writeFileSync(
+              path.join(distDir, 'iframe-design.html'),
+              content,
+              'utf-8'
+            )
           }
 
-          // 2. 完整复制整个 common 目录（api.js, utils.js, mock.js, deps.js, lib等）到 dist/common
-          const srcCommon = path.resolve(__dirname, 'demo/common')
-          const destCommon = path.resolve(distDir, 'common')
-          if (fs.existsSync(srcCommon)) {
-            fs.cpSync(srcCommon, destCommon, { recursive: true, force: true })
+          if (fs.existsSync(demoDistDir)) {
+            fs.rmSync(demoDistDir, { recursive: true, force: true })
           }
         }
       }
@@ -125,8 +149,6 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, 'index.html'),
-          'component-management': path.resolve(__dirname, 'demo/component-management.html'),
-          'template-management': path.resolve(__dirname, 'demo/template-management.html'),
           'iframe-design': path.resolve(__dirname, 'demo/iframe-design.html')
         }
       }
@@ -134,6 +156,9 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: 3000,
+      watch: {
+        ignored: ['**/dist/**']
+      },
       proxy: {
         '/system': {
           target: 'http://10.0.43.207:30300',

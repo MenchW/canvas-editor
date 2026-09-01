@@ -86,4 +86,17 @@ describe('轻量级网络请求工具方法测试', () => {
 
     await expect(http.get('/api/not-found')).rejects.toThrow('HTTP Error 404: Not Found')
   })
+
+  it('业务 code 不为 200 时正确提示并抛出错误', async () => {
+    const errorData = { code: 500, msg: '数据库连接失败' }
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(errorData), {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'Content-Type': 'application/json' }
+      })
+    )
+
+    await expect(http.get('/api/data')).rejects.toThrow('数据库连接失败')
+  })
 })

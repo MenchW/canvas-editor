@@ -1,4 +1,3 @@
-import { jsPDF } from 'jspdf'
 import { NBSP, WRAP, ZERO } from '../../dataset/constant/Common'
 import {
   AREA_CONTEXT_ATTR,
@@ -1477,69 +1476,7 @@ export class CommandAdapt {
     }
   }
 
-  public async exportPdf(fileName = 'CanvasEditor文档') {
-    const { scale, printPixelRatio, paperDirection } = this.options
-    if (scale !== 1) {
-      this.draw.setPageScale(1)
-    }
-    const base64List = await this.draw.getDataURL({
-      pixelRatio: printPixelRatio,
-      mode: EditorMode.PRINT
-    })
-    if (!base64List || !base64List.length) {
-      if (scale !== 1) {
-        this.draw.setPageScale(scale)
-      }
-      return
-    }
 
-    const isHorizontal = paperDirection === PaperDirection.HORIZONTAL
-
-    const doc = new jsPDF({
-      orientation: isHorizontal ? 'landscape' : 'portrait',
-      unit: 'pt',
-      format: 'a4'
-    })
-
-    const pdfWidth = doc.internal.pageSize.getWidth()
-    const pdfHeight = doc.internal.pageSize.getHeight()
-
-    base64List.forEach((imgData, index) => {
-      if (index > 0) {
-        doc.addPage()
-      }
-      doc.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight)
-    })
-
-    if (scale !== 1) {
-      this.draw.setPageScale(scale)
-    }
-
-    try {
-      doc.save(`${fileName}.pdf`)
-    } catch (e) {
-      console.warn('[exportPdf] 沙箱环境原生下载限制:', e)
-      const blob = doc.output('blob')
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${fileName}.pdf`
-      try {
-        a.click()
-      } catch (err) {
-        console.warn('[exportPdf] 沙箱窗口回退失败:', err)
-        const newWin = window.open(url, '_blank')
-        if (!newWin) {
-          console.warn(
-            '【宿主沙箱提示】受系统 iframe 安全限制未能直接导出 PDF 文件。请在宿主 <iframe sandbox="..."> 标签中添加 allow-downloads 许可。'
-          )
-        }
-      }
-      setTimeout(() => {
-        window.URL.revokeObjectURL(url)
-      }, 1000)
-    }
-  }
 
   public replaceImageElement(payload: string) {
     const { startIndex } = this.range.getRange()
@@ -3057,3 +2994,4 @@ export class CommandAdapt {
     })
   }
 }
+

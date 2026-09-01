@@ -1,3 +1,9 @@
+/**
+ * @file 宿主客户端 SDK 模块
+ * @version 1.0.1
+ * @author menchw
+ */
+
 import { connect, WindowMessenger } from 'penpal'
 import { EditorMode } from '../editor/dataset/enum/Editor'
 import type {
@@ -142,6 +148,19 @@ export class EditorClient implements IEditorClient {
     if (!this.editorRpc) return
     try {
       const { getTemplate, getData, getComponents } = this.options
+      if (!getTemplate) {
+        console.warn('[EditorClient SDK] getTemplate 配置空')
+      }
+
+      if (!getData) {
+        console.warn('[EditorClient SDK] getData 配置空')
+      }
+
+      if (!getComponents) {
+        console.warn('[EditorClient SDK] getComponents 配置空')
+      }
+      console.log(getData)
+
       const [template, businessData, componentList] = await Promise.all([
         typeof getTemplate === 'function' ? getTemplate() : getTemplate,
         typeof getData === 'function' ? getData() : getData,
@@ -152,7 +171,17 @@ export class EditorClient implements IEditorClient {
           : undefined
       ])
 
-      if (businessData && typeof businessData === 'object' && !Array.isArray(businessData)) {
+      console.log('[EditorClient SDK] 渲染参数', {
+        template,
+        data: businessData,
+        componentList
+      })
+
+      if (
+        businessData &&
+        typeof businessData === 'object' &&
+        !Array.isArray(businessData)
+      ) {
         this.lastFilledData = businessData
       }
 
@@ -189,7 +218,9 @@ export class EditorClient implements IEditorClient {
   /**
    * 批量填充表单/占位符控件数据
    */
-  public async setControlValueList(data?: Record<string, any> | any[]): Promise<void> {
+  public async setControlValueList(
+    data?: Record<string, any> | any[]
+  ): Promise<void> {
     if (!this.editorRpc) return
     let targetData = data
     if (!targetData && this.options.getData) {
@@ -198,7 +229,11 @@ export class EditorClient implements IEditorClient {
           ? await this.options.getData()
           : this.options.getData
     }
-    if (targetData && typeof targetData === 'object' && !Array.isArray(targetData)) {
+    if (
+      targetData &&
+      typeof targetData === 'object' &&
+      !Array.isArray(targetData)
+    ) {
       this.lastFilledData = targetData
     }
     await this.editorRpc.setControlValueList(targetData)
@@ -217,7 +252,9 @@ export class EditorClient implements IEditorClient {
   /**
    * 检查宿主业务数据与画布控件列表的字段对齐与假值情况
    */
-  public async getMissingControlList(data?: Record<string, any>): Promise<IControlDataAuditResult> {
+  public async getMissingControlList(
+    data?: Record<string, any>
+  ): Promise<IControlDataAuditResult> {
     const controls = await this.getControlList()
     if (!controls || controls.length === 0) {
       return { missingControls: [], falsyControls: [] }
@@ -225,7 +262,11 @@ export class EditorClient implements IEditorClient {
 
     const targetData = data || this.lastFilledData
 
-    if (!targetData || typeof targetData !== 'object' || Object.keys(targetData).length === 0) {
+    if (
+      !targetData ||
+      typeof targetData !== 'object' ||
+      Object.keys(targetData).length === 0
+    ) {
       return { missingControls: [], falsyControls: [] }
     }
 
@@ -364,5 +405,3 @@ export class EditorClient implements IEditorClient {
     this.connection?.destroy()
   }
 }
-
-

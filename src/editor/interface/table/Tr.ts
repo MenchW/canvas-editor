@@ -13,10 +13,16 @@ export interface ITr {
   loopConfig?: {
     datasetId: string
     isLoopRow: boolean
+    isGroupHeader?: boolean
+    isTbodyGroup?: boolean
+    isDetailRow?: boolean
+    itemAlias?: string
+    sourcePath?: string
     /**
      * 循环块结束行索引(含):循环区域由起始行(loopConfig 所在行)到 endTrIndex 组成,
      * 整块按数据条数复制;块内合并单元格(rowspan)按原格式保留
      */
     endTrIndex?: number
   }
+  when?: string
 }

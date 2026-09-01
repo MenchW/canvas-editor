@@ -36,6 +36,7 @@ export interface ITd {
   borderTypes?: TdBorder[]
   slashTypes?: TdSlash[]
   mergeSame?: 'vertical' | boolean
+  when?: string
   _remove?: boolean
   mainHeight?: number // 内容 + 内边距高度
   realHeight?: number // 真实高度（包含跨列）
