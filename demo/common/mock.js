@@ -1429,41 +1429,93 @@
           // -------------------------------------------------------------
           threeLevelNestedData: [
             {
-              projectItemName: '资质与制度体系（关键）',
-              projectScore: 100,
-              projectActualScore: 90,
+              projectName: '基础资质与制度体系',
+              projectItemName: '基础资质与制度体系（关键）',
+              projectMax: 50,
+              projectScore: 50,
+              projectActual: 50,
+              projectActualScore: 50,
               children: [
                 {
-                  contentItemName: '许可管理（关键）',
+                  contentName: '证照与人员管理',
+                  contentItemName: '证照与人员管理（满分 50 分）',
+                  contentMax: 50,
                   contentScore: 50,
+                  contentActual: 50,
                   contentActualScore: 50,
                   children: [
-                    { itemIndex: 1, evalContent: '★ 食堂持有效《食品经营许可证》', problemDesc: '暂无', images: [], score: 10, rectifySuggest: '暂无' },
-                    { itemIndex: 5, evalContent: '★ 实施承包经营准入和退出机制', problemDesc: '暂无', images: [], score: 10, rectifySuggest: '暂无' }
-                  ]
-                },
-                {
-                  contentItemName: '信息公示（关键）',
-                  contentScore: 50,
-                  contentActualScore: 40,
-                  children: [
-                    { itemIndex: 6, evalContent: '★ 醒目位置公示从业人员健康证明', problemDesc: '暂无', images: [], score: 10, rectifySuggest: '暂无' },
-                    { itemIndex: 10, evalContent: '★ 公示食品添加剂使用品种和用量', problemDesc: '用量不详', images: [], score: 0, rectifySuggest: '立即整改' }
+                    {
+                      index: 1,
+                      itemIndex: 1,
+                      title: '食堂持有效食品经营许可证且无涂改行为',
+                      evalContent: '★ 食堂持有效《食品经营许可证》且无涂改',
+                      tags: [{ name: '关键项' }, { name: '资质合规' }],
+                      problem: '暂无问题',
+                      problemDesc: '暂无',
+                      photos: '-',
+                      images: [],
+                      score: 25,
+                      rectifySuggest: '暂无'
+                    },
+                    {
+                      index: 2,
+                      itemIndex: 2,
+                      title: '从业人员健康证明均在有效期内',
+                      evalContent: '★ 从业人员健康证明均在有效期内且醒目公示',
+                      tags: [{ name: '人员管理' }, { name: '每日晨检' }],
+                      problem: '暂无问题',
+                      problemDesc: '暂无',
+                      photos: '-',
+                      images: [],
+                      score: 25,
+                      rectifySuggest: '暂无'
+                    }
                   ]
                 }
               ]
             },
             {
+              projectName: '加工制作过程管控',
               projectItemName: '加工制作过程（合理）',
-              projectScore: 100,
-              projectActualScore: 100,
+              projectMax: 50,
+              projectScore: 50,
+              projectActual: 40,
+              projectActualScore: 40,
               children: [
                 {
+                  contentName: '初加工与清洗消毒',
                   contentItemName: '初加工（合理）',
+                  contentMax: 50,
                   contentScore: 50,
-                  contentActualScore: 50,
+                  contentActual: 40,
+                  contentActualScore: 40,
                   children: [
-                    { itemIndex: 11, evalContent: '分开设置荤素水产清洗池', problemDesc: '暂无', images: [], score: 10, rectifySuggest: '暂无' }
+                    {
+                      index: 3,
+                      itemIndex: 3,
+                      title: '分开设置荤素水产清洗池并设明显标识',
+                      evalContent: '分开设置荤素水产清洗池',
+                      tags: [{ name: '洗消规范' }],
+                      problem: '水产池标识轻微磨损',
+                      problemDesc: '标识磨损',
+                      photos: '-',
+                      images: [],
+                      score: 20,
+                      rectifySuggest: '更换新标识'
+                    },
+                    {
+                      index: 4,
+                      itemIndex: 4,
+                      title: '餐饮具清洗消毒保洁设施运转正常',
+                      evalContent: '餐饮具清洗消毒保洁设施运转正常',
+                      tags: [{ name: '消毒记录' }],
+                      problem: '消毒温度记录完整',
+                      problemDesc: '记录完整',
+                      photos: '-',
+                      images: [],
+                      score: 20,
+                      rectifySuggest: '继续保持'
+                    }
                   ]
                 }
               ]
@@ -1484,9 +1536,165 @@
     })
   }
 
+  // -------------------------------------------------------------
+  // 控制台专属：表格回显深度诊断与排查工具 (debugTable / debugTableEcho)
+  // -------------------------------------------------------------
+  function debugTable(tableHtml, businessData) {
+    if (!tableHtml || typeof tableHtml !== 'string') {
+      console.warn('%c[debugTable] 请传入 table HTML 字符串，例如: debugTable("<table...</table>")', 'color:#f5222d;font-weight:bold;')
+      return
+    }
+    // 获取数据源
+    let data = businessData
+    if (!data) {
+      if (global.DEFAULT_BUSINESS_DATA) {
+        data = global.DEFAULT_BUSINESS_DATA
+      }
+    }
+
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(tableHtml, 'text/html')
+    const table = doc.querySelector('table')
+    if (!table) {
+      console.error('%c[debugTable] 传入的字符串中未找到 <table> 标签，请检查 HTML 是否完整闭合！', 'color:#f5222d;font-weight:bold;')
+      return
+    }
+
+    const declaredLoops = []
+    const fieldsAudit = []
+    const warnings = []
+
+    function getPathValue(obj, path) {
+      if (!obj || !path) return undefined
+      const parts = path.replace(/\[(\w+)\]/g, '.$1').replace(/^\./, '').split('.')
+      let cur = obj
+      for (const p of parts) {
+        if (cur === null || cur === undefined) return undefined
+        cur = cur[p]
+      }
+      return cur
+    }
+
+    // 1. 查找 tbody/tr loop
+    const tbodies = Array.from(table.querySelectorAll('tbody'))
+    tbodies.forEach((tbody, tbIdx) => {
+      const tbodyLoop = tbody.getAttribute('loop')
+      if (tbodyLoop) {
+        const m = tbodyLoop.match(/(?:let|var|const)?\s*(\w+)\s+in\s+([\w\.]+)/)
+        const alias = m ? m[1] : 'item'
+        const path = m ? m[2] : tbodyLoop.trim()
+        const subData = getPathValue(data, path)
+        const isArr = Array.isArray(subData)
+        declaredLoops.push({
+          位置: `tbody #${tbIdx + 1}`,
+          类型: 'tbody 块级循环',
+          别名: alias,
+          数据路径: path,
+          数据是否存在: isArr ? `✔ 存在 (${subData.length} 条)` : '✖ 不存在或非数组'
+        })
+        if (!isArr) {
+          warnings.push(`tbody 循环路径 [${path}] 在数据源中不存在！`)
+        }
+      }
+    })
+
+    const trs = Array.from(table.querySelectorAll('tr'))
+    trs.forEach((tr, rIdx) => {
+      const trLoop = tr.getAttribute('loop')
+      if (trLoop) {
+        const m = trLoop.match(/(?:let|var|const)?\s*(\w+)\s+in\s+([\w\.]+)/)
+        const alias = m ? m[1] : 'item'
+        const path = m ? m[2] : trLoop.trim()
+        const subData = getPathValue(data, path)
+        const isArr = Array.isArray(subData)
+        declaredLoops.push({
+          位置: `第 ${rIdx + 1} 行 tr`,
+          类型: 'tr 行循环',
+          别名: alias,
+          数据路径: path,
+          数据是否存在: isArr ? `✔ 存在 (${subData.length} 条)` : '✖ 不存在或非数组'
+        })
+      }
+
+      // 提取单元格中的占位符
+      const cells = Array.from(tr.querySelectorAll('th, td'))
+      cells.forEach((cell, cIdx) => {
+        const cellText = cell.innerHTML
+        const matches = cellText.match(/\{\{\s*([\w\.\-]+)\s*\}\}/g) || []
+        matches.forEach(m => {
+          const rawKey = m.replace(/^\{\{\s*|\s*\}\}$/g, '')
+          const parts = rawKey.split('.')
+          const alias = parts[0]
+          const fieldKey = parts.slice(1).join('.') || rawKey
+
+          let resolvedVal = undefined
+          let matched = false
+
+          const targetLoop = declaredLoops.find(l => l.别名 === alias)
+          if (targetLoop && data) {
+            const loopList = getPathValue(data, targetLoop.数据路径)
+            if (Array.isArray(loopList) && loopList.length > 0) {
+              const firstRow = loopList[0]
+              if (firstRow && typeof firstRow === 'object' && fieldKey in firstRow) {
+                resolvedVal = firstRow[fieldKey]
+                matched = true
+              }
+            }
+          }
+
+          if (!matched && data) {
+            const directVal = getPathValue(data, fieldKey) || getPathValue(data, rawKey)
+            if (directVal !== undefined) {
+              resolvedVal = directVal
+              matched = true
+            }
+          }
+
+          fieldsAudit.push({
+            单元格: `第 ${rIdx + 1} 行第 ${cIdx + 1} 列`,
+            占位符: `{{ ${rawKey} }}`,
+            字段名: fieldKey,
+            别名: alias,
+            首行回显模拟值: matched ? (typeof resolvedVal === 'object' ? JSON.stringify(resolvedVal) : String(resolvedVal)) : '✖ NOT_FOUND',
+            匹配状态: matched ? '🟢 MATCHED' : '🔴 未匹配到数据'
+          })
+        })
+      })
+    })
+
+    const isSuccess = warnings.length === 0 && (fieldsAudit.length === 0 || fieldsAudit.some(f => f.匹配状态.includes('MATCHED')))
+
+    console.group(`%c[debugTable 表格回显深度诊断] ${isSuccess ? '✔ 回显成功' : '✖ 发现潜在配置异常'}`, isSuccess ? 'background:#52c41a;color:#fff;font-weight:bold;padding:4px 10px;border-radius:4px;' : 'background:#f5222d;color:#fff;font-weight:bold;padding:4px 10px;border-radius:4px;')
+
+    if (warnings.length > 0) {
+      console.group('%c⚠ 告警与诊断建议', 'color:#fa8c16;font-weight:bold;')
+      warnings.forEach(w => console.warn('• ' + w))
+      console.groupEnd()
+    }
+
+    if (declaredLoops.length > 0) {
+      console.group('%c🔄 循环声明与数据源映射', 'color:#1890ff;font-weight:bold;')
+      console.table(declaredLoops)
+      console.groupEnd()
+    }
+
+    if (fieldsAudit.length > 0) {
+      console.group('%c📋 占位符字段匹配明细表', 'color:#722ed1;font-weight:bold;')
+      console.table(fieldsAudit)
+      console.groupEnd()
+    }
+
+    console.log('📥 传入的业务数据:', data)
+    console.groupEnd()
+
+    return { success: isSuccess, declaredLoops, fieldsAudit, warnings }
+  }
+
   // 挂载到全局
   global.DEFAULT_COMPONENT_DATA = DEFAULT_COMPONENT_DATA
   global.mockFetchComponentListApi = mockFetchComponentListApi
   global.mockFetchTemplateApi = mockFetchTemplateApi
   global.mockFetchBusinessDataApi = mockFetchBusinessDataApi
+  global.debugTable = debugTable
+  global.debugTableEcho = debugTable
 })(typeof window !== 'undefined' ? window : this)

@@ -4,6 +4,7 @@ import prism from 'prismjs'
 import docxPlugin from './plugins/docx'
 import pdfPlugin from './plugins/pdf'
 import { EditorBridge } from './bridge'
+import './utils/debugTable'
 import Editor, {
   BlockType,
   Command,

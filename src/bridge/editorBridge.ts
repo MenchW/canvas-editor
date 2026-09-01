@@ -534,6 +534,37 @@ function remapControlIdsAndCollect(
       })
     }
 
+    // 1.4 增强同块内丢失 innerLoop 的控件节点自愈补齐（例如部分旧版保存的 JSON 中 control 节点漏打 innerLoop）
+    const existingLoopConfigs: any[] = []
+    td.value.forEach((el: any) => {
+      if (el.innerLoop?.isLoop && el.innerLoop.datasetId) {
+        if (!existingLoopConfigs.some(c => c.loopBlockId === el.innerLoop.loopBlockId)) {
+          existingLoopConfigs.push(el.innerLoop)
+        }
+      }
+    })
+
+    if (existingLoopConfigs.length > 0) {
+      existingLoopConfigs.forEach(loopCfg => {
+        const itemAlias = loopCfg.itemAlias || 'item'
+        const aliasPrefix = `${itemAlias}.`
+        td.value.forEach((el: any) => {
+          if (!el.innerLoop) {
+            const ph = el.control?.placeholder || el.placeholder || ''
+            const cid = el.control?.conceptId || el.conceptId || ''
+            if (
+              ph.startsWith(aliasPrefix) ||
+              cid.startsWith(aliasPrefix) ||
+              ph === itemAlias ||
+              cid === itemAlias
+            ) {
+              el.innerLoop = { ...loopCfg }
+            }
+          }
+        })
+      })
+    }
+
     // 1.5 扫描并展开单元格内标签级别的 innerLoop（如 <span loop="item in list">）
     const loopBlockMap = new Map<
       string,
@@ -568,7 +599,22 @@ function remapControlIdsAndCollect(
       )
       sortedBlocks.forEach(blk => {
         const datasetId = blk.config.datasetId
-        const listData = getValueByPath(itemData, datasetId)
+        let listData = getValueByPath(itemData, datasetId)
+        if (listData === undefined && datasetId && datasetId.includes('.')) {
+          const cleanKey = datasetId.split('.').slice(1).join('.')
+          listData =
+            getValueByPath(itemData, cleanKey) ??
+            (itemData && typeof itemData === 'object' ? itemData[cleanKey] : undefined)
+        }
+        if (listData === undefined && itemData && typeof itemData === 'object') {
+          listData =
+            itemData[datasetId] ??
+            itemData.tags ??
+            itemData.items ??
+            itemData.children ??
+            itemData.data ??
+            itemData.list
+        }
         const dataRows = Array.isArray(listData)
           ? listData.length > 0
             ? listData
@@ -671,6 +717,9 @@ function remapControlIdsAndCollect(
               }
               if (subVal === undefined) {
                 subVal = getItemValue(itemData, conceptId)
+                if (subVal === undefined && cleanField !== conceptId) {
+                  subVal = getItemValue(itemData, cleanField)
+                }
               }
 
               const prefixChar = token.control?.prefix ?? '{'
@@ -898,7 +947,13 @@ function remapControlIdsAndCollect(
         continue
       }
 
-      const val = getItemValue(itemData, conceptId)
+      let val = getItemValue(itemData, conceptId)
+      if (val === undefined && conceptId.includes('.')) {
+        const cleanKey = conceptId.split('.').slice(1).join('.')
+        val =
+          getItemValue(itemData, cleanKey) ??
+          (itemData && typeof itemData === 'object' ? itemData[cleanKey] : undefined)
+      }
 
       // 判断是否为图片字段
       const isImgField =
@@ -1013,6 +1068,8 @@ export class EditorBridge {
   private currentConfig: any = {}
   /** 宿主下发的业务数据(模式切换回显时复用) */
   private lastBusinessData: any = null
+  /** 纯净模板 AST 快照(用于异步/多次回显时保证模板 100% 纯净与幂等) */
+  private pureTemplate: any = null
 
   constructor(options: IBridgeOptions) {
     this.instance = options.instance
@@ -1122,6 +1179,11 @@ export class EditorBridge {
     try {
       if (payload) {
         const template = payload.template || payload
+
+        // 存储最纯净的模板 AST 快照（不受初次空数据展开污染）
+        if (template && typeof template === 'object') {
+          this.pureTemplate = deepClone(template)
+        }
 
         // 1. 设置排版 options
         if (template.options && typeof template.options === 'object') {
@@ -1270,13 +1332,35 @@ export class EditorBridge {
         // 直接下发 ID/conceptId 键值对数组
         this.instance.command.executeSetControlValueList(data)
       } else {
-        const originalElementList = (
-          this.instance.command as any
-        ).getOriginalElementList()
         collectedValues.length = 0
 
-        // 1. 表格循环行展开（保留控件结构与 Remap UUID，支持单元格多图）
-        expandLoopTables(originalElementList, data)
+        // 1. 如果存在纯净模板快照，从纯净模板出发重构当前文档（保证幂等与结构完好）
+        if (this.pureTemplate) {
+          const clonedTemplate = deepClone(this.pureTemplate)
+          const templateData =
+            clonedTemplate.data ||
+            (Array.isArray(clonedTemplate)
+              ? { main: clonedTemplate }
+              : clonedTemplate)
+
+          if (templateData.main) {
+            expandLoopTables(templateData.main, data)
+          }
+          if (templateData.header) {
+            expandLoopTables(templateData.header, data)
+          }
+          if (templateData.footer) {
+            expandLoopTables(templateData.footer, data)
+          }
+
+          this.instance.command.executeSetValue(templateData)
+        } else {
+          // 降级：基于当前画布上的 ElementList 展开
+          const originalElementList = (
+            this.instance.command as any
+          ).getOriginalElementList()
+          expandLoopTables(originalElementList, data)
+        }
 
         // 2. 批量向所有控件（文本、单选、多选、多图等）填充值并由 Control 体系多态展开
         const rootValues = toControlValueList(data)
@@ -1293,6 +1377,10 @@ export class EditorBridge {
         if (allValues.length > 0) {
           this.instance.command.executeSetControlValueList(allValues)
         }
+
+        const originalElementList = (
+          this.instance.command as any
+        ).getOriginalElementList()
 
         // 5. 声明式相邻相同数据垂直合并 (merge-same)
         const walkMerge = (list: any[]) => {
@@ -1314,9 +1402,9 @@ export class EditorBridge {
           })
         }
         walkMerge(originalElementList)
-      }
 
-      this.instance.command.executeForceUpdate()
+        this.instance.command.executeForceUpdate()
+      }
     } catch (err: any) {
       console.error('[EditorBridge] 设置控件数据失败:', err)
     }

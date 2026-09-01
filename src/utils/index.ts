@@ -376,6 +376,7 @@ function parseCellChildNodesToValueList(
       }
       childOptions = {
         ...options,
+        parentAlias: options.loopItemAlias || options.parentAlias,
         loopItemAlias: loopItemAlias
       }
     }
@@ -675,3 +676,4 @@ export function parseTableHtml(
 
 export * from './request'
 export * from '../components/toast'
+export * from './debugTable'

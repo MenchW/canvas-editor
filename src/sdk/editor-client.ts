@@ -18,8 +18,10 @@ import type {
 import { CanvasDataTransform } from './transforms'
 import { getValueByPath } from '../editor/utils/index'
 import { toast } from '../components/toast/Toast'
+import { debugTableEcho } from '../utils/debugTable'
 
-export { toast, EditorMode, CanvasDataTransform }
+export { toast, EditorMode, CanvasDataTransform, debugTableEcho }
+export const debugTable = debugTableEcho
 export type {
   IToast,
   IEditorClient,
@@ -142,58 +144,111 @@ export class EditorClient implements IEditorClient {
   }
 
   /**
-   * 从宿主 Providers 并发拉取数据并下发给编辑器渲染
+   * 聚合加载并一次性渲染（保持 Loading 直到模板与数据全部就绪，避免局部空白与结构跳变）：
+   * 1. 并发请求模板、业务数据与组件字典；
+   * 2. 细粒度捕获每个接口的独立异常，提供精准 Toast 与错误遮罩提示（告别 Promise.all 一损俱损无提示问题）；
+   * 3. 核心资源全部就绪后一次性交付渲染，完整展开表格与全部回显值。
    */
   private async fetchAndRender(): Promise<void> {
     if (!this.editorRpc) return
-    try {
-      const { getTemplate, getData, getComponents } = this.options
-      if (!getTemplate) {
-        console.warn('[EditorClient SDK] getTemplate 配置空')
-      }
+    const { getTemplate, getData, getComponents } = this.options
 
-      if (!getData) {
-        console.warn('[EditorClient SDK] getData 配置空')
-      }
+    let template: any = null
+    let businessData: any = null
+    let componentList: any = null
+    let templateFetchError: string | null = null
 
-      if (!getComponents) {
-        console.warn('[EditorClient SDK] getComponents 配置空')
+    // 1. 任务 A：模板拉取通道
+    const fetchTemplatePromise = (async () => {
+      if (!getTemplate) return
+      try {
+        template =
+          typeof getTemplate === 'function' ? await getTemplate() : getTemplate
+      } catch (err: any) {
+        const errMsg =
+          err?.message || err?.msg || String(err) || '模板加载接口异常'
+        console.error('[EditorClient SDK] 报告模板加载失败:', err)
+        templateFetchError = `【报告模板】: ${errMsg}`
+        toast.error(`报告模板加载失败: ${errMsg}`)
       }
-      console.log(getData)
+    })()
 
-      const [template, businessData, componentList] = await Promise.all([
-        typeof getTemplate === 'function' ? getTemplate() : getTemplate,
-        typeof getData === 'function' ? getData() : getData,
-        getComponents
-          ? typeof getComponents === 'function'
-            ? getComponents()
+    // 2. 任务 B：业务数据拉取通道
+    const fetchDataPromise = (async () => {
+      if (!getData) return
+      try {
+        businessData =
+          typeof getData === 'function' ? await getData() : getData
+        if (
+          businessData &&
+          typeof businessData === 'object' &&
+          !Array.isArray(businessData)
+        ) {
+          this.lastFilledData = businessData
+        }
+      } catch (err: any) {
+        const errMsg =
+          err?.message || err?.msg || String(err) || '业务数据接口异常'
+        console.error('[EditorClient SDK] 业务数据加载失败:', err)
+        toast.error(`业务数据加载失败: ${errMsg}`)
+      }
+    })()
+
+    // 3. 任务 C：组件字典拉取通道（非关键资源）
+    const fetchComponentsPromise = (async () => {
+      if (!getComponents) return
+      try {
+        const comps =
+          typeof getComponents === 'function'
+            ? await getComponents()
             : getComponents
-          : undefined
-      ])
-
-      console.log('[EditorClient SDK] 渲染参数', {
-        template,
-        data: businessData,
-        componentList
-      })
-
-      if (
-        businessData &&
-        typeof businessData === 'object' &&
-        !Array.isArray(businessData)
-      ) {
-        this.lastFilledData = businessData
+        if (Array.isArray(comps)) {
+          componentList = comps
+        }
+      } catch (err: any) {
+        console.warn('[EditorClient SDK] 数据字典加载异常:', err)
+        toast.warning('数据字典加载异常，部分控件可能无法从右侧面板拖拽')
       }
+    })()
 
+    // 等待所有接口全部响应完成
+    await Promise.all([
+      fetchTemplatePromise,
+      fetchDataPromise,
+      fetchComponentsPromise
+    ])
+
+    // 只有在模板接口真实抛错时，才在遮罩层上展示错误提示并中断渲染
+    if (templateFetchError) {
+      await this.editorRpc?.setError(templateFetchError)
+      return
+    }
+
+    // 模板归一化：若返回为空字符串/null/undefined，代表新建/空白模板，优雅以空白结构渲染
+    let finalTemplate = template
+    if (!finalTemplate || typeof finalTemplate !== 'object') {
+      finalTemplate = { data: { main: [] } }
+    }
+
+    // 核心数据全部就绪：合并为完整 Payload 一次性下发给编辑器，完成整屏完美回显与表格展开
+    console.log('[EditorClient SDK] 全部数据就绪，一次性交付整屏渲染:', {
+      isNewBlankTemplate: !template,
+      hasBusinessData: Boolean(businessData),
+      componentCount: Array.isArray(componentList) ? componentList.length : 0
+    })
+
+    try {
       await this.editorRpc.render({
-        template,
+        template: finalTemplate,
         businessData: businessData || {},
         ...(componentList ? { componentList } : {})
       })
-    } catch (err: any) {
-      const msg = err || err.msg || err.message || '宿主数据拉取失败，请重试'
-      await this.editorRpc?.setError(msg || '宿主数据拉取失败，请重试')
-      throw err
+    } catch (renderErr: any) {
+      console.error('[EditorClient SDK] 整屏渲染失败:', renderErr)
+      const renderErrMsg =
+        renderErr?.message || renderErr?.msg || '文档渲染失败'
+      toast.error(`文档渲染失败: ${renderErrMsg}`)
+      await this.editorRpc?.setError(`文档渲染失败: ${renderErrMsg}`)
     }
   }
 
@@ -404,4 +459,17 @@ export class EditorClient implements IEditorClient {
   public destroy(): void {
     this.connection?.destroy()
   }
+
+  /**
+   * 静态表格回显深度诊断工具
+   */
+  public static debugTable = debugTableEcho
 }
+
+// 自动挂载至宿主 window
+if (typeof window !== 'undefined') {
+  ;(window as any).debugTable = debugTableEcho
+  ;(window as any).debugTableEcho = debugTableEcho
+  ;(window as any).EditorClient = EditorClient
+}
+
