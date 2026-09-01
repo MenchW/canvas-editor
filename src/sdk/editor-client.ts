@@ -177,8 +177,7 @@ export class EditorClient implements IEditorClient {
     const fetchDataPromise = (async () => {
       if (!getData) return
       try {
-        businessData =
-          typeof getData === 'function' ? await getData() : getData
+        businessData = typeof getData === 'function' ? await getData() : getData
         if (
           businessData &&
           typeof businessData === 'object' &&
@@ -231,10 +230,10 @@ export class EditorClient implements IEditorClient {
     }
 
     // 核心数据全部就绪：合并为完整 Payload 一次性下发给编辑器，完成整屏完美回显与表格展开
-    console.log('[EditorClient SDK] 全部数据就绪，一次性交付整屏渲染:', {
-      isNewBlankTemplate: !template,
-      hasBusinessData: Boolean(businessData),
-      componentCount: Array.isArray(componentList) ? componentList.length : 0
+    console.log('[EditorClient SDK] 整屏渲染:', {
+      template,
+      businessData,
+      componentList
     })
 
     try {
@@ -472,4 +471,3 @@ if (typeof window !== 'undefined') {
   ;(window as any).debugTableEcho = debugTableEcho
   ;(window as any).EditorClient = EditorClient
 }
-
