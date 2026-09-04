@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Canvas Editor SDK - 免 iframe 模式控件与数据审计演示</title>
+  <style>
+    :root {
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --bg: #0f172a;
+      --panel-bg: #1e293b;
+      --card-bg: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #475569;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      background: rgba(30, 41, 59, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-badge {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .brand h1 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: white;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+    }
+
+    .btn-secondary {
+      background: var(--panel-bg);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .btn-secondary:hover {
+      background: var(--card-bg);
+      border-color: #64748b;
+    }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 16px 24px;
+      overflow: hidden;
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 12px 16px;
+      background: rgba(15, 23, 42, 0.4);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .panel-header span.tag {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--card-bg);
+      color: var(--text-muted);
+    }
+
+    .editor-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    textarea {
+      width: 100%;
+      height: 100%;
+      background: #090d16;
+      color: #38bdf8;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      border: none;
+      padding: 12px 16px;
+      resize: none;
+      outline: none;
+      overflow-y: auto;
+    }
+
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .stat-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .stat-card.stat-missing .stat-value { color: var(--danger); }
+    .stat-card.stat-falsy .stat-value { color: var(--warning); }
+    .stat-card.stat-total .stat-value { color: var(--primary); }
+    .stat-card.stat-pass .stat-value { color: var(--success); }
+
+    .result-view {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 16px;
+      background: #090d16;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 14px 0 8px 0;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-danger { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+    .badge-warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .badge-success { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+
+    .list-item {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .item-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .item-key { font-weight: 600; color: #e2e8f0; }
+    .item-name { color: var(--text-muted); font-size: 11px; }
+
+    .info-bar {
+      font-size: 11px;
+      color: #64748b;
+      padding: 6px 16px;
+      border-top: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="brand-badge">SDK Tool</span>
+      <h1>Canvas Editor SDK - 纯数据审计演示 (无 Iframe 模式)</h1>
+    </div>
+    <div class="actions">
+      <button id="btnReset" class="btn-secondary">↺ 重置预设数据</button>
+      <button id="btnGetControlList" class="btn-secondary">📋 1. 获取所有控件 (getControlList)</button>
+      <button id="btnAudit" class="btn-primary">⚡ 2. 执行数据审计 (getMissingControlList)</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- 左侧：输入数据模拟配置 -->
+    <div class="column">
+      <div class="panel" style="flex: 1.2;">
+        <div class="panel-header">
+          <span>📄 1. 模拟模板 (getTemplate)</span>
+          <span class="tag">JSON Payload</span>
+        </div>
+        <div class="editor-container">
+          <textarea id="txtTemplate" spellcheck="false"></textarea>
+        </div>
+      </div>
+
+      <div class="panel" style="flex: 1;">
+        <div class="panel-header">
+          <span>📦 2. 模拟宿主业务数据 (getData)</span>
+          <span class="tag">Business Data</span>
+        </div>
+        <div class="editor-container">
+          <textarea id="txtData" spellcheck="false"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧：SDK 实时方法输出结果 -->
+    <div class="column">
+      <!-- 统计指标 -->
+      <div class="stats-bar">
+        <div class="stat-card stat-total">
+          <span class="stat-label">模板控件总数</span>
+          <span class="stat-value" id="valTotal">-</span>
+        </div>
+        <div class="stat-card stat-missing">
+          <span class="stat-label">缺失字段 (Missing)</span>
+          <span class="stat-value" id="valMissing">-</span>
+        </div>
+        <div class="stat-card stat-falsy">
+          <span class="stat-label">假值/空值 (Falsy)</span>
+          <span class="stat-value" id="valFalsy">-</span>
+        </div>
+        <div class="stat-card stat-pass">
+          <span class="stat-label">正常回显字段</span>
+          <span class="stat-value" id="valPass">-</span>
+        </div>
+      </div>
+
+      <div class="panel" style="flex: 1;">
+        <div class="panel-header">
+          <span>📊 SDK 审计执行结果输出 (Console & UI)</span>
+          <span class="tag" id="statusTag">等待执行</span>
+        </div>
+        <div class="result-view" id="resultView">
+          <div style="color: #64748b; text-align: center; margin-top: 40px;">
+            点击顶部按钮「执行数据审计 (getMissingControlList)」开始运行
+          </div>
+        </div>
+        <div class="info-bar">
+          <span id="timeInfo">执行耗时: - ms</span>
+          <span>SDK 运行状态: 纯本地无 DOM 驱动 (No Iframe Required)</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { EditorClient } from '../src/sdk/index.ts'
+
+    // 默认预设数据
+    const DEFAULT_TEMPLATE = {
+      data: {
+        header: [
+          {
+            type: 'control',
+            control: { conceptId: 'hospital_name', placeholder: '医院名称', type: 'text' }
+          }
+        ],
+        main: [
+          {
+            type: 'control',
+            control: { conceptId: 'patient.name', placeholder: '患者姓名', type: 'text' }
+          },
+          {
+            type: 'control',
+            control: { conceptId: 'patient.age', placeholder: '患者年龄', type: 'number' }
+          },
+          {
+            type: 'control',
+            control: { conceptId: 'patient.gender', placeholder: '患者性别', type: 'select' }
+          },
+          {
+            type: 'control',
+            control: { conceptId: 'diagnosis', placeholder: '临床诊断', type: 'text' }
+          },
+          {
+            type: 'control',
+            control: { conceptId: 'remark', placeholder: '备注说明', type: 'text' }
+          },
+          {
+            type: 'table',
+            conceptId: 'check_items',
+            name: '检查项目明细表',
+            trList: [
+              {
+                loopConfig: { datasetId: 'check_items' },
+                tdList: [
+                  {
+                    value: [
+                      { type: 'control', control: { conceptId: 'item_name', placeholder: '项目名称' } }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+
+    const DEFAULT_DATA = {
+      hospital_name: '第一人民医院',
+      patient: {
+        name: '张三',
+        age: 0          // 0 属于合法有效数值，非假值
+        // 缺少 gender 字段（属于 missing）
+      },
+      diagnosis: '',    // 空字符串（属于 falsy）
+      remark: null,     // null（属于 falsy）
+      check_items: [    // 表格数组数据正常
+        { item_name: '血常规', result: '正常' }
+      ]
+    }
+
+    const txtTemplate = document.getElementById('txtTemplate')
+    const txtData = document.getElementById('txtData')
+    const resultView = document.getElementById('resultView')
+    const statusTag = document.getElementById('statusTag')
+    const timeInfo = document.getElementById('timeInfo')
+
+    const valTotal = document.getElementById('valTotal')
+    const valMissing = document.getElementById('valMissing')
+    const valFalsy = document.getElementById('valFalsy')
+    const valPass = document.getElementById('valPass')
+
+    function resetInputs() {
+      txtTemplate.value = JSON.stringify(DEFAULT_TEMPLATE, null, 2)
+      txtData.value = JSON.stringify(DEFAULT_DATA, null, 2)
+    }
+
+    resetInputs()
+
+    document.getElementById('btnReset').onclick = () => {
+      resetInputs()
+      renderInitial()
+    }
+
+    function renderInitial() {
+      valTotal.innerText = '-'
+      valMissing.innerText = '-'
+      valFalsy.innerText = '-'
+      valPass.innerText = '-'
+      statusTag.innerText = '等待执行'
+      resultView.innerHTML = `
+        <div style="color: #64748b; text-align: center; margin-top: 40px;">
+          点击顶部按钮「执行数据审计 (getMissingControlList)」开始运行
+        </div>
+      `
+    }
+
+    // 创建无需 iframe 的 EditorClient 实例
+    function createClient() {
+      let templateJson = {}
+      let dataJson = {}
+      try {
+        templateJson = JSON.parse(txtTemplate.value)
+      } catch (e) {
+        alert('模板 JSON 格式错误: ' + e.message)
+        return null
+      }
+      try {
+        dataJson = JSON.parse(txtData.value)
+      } catch (e) {
+        alert('业务数据 JSON 格式错误: ' + e.message)
+        return null
+      }
+
+      // 注意：完全不传入 iframe，仅提供 getTemplate 与 getData
+      return {
+        client: new EditorClient({
+          getTemplate: async () => templateJson,
+          getData: async () => dataJson,
+          onSave: () => {}
+        }),
+        dataJson
+      }
+    }
+
+    // 1. 获取所有控件列表
+    document.getElementById('btnGetControlList').onclick = async () => {
+      const res = createClient()
+      if (!res) return
+      const t0 = performance.now()
+      const list = await res.client.getControlList()
+      const cost = (performance.now() - t0).toFixed(1)
+
+      statusTag.innerText = `已获取 (${list.length} 个控件)`
+      timeInfo.innerText = `执行耗时: ${cost} ms`
+      valTotal.innerText = list.length
+
+      statusTag.innerText = `已获取 (${list.length} 个控件)`
+      timeInfo.innerText = `执行耗时: ${cost} ms`
+      valTotal.innerText = list.length
+
+      let html = `<div class="section-title">📋 模板顶层全部控件清单 (${list.length})</div>`
+      list.forEach(c => {
+        html += `
+          <div class="list-item">
+            <div class="item-meta">
+              <span class="badge" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4);">CONTROL</span>
+              <span class="item-key">${c.conceptId || c.code}</span>
+              <span class="item-name">(${c.placeholder || c.name || '未命名字段'})</span>
+            </div>
+            <span class="badge" style="background:#0f172a; color:#94a3b8;">类型: ${c.type || 'text'}</span>
+          </div>
+        `
+      })
+      html += `<div style="color: #64748b; font-size: 11px; margin-top: 12px; text-align: right;">💡 完整控件数组对象已打印在 F12 控制台</div>`
+      resultView.innerHTML = html
+      console.log('[EditorClient 纯数据模式] getControlList 输出:', list)
+    }
+
+    // 2. 执行数据审计
+    document.getElementById('btnAudit').onclick = async () => {
+      const res = createClient()
+      if (!res) return
+      const t0 = performance.now()
+
+      const controls = await res.client.getControlList()
+      const auditResult = await res.client.getMissingControlList(res.dataJson)
+      const cost = (performance.now() - t0).toFixed(1)
+
+      // const totalCount = controls.length
+      const missingCount = auditResult.missingControls.length
+      const falsyCount = auditResult.falsyControls.length
+      // const passCount = Math.max(0, totalCount - missingCount - falsyCount)
+
+      // valTotal.innerText = totalCount
+      // valMissing.innerText = missingCount
+      // valFalsy.innerText = falsyCount
+      // valPass.innerText = passCount
+
+      // statusTag.innerText = `审计完成 (耗时 ${cost}ms)`
+      // timeInfo.innerText = `执行耗时: ${cost} ms`
+
+      let html = `
+        <div class="section-title" style="color: #f87171;">🚫 缺失字段清单 (${missingCount}) - 宿主数据未提供 Key</div>
+      `
+
+      if (missingCount === 0) {
+        html += `<div style="color: #64748b; padding: 4px 0 10px 0;">🎉 无缺失字段，全部 Key 均已匹配</div>`
+      } else {
+        auditResult.missingControls.forEach(c => {
+          html += `
+            <div class="list-item">
+              <div class="item-meta">
+                <span class="badge badge-danger">MISSING</span>
+                <span class="item-key">${c.conceptId || c.code}</span>
+                <span class="item-name">(${c.placeholder || c.name || '未命名字段'})</span>
+              </div>
+              <span class="badge" style="background:#0f172a; color:#94a3b8;">类型: ${c.type || 'text'}</span>
+            </div>
+          `
+        })
+      }
+
+      html += `<div class="section-title" style="color: #fbbf24; margin-top: 16px;">⚠️ 假值/空值字段清单 (${falsyCount}) - 提供了 Key 但值为 '' 或 null</div>`
+
+      if (falsyCount === 0) {
+        html += `<div style="color: #64748b; padding: 4px 0 10px 0;">🎉 无假值字段</div>`
+      } else {
+        auditResult.falsyControls.forEach(c => {
+          html += `
+            <div class="list-item">
+              <div class="item-meta">
+                <span class="badge badge-warning">FALSY</span>
+                <span class="item-key">${c.conceptId || c.code}</span>
+                <span class="item-name">(${c.placeholder || c.name || '未命名字段'})</span>
+              </div>
+              <span class="badge" style="background:#0f172a; color:#94a3b8;">类型: ${c.type || 'text'}</span>
+            </div>
+          `
+        })
+      }
+
+      html += `<div style="color: #64748b; font-size: 11px; margin-top: 16px; text-align: right;">💡 完整审计结果对象已打印在 F12 控制台</div>`
+
+      resultView.innerHTML = html
+      console.log('[EditorClient 纯数据模式] getMissingControlList 审计结果:', auditResult)
+    }
+  </script>
+</body>
+</html>

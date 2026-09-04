@@ -273,13 +273,15 @@ describe('表格内图片控件 getControlList 测试', () => {
 
     // 检查第 1 行明细的图片
     const row1ChartTd = tableEl.trList![1].tdList[3]
-    const row1ImgNode = row1ChartTd.value.find((v: any) => v.type === 'image')
+    const row1Ctrl = row1ChartTd.value.find((v: any) => v.type === 'control' || v.control)
+    const row1ImgNode = row1Ctrl?.control?.value?.find((v: any) => v.type === 'image') || row1ChartTd.value.find((v: any) => v.type === 'image')
     expect(row1ImgNode).toBeDefined()
     expect(row1ImgNode!.value).toBe('https://example.com/chart1.png')
 
     // 检查第 2 行明细的图片
     const row2ChartTd = tableEl.trList![2].tdList[3]
-    const row2ImgNode = row2ChartTd.value.find((v: any) => v.type === 'image')
+    const row2Ctrl = row2ChartTd.value.find((v: any) => v.type === 'control' || v.control)
+    const row2ImgNode = row2Ctrl?.control?.value?.find((v: any) => v.type === 'image') || row2ChartTd.value.find((v: any) => v.type === 'image')
     expect(row2ImgNode).toBeDefined()
     expect(row2ImgNode!.value).toBe('https://example.com/chart2.png')
   })
@@ -381,14 +383,16 @@ describe('表格内图片控件 getControlList 测试', () => {
 
     // 检查第 1 行的多图
     const row1PhotosTd = tableEl.trList![1].tdList[1]
-    const row1ImgNodes = row1PhotosTd.value.filter((v: any) => v.type === 'image')
+    const row1Ctrl = row1PhotosTd.value.find((v: any) => v.type === 'control' || v.control)
+    const row1ImgNodes = row1Ctrl?.control?.value?.filter((v: any) => v.type === 'image') || row1PhotosTd.value.filter((v: any) => v.type === 'image')
     expect(row1ImgNodes.length).toBe(2)
     expect(row1ImgNodes[0].value).toBe('https://example.com/pic1.png')
     expect(row1ImgNodes[1].value).toBe('https://example.com/pic2.png')
 
     // 检查第 2 行空数组
     const row2PhotosTd = tableEl.trList![2].tdList[1]
-    const row2ImgNodes = row2PhotosTd.value.filter((v: any) => v.type === 'image')
+    const row2Ctrl = row2PhotosTd.value.find((v: any) => v.type === 'control' || v.control)
+    const row2ImgNodes = row2Ctrl?.control?.value?.filter((v: any) => v.type === 'image') || row2PhotosTd.value.filter((v: any) => v.type === 'image')
     expect(row2ImgNodes.length).toBe(0)
   })
 })

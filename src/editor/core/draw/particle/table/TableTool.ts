@@ -1,5 +1,5 @@
 import { IElement } from '../../../..'
-import { EDITOR_PREFIX } from '../../../../dataset/constant/Editor'
+import { EDITOR_COMPONENT, EDITOR_PREFIX } from '../../../../dataset/constant/Editor'
 import { TableOrder } from '../../../../dataset/enum/table/TableTool'
 import { DeepRequired } from '../../../../interface/Common'
 import { IEditorOption } from '../../../../interface/Editor'
@@ -161,6 +161,7 @@ export class TableTool {
     const tableWidth = element.width! * scale
     // 表格选择工具（尺寸由 CSS 类固定，无需设置高度）
     const tableSelectBtn = document.createElement('div')
+    tableSelectBtn.setAttribute(EDITOR_COMPONENT, 'table-tool')
     tableSelectBtn.classList.add(`${EDITOR_PREFIX}-table-tool__select`)
     tableSelectBtn.style.left = `${tableX}px`
     tableSelectBtn.style.top = `${tableY}px`
@@ -175,6 +176,7 @@ export class TableTool {
     this.toolTableSelectBtn = tableSelectBtn
     // 渲染行工具（跨页片段仅渲染当前片段的行）
     const rowContainer = document.createElement('div')
+    rowContainer.setAttribute(EDITOR_COMPONENT, 'table-tool')
     rowContainer.classList.add(`${EDITOR_PREFIX}-table-tool__row`)
     rowContainer.style.transform = `translateX(-${
       this.ROW_COL_OFFSET * scale
@@ -244,6 +246,7 @@ export class TableTool {
     this.toolRowContainer = rowContainer
     // 添加行按钮（尺寸由 CSS 类固定，无需设置高度）
     const rowAddBtn = document.createElement('div')
+    rowAddBtn.setAttribute(EDITOR_COMPONENT, 'table-tool')
     rowAddBtn.classList.add(`${EDITOR_PREFIX}-table-tool__quick__add`)
     rowAddBtn.style.left = `${tableX}px`
     rowAddBtn.style.top = `${tableY + tableHeight}px`
@@ -267,6 +270,7 @@ export class TableTool {
     // 渲染列工具
     const colWidthList = colgroup!.map(col => col.width)
     const colContainer = document.createElement('div')
+    colContainer.setAttribute(EDITOR_COMPONENT, 'table-tool')
     colContainer.classList.add(`${EDITOR_PREFIX}-table-tool__col`)
     colContainer.style.transform = `translateY(-${
       this.ROW_COL_OFFSET * scale
@@ -330,6 +334,7 @@ export class TableTool {
     this.toolColContainer = colContainer
     // 添加列按钮（尺寸由 CSS 类固定，无需设置高度）
     const colAddBtn = document.createElement('div')
+    colAddBtn.setAttribute(EDITOR_COMPONENT, 'table-tool')
     colAddBtn.classList.add(`${EDITOR_PREFIX}-table-tool__quick__add`)
     colAddBtn.style.left = `${tableX + tableWidth}px`
     colAddBtn.style.top = `${tableY}px`
@@ -352,6 +357,7 @@ export class TableTool {
     this.toolColAddBtn = colAddBtn
     // 渲染单元格边框拖拽工具
     const borderContainer = document.createElement('div')
+    borderContainer.setAttribute(EDITOR_COMPONENT, 'table-tool')
     borderContainer.classList.add(`${EDITOR_PREFIX}-table-tool__border`)
     borderContainer.style.height = `${tableHeight}px`
     borderContainer.style.width = `${tableWidth}px`

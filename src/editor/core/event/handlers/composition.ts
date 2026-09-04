@@ -3,10 +3,23 @@ import { CanvasEvent } from '../CanvasEvent'
 import { input, removeComposingInput } from './input'
 
 function compositionstart(host: CanvasEvent) {
+  console.log(
+    '%c[IME-Lifecycle]%c compositionstart (开始拼音输入)',
+    'color: #ff9800; font-weight: bold',
+    'color: inherit'
+  )
+  // 在开始拼音输入前，立即将前一个操作的历史快照落定，并清除防抖定时器，防止拼音过程字母被存入快照
+  host.getDraw().flushHistory()
   host.isComposing = true
 }
 
 function compositionend(host: CanvasEvent, evt: CompositionEvent) {
+  const tStart = performance.now()
+  console.log(
+    `%c[IME-Lifecycle]%c compositionend (拼音转中文上屏) data="${evt.data}"`,
+    'color: #4caf50; font-weight: bold',
+    'color: inherit'
+  )
   host.isComposing = false
   // 处理输入框关闭
   const draw = host.getDraw()
@@ -37,6 +50,9 @@ function compositionend(host: CanvasEvent, evt: CompositionEvent) {
   // 移除代理输入框数据
   const cursor = draw.getCursor()
   cursor.clearAgentDomValue()
+  console.log(
+    `[IME-Lifecycle] compositionend 完成，耗时: ${(performance.now() - tStart).toFixed(1)}ms`
+  )
 }
 
 export default {

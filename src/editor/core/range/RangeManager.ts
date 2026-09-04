@@ -2,7 +2,7 @@ import { ElementType } from '../..'
 import { ZERO } from '../../dataset/constant/Common'
 import { TEXTLIKE_ELEMENT_TYPE } from '../../dataset/constant/Element'
 import { ControlComponent } from '../../dataset/enum/Control'
-import { EditorContext } from '../../dataset/enum/Editor'
+import { EditorContext, EditorMode } from '../../dataset/enum/Editor'
 import { IControlContext } from '../../interface/Control'
 import { IEditorOption } from '../../interface/Editor'
 import { IElement } from '../../interface/Element'
@@ -385,6 +385,7 @@ export class RangeManager {
   }
 
   public getIsCanInput(): boolean {
+    if (this.draw.getMode() === EditorMode.PREVIEW_EDIT) return true
     const { startIndex, endIndex } = this.getRange()
     if (!~startIndex && !~endIndex) return false
     const elementList = this.draw.getElementList()
@@ -454,7 +455,13 @@ export class RangeManager {
     // 激活控件
     const control = this.draw.getControl()
     if (~startIndex && ~endIndex) {
-      const elementList = this.draw.getElementList()
+      const positionContext = this.draw.getPosition().getPositionContext()
+      const elementList = positionContext.isTable
+        ? this.draw.getPosition().getTableTdByContext(
+            this.draw.getOriginalElementList(),
+            positionContext
+          )?.value || []
+        : this.draw.getElementList()
       const element = elementList[startIndex]
       if (element?.controlId) {
         control.initControl()

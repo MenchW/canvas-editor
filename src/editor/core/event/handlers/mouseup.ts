@@ -115,6 +115,31 @@ export function mouseup(evt: MouseEvent, host: CanvasEvent) {
       range.endIndex <= cacheEndIndex &&
       host.cachePositionContext?.tdId === positionContext.tdId
     ) {
+      // 单纯点击（上次 cacheRange 是闭合的单字符，且非多字选区拖拽）时，
+      // 不应触发 clearSideEffect + isSetCursor:false 渲染，而是直接重绘光标确保常驻
+      if (isCacheRangeCollapsed) {
+        const dragElement = cacheElementList[cacheEndIndex]
+        const isDragFloat =
+          dragElement &&
+          (dragElement.type === ElementType.IMAGE ||
+            dragElement.type === ElementType.LATEX) &&
+          (dragElement.imgDisplay === ImageDisplay.SURROUND ||
+            dragElement.imgDisplay === ImageDisplay.FLOAT_TOP ||
+            dragElement.imgDisplay === ImageDisplay.FLOAT_BOTTOM)
+        if (!isDragFloat) {
+          // 非浮动图片拖拽：单纯点击，直接用当前 range 重置光标，确保光标常驻
+          const curRange = rangeManager.getRange()
+          const curIndex = positionContext.isTable
+            ? curRange.endIndex
+            : curRange.endIndex
+          draw.setCursor(curIndex)
+          draw.getCursor().drawCursor({
+            isFocus: true,
+            isBlink: true
+          })
+          return
+        }
+      }
       // 清除渲染副作用
       draw.clearSideEffect()
       // 浮动元素拖拽需要提交历史

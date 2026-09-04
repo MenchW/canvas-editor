@@ -154,6 +154,7 @@ export class Command {
   public getControlValue: CommandAdapt['getControlValue']
   public getControlList: CommandAdapt['getControlList']
   public getContainer: CommandAdapt['getContainer']
+  public getDraw: CommandAdapt['getDraw']
   public getTitleValue: CommandAdapt['getTitleValue']
   public getPositionContextByEvent: CommandAdapt['getPositionContextByEvent']
   public getElementById: CommandAdapt['getElementById']
@@ -624,6 +625,7 @@ export class Command {
     )
     this.getControlValue = adapt.getControlValue.bind(adapt)
     this.getControlList = adapt.getControlList.bind(adapt)
+    this.getDraw = adapt.getDraw.bind(adapt)
     this.executeLocationControl = this.wrap(
       'executeLocationControl',
       adapt.locationControl.bind(adapt)

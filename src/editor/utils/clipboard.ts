@@ -40,34 +40,50 @@ export async function writeClipboardItem(
   if (!text && !html && !elementList.length) return
   const plainText = new Blob([text], { type: 'text/plain' })
   const htmlText = new Blob([html], { type: 'text/html' })
-  if (window.ClipboardItem) {
-    // @ts-ignore
-    const item = new ClipboardItem({
-      [plainText.type]: plainText,
-      [htmlText.type]: htmlText
-    })
-    await window.navigator.clipboard.write([item])
-  } else {
-    const fakeElement = document.createElement('div')
-    fakeElement.setAttribute('contenteditable', 'true')
-    fakeElement.innerHTML = html
-    document.body.append(fakeElement)
-    // add new range
-    const selection = window.getSelection()
-    const range = document.createRange()
-    // 增加尾行换行字符避免dom复制缺失
-    const br = document.createElement('span')
-    br.innerText = '\n'
-    fakeElement.append(br)
-    // 扩选选区并执行复制
-    range.selectNodeContents(fakeElement)
-    selection?.removeAllRanges()
-    selection?.addRange(range)
-    document.execCommand('copy')
-    fakeElement.remove()
+  let isAsyncWriteSuccess = false
+  if (window.ClipboardItem && window.navigator?.clipboard?.write) {
+    try {
+      // @ts-ignore
+      const item = new ClipboardItem({
+        [plainText.type]: plainText,
+        [htmlText.type]: htmlText
+      })
+      await window.navigator.clipboard.write([item])
+      isAsyncWriteSuccess = true
+    } catch {
+      // 浏览器权限策略拦截、非安全上下文或 iframe 权限限制时，平滑降级到 document.execCommand
+      isAsyncWriteSuccess = false
+    }
+  }
+  if (!isAsyncWriteSuccess) {
+    try {
+      const fakeElement = document.createElement('div')
+      fakeElement.setAttribute('contenteditable', 'true')
+      fakeElement.innerHTML = html
+      document.body.append(fakeElement)
+      // add new range
+      const selection = window.getSelection()
+      const range = document.createRange()
+      // 增加尾行换行字符避免dom复制缺失
+      const br = document.createElement('span')
+      br.innerText = '\n'
+      fakeElement.append(br)
+      // 扩选选区并执行复制
+      range.selectNodeContents(fakeElement)
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+      document.execCommand('copy')
+      fakeElement.remove()
+    } catch {
+      // 降级兜底
+    }
   }
   // 编辑器结构化数据
-  setClipboardData({ text, elementList })
+  try {
+    setClipboardData({ text, elementList })
+  } catch {
+    // 忽略存储异常
+  }
 }
 
 export async function writeElementList(

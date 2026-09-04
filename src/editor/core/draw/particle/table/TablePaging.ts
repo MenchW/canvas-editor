@@ -156,11 +156,20 @@ export class TablePaging {
           // 内容底部（相对行顶）：决定拆分点所需的最小行高
           // 内容行高为缩放单位，需还原为未缩放后再与行坐标运算；
           // 续排窗口需计入窗口之前已消耗的内容行高，否则续页消耗高度被低估
-          const contentHeight = td
-            .rowList!.slice(0, endLine)
-            .reduce((pre, cur) => pre + cur.height, 0)
+          const extraPadding =
+            endLine > 1 ? Math.max(12, endLine * 2 + 8) : 0
+          let contentHeight = 0
+          const tdRowList = td.rowList!
+          for (let l = 0; l < endLine; l++) {
+            contentHeight += tdRowList[l].height
+          }
           const contentBottom =
-            td.y! + tdPadding[0] + tdPadding[2] + contentHeight / scale - trY
+            td.y! +
+            tdPadding[0] +
+            tdPadding[2] +
+            contentHeight / scale +
+            extraPadding -
+            trY
           consumedHeight = Math.max(consumedHeight, contentBottom)
         }
         return { fit, hasRemaining, consumedHeight }
@@ -563,17 +572,20 @@ export class TablePaging {
       0,
       Math.max(0, windowEnd)
     )
-    // 裁剪后内容自然高度（内边距 + 内容行）不得超出行盒，
+    // 裁剪后内容自然高度（内边距 + 内容行 + extraPadding）不得超出行盒，
     // 防止下次渲染按内容重新长高导致保留行再次被截断（截断震荡）
     const rowList = td.rowList!
     const tdPaddingHeight = tdPadding[0] + tdPadding[2]
     let accHeight = 0
     let fitLine = 0
     for (let i = 0; i < endLine; i++) {
+      const lineCount = i + 1
+      const extraPadding =
+        lineCount > 1 ? Math.max(12, lineCount * 2 + 8) : 0
       const nextHeight = accHeight + rowList[i].height / scale
-      if (tdPaddingHeight + nextHeight > windowEnd) break
+      if (tdPaddingHeight + nextHeight + extraPadding > windowEnd) break
       accHeight = nextHeight
-      fitLine = i + 1
+      fitLine = lineCount
     }
     endLine = fitLine
     const endElementIndex =

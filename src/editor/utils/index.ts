@@ -545,3 +545,6 @@ export function getValueByPath(data: any, path: string): any {
 
   return resolve(data, parts)
 }
+
+export { getItemValue, evaluateWhenCondition } from './dataEngine'
+

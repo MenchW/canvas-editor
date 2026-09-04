@@ -262,17 +262,14 @@ export class ImageParticle {
         img.onerror = error => {
           const fallbackImage = this.getFallbackImage(width, height)
           fallbackImage.onload = () => {
-            this._drawImageWithCrop(
-              ctx,
-              fallbackImage,
-              element,
-              x,
-              y,
-              width,
-              height
-            )
             this.imageCache.set(element.value, fallbackImage)
-            this._renderCaption(ctx, element, x, y, width, height)
+            if (cacheRenderCount === this.draw.getRenderCount()) {
+              this.draw.render({
+                isCompute: false,
+                isSetCursor: false,
+                isSubmitHistory: false
+              })
+            }
           }
           reject(error)
         }

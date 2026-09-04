@@ -83,6 +83,7 @@ export function hitRadio(element: IElement, draw: Draw) {
 
 export function mousedown(evt: MouseEvent, host: CanvasEvent) {
   const draw = host.getDraw()
+  draw.flushHistory()
   let isReadonly = draw.isReadonly()
   const rangeManager = draw.getRange()
   const position = draw.getPosition()
@@ -166,7 +167,7 @@ export function mousedown(evt: MouseEvent, host: CanvasEvent) {
       }
     }
     rangeManager.setRange(startIndex, endIndex)
-    position.setCursorPosition(positionList[curIndex])
+    draw.setCursor(curIndex)
     // 更新只读状态
     isReadonly = draw.isReadonly()
     // 复选框与单选框
@@ -183,10 +184,12 @@ export function mousedown(evt: MouseEvent, host: CanvasEvent) {
           !isDirectHitImage && !isDirectHitCheckbox && !isDirectHitRadio
       })
     }
-    // 首字需定位到行首，非上一行最后一个字后
-    if (hitLineStartIndex) {
+    // 唤醒常驻光标与聚焦闪烁
+    if (!isDirectHitImage && !isDirectHitCheckbox && !isDirectHitRadio) {
       host.getDraw().getCursor().drawCursor({
-        hitLineStartIndex
+        hitLineStartIndex,
+        isFocus: true,
+        isBlink: true
       })
     }
   }
@@ -212,12 +215,22 @@ export function mousedown(evt: MouseEvent, host: CanvasEvent) {
       previewerDrawOption.mime = 'svg'
       previewerDrawOption.srcKey = 'laTexSVG'
     }
+    const targetPos = isTable
+      ? position.getTableTdByContext(
+          draw.getOriginalElementList(),
+          position.getPositionContext()
+        )?.positionList?.[curIndex] || positionList[curIndex]
+      : positionList[curIndex]
     previewer.drawResizer(
       curElement,
-      positionList[curIndex],
+      targetPos,
       previewerDrawOption
     )
-    // 光标事件代理丢失，重新定位
+    // 同步设置光标位置至当前图片节点，避免跨单元格操作时焦点遗留在原单元格
+    if (targetPos) {
+      position.setCursorPosition(targetPos)
+    }
+    // 光标事件代理丢失，隐藏光标竖线
     draw.getCursor().drawCursor({
       isShow: false
     })

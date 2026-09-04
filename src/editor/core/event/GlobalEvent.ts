@@ -75,22 +75,35 @@ export class GlobalEvent {
 
   public clearSideEffect = (evt: Event) => {
     if (!this.cursor) return
+    // window.blur 事件处理：窗口/页面失焦时直接隐藏模拟光标，避免误导用户
+    if (evt?.type === 'blur') {
+      this.cursor.recoveryCursor()
+      return
+    }
     // 编辑器内部dom
-    const target = <Element>(evt?.composedPath()[0] || evt.target)
+    const target = <Element>(evt?.composedPath?.()?.[0] || evt?.target)
+    const container = this.draw.getContainer()
+    const pageContainer = this.draw.getPageContainer()
     const pageList = this.draw.getPageList()
-    const innerEditorDom = findParent(
-      target,
-      (node: HTMLCanvasElement) => pageList.includes(node),
-      true
-    )
+    const innerEditorDom =
+      (container && container.contains(target)) ||
+      (pageContainer && pageContainer.contains(target)) ||
+      (target &&
+        findParent(
+          target,
+          (node: HTMLCanvasElement) => pageList.includes(node),
+          true
+        ))
     if (innerEditorDom) return
     // 编辑器外部组件dom
-    const outerEditorDom = findParent(
-      target,
-      (node: Node & Element) =>
-        !!node && node.nodeType === 1 && !!node.getAttribute(EDITOR_COMPONENT),
-      true
-    )
+    const outerEditorDom =
+      target &&
+      findParent(
+        target,
+        (node: Node & Element) =>
+          !!node && node.nodeType === 1 && !!node.getAttribute(EDITOR_COMPONENT),
+        true
+      )
     if (outerEditorDom) {
       this.watchCursorActive()
       return

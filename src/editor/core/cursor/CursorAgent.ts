@@ -1,5 +1,6 @@
-import { EDITOR_PREFIX } from '../../dataset/constant/Editor'
+import { EDITOR_COMPONENT, EDITOR_PREFIX } from '../../dataset/constant/Editor'
 import { EventBusMap } from '../../interface/EventBus'
+import { findParent } from '../../utils'
 import { Draw } from '../draw/Draw'
 import { CanvasEvent } from '../event/CanvasEvent'
 import { EventBus } from '../event/eventbus/EventBus'
@@ -28,6 +29,29 @@ export class CursorAgent {
     agentCursorDom.onkeydown = (evt: KeyboardEvent) => this._keyDown(evt)
     agentCursorDom.oninput = this._input.bind(this)
     agentCursorDom.onpaste = (evt: ClipboardEvent) => this._paste(evt)
+    agentCursorDom.onblur = () => {
+      // 延迟检查失焦后新聚焦的元素是否属于编辑器内部或带有 EDITOR_COMPONENT 的工具栏组件
+      setTimeout(() => {
+        const activeEl = document.activeElement
+        if (!activeEl || activeEl === document.body) {
+          this.draw.getCursor()?.recoveryCursor()
+          return
+        }
+        const container = this.draw.getContainer()
+        if (container && container.contains(activeEl)) return
+        const isOuterComponent = findParent(
+          activeEl as Element,
+          (node: any) =>
+            !!node &&
+            node.nodeType === 1 &&
+            !!(node as Element).getAttribute?.(EDITOR_COMPONENT),
+          true
+        )
+        if (!isOuterComponent) {
+          this.draw.getCursor()?.recoveryCursor()
+        }
+      })
+    }
     agentCursorDom.addEventListener(
       'compositionstart',
       this._compositionstart.bind(this)

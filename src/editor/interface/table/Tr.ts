@@ -7,6 +7,7 @@ export interface ITr {
   height: number
   tdList: ITd[]
   minHeight?: number
+  rawMinHeight?: number
   isHeader?: boolean
   isFooter?: boolean
   pagingRepeat?: boolean // 在各页顶端以标题行的形式重复出现

@@ -29,7 +29,7 @@ export class ListRadioControl extends RadioControl {
     const startElement = elementList[startIndex]
     const targetControlId = this.element.controlId || startElement?.controlId
 
-    // 解析下发数据：支持选项数组 [{label, code, checked}] 或普通 codes 字符串数组
+    // 解析下发数据：支持选项数组 [{label, code, checked}]、codes 数组或标量值 ('1', '男' 等)
     let codes: string[] = []
     if (
       Array.isArray(payload) &&
@@ -52,11 +52,20 @@ export class ListRadioControl extends RadioControl {
       }
     } else if (Array.isArray(payload)) {
       codes = payload.map(String)
-    } else if (typeof payload === 'string' && payload) {
-      codes = [payload]
+    } else if (payload !== null && payload !== undefined && payload !== '') {
+      codes = [String(payload)]
     }
 
-    const selectedCode = codes[0] || (control?.code ? String(control.code) : null)
+    let selectedCode =
+      codes[0] || (control?.code ? String(control.code) : null)
+    if (selectedCode && control?.valueSets) {
+      const matchedByVal = control.valueSets.find(
+        vs => vs.value === selectedCode || vs.code === selectedCode
+      )
+      if (matchedByVal) {
+        selectedCode = matchedByVal.code
+      }
+    }
 
     // 检查是否存在 RADIO 选项元素，并定位 PREFIX / POSTFIX 边界
     let hasRadioEl = false

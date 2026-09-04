@@ -270,19 +270,126 @@ export class CheckboxControl implements IControlInstance {
     if (this.control.getIsDisabledControl()) {
       return null
     }
-    // 无痕编辑模式 (PREVIEW_EDIT) 下解包控件，允许光标自由在文字间逐字删除/按 Enter 换行，禁止整块删除控件
-    if (this.control.getDraw().getMode() === EditorMode.PREVIEW_EDIT) {
-      return null
-    }
+    const draw = this.control.getDraw()
+    const isPreviewEdit = draw.getMode() === EditorMode.PREVIEW_EDIT
+    const elementList = this.control.getElementList()
     const range = this.control.getRange()
-    // 收缩边界到Value内
     this.control.shrinkBoundary()
     const { startIndex, endIndex } = range
-    // 删除
-    if (evt.key === KeyMap.Backspace || evt.key === KeyMap.Delete) {
-      return this.control.removeControl(startIndex)
+    const startElement = elementList[startIndex]
+    const cId = startElement?.controlId || elementList[endIndex]?.controlId
+
+    if (evt.key === KeyMap.Backspace) {
+      if (startIndex !== endIndex) {
+        // 选区删除
+        draw.deleteElementList(
+          elementList,
+          startIndex + 1,
+          endIndex - startIndex
+        )
+        const hasValue = elementList.some(
+          el =>
+            el.controlId === cId &&
+            (el.controlComponent === ControlComponent.VALUE ||
+              el.controlComponent === ControlComponent.CHECKBOX ||
+              el.controlComponent === ControlComponent.RADIO)
+        )
+        if (!hasValue) {
+          if (isPreviewEdit) {
+            return this.control.removeControl(startIndex)
+          } else {
+            this.control.addPlaceholder(startIndex)
+          }
+        }
+        return startIndex
+      } else {
+        if (
+          startElement?.controlComponent === ControlComponent.PREFIX ||
+          startElement?.controlComponent === ControlComponent.PLACEHOLDER
+        ) {
+          return this.control.removeControl(startIndex)
+        } else if (
+          startElement?.controlComponent === ControlComponent.VALUE ||
+          startElement?.controlComponent === ControlComponent.CHECKBOX ||
+          startElement?.controlComponent === ControlComponent.RADIO
+        ) {
+          // 逐字删除单字符
+          draw.deleteElementList(elementList, startIndex, 1)
+          const newIdx = Math.max(0, startIndex - 1)
+          const hasValue = elementList.some(
+            el =>
+              el.controlId === cId &&
+              (el.controlComponent === ControlComponent.VALUE ||
+                el.controlComponent === ControlComponent.CHECKBOX ||
+                el.controlComponent === ControlComponent.RADIO)
+          )
+          if (!hasValue) {
+            if (isPreviewEdit) {
+              return this.control.removeControl(newIdx)
+            } else {
+              this.control.addPlaceholder(newIdx)
+              return newIdx
+            }
+          }
+          return newIdx
+        }
+      }
+    } else if (evt.key === KeyMap.Delete) {
+      if (startIndex !== endIndex) {
+        draw.deleteElementList(
+          elementList,
+          startIndex + 1,
+          endIndex - startIndex
+        )
+        const hasValue = elementList.some(
+          el =>
+            el.controlId === cId &&
+            (el.controlComponent === ControlComponent.VALUE ||
+              el.controlComponent === ControlComponent.CHECKBOX ||
+              el.controlComponent === ControlComponent.RADIO)
+        )
+        if (!hasValue) {
+          if (isPreviewEdit) {
+            return this.control.removeControl(startIndex)
+          } else {
+            this.control.addPlaceholder(startIndex)
+          }
+        }
+        return startIndex
+      } else {
+        const nextIdx = endIndex + 1
+        const nextElement = elementList[nextIdx]
+        if (
+          nextElement?.controlComponent === ControlComponent.VALUE ||
+          nextElement?.controlComponent === ControlComponent.CHECKBOX ||
+          nextElement?.controlComponent === ControlComponent.RADIO
+        ) {
+          draw.deleteElementList(elementList, nextIdx, 1)
+          const hasValue = elementList.some(
+            el =>
+              el.controlId === cId &&
+              (el.controlComponent === ControlComponent.VALUE ||
+                el.controlComponent === ControlComponent.CHECKBOX ||
+                el.controlComponent === ControlComponent.RADIO)
+          )
+          if (!hasValue) {
+            if (isPreviewEdit) {
+              return this.control.removeControl(endIndex)
+            } else {
+              this.control.addPlaceholder(endIndex)
+              return endIndex
+            }
+          }
+          return endIndex
+        } else if (
+          nextElement?.controlComponent === ControlComponent.POSTFIX &&
+          !isPreviewEdit
+        ) {
+          return this.control.removeControl(endIndex)
+        }
+      }
     }
-    return endIndex
+    return null
   }
 
   public cut(): number {

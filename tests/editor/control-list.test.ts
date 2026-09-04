@@ -151,11 +151,20 @@ describe('ListRadioControl & ListCheckboxControl 真实场景还原测试', () =
 
     // 检查第 1 组大标题
     const group1Header = renderedTable.trList![1].tdList[0]
-    expect(group1Header.value.map((v: any) => v.value).join('')).toContain('一、血常规检查组')
+    const headerText = group1Header.value
+      .map(
+        (v: any) =>
+          v.value ||
+          v.control?.value?.map((cv: any) => cv.value).join('') ||
+          ''
+      )
+      .join('')
+    expect(headerText).toContain('一、血常规检查组')
 
     // 检查第 1 组第 1 行多图
     const imgTd = renderedTable.trList![2].tdList[3]
-    const imgNodes = imgTd.value.filter((v: any) => v.type === 'image')
+    const imgCtrl = imgTd.value.find((v: any) => v.type === 'control' || v.control)
+    const imgNodes = imgCtrl?.control?.value?.filter((v: any) => v.type === 'image') || imgTd.value.filter((v: any) => v.type === 'image')
     expect(imgNodes.length).toBe(2)
   })
 

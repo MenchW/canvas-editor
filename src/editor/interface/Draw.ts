@@ -8,11 +8,13 @@ export interface IDrawOption {
   curIndex?: number
   isSetCursor?: boolean
   isSubmitHistory?: boolean
+  isSubmitHistoryDebounce?: boolean
   isCompute?: boolean
   isLazy?: boolean
   isInit?: boolean
   isSourceHistory?: boolean
   isFirstRender?: boolean
+  isComposing?: boolean
 }
 
 export interface IForceUpdateOption {

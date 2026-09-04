@@ -1,7 +1,6 @@
 import {
   cloneProperty,
   deepClone,
-  deepCloneOmitKeys,
   deleteProperty,
   getUUID,
   isArrayEqual,
@@ -51,7 +50,6 @@ import { DeepRequired } from '../interface/Common'
 import { IControlSelect } from '../interface/Control'
 import { IEditorOption } from '../interface/Editor'
 import { IElement, ITraceRecord } from '../interface/Element'
-import { IRowElement } from '../interface/Row'
 import { ITd } from '../interface/table/Td'
 import { ITr } from '../interface/table/Tr'
 import { mergeOption } from './option'
@@ -344,6 +342,20 @@ export function formatElementList(
         }
       }
       i--
+    } else if (el.type === ElementType.IMAGE || el.type === ElementType.LATEX) {
+      // 非浮动图片/公式尺寸自适应：最大不能超过画布最大可用宽度，超过等比缩放
+      const { margins, width } = editorOptions
+      const innerWidth = width - margins[1] - margins[3]
+      const isFloat =
+        el.imgDisplay === ImageDisplay.SURROUND ||
+        el.imgDisplay === ImageDisplay.FLOAT_TOP ||
+        el.imgDisplay === ImageDisplay.FLOAT_BOTTOM
+      if (!isFloat && el.width && el.width > innerWidth) {
+        if (el.height) {
+          el.height = Math.round((el.height * innerWidth) / el.width)
+        }
+        el.width = innerWidth
+      }
     } else if (el.type === ElementType.CONTROL) {
       // 兼容控件内容类型错误
       if (!el.control) {
@@ -389,6 +401,17 @@ export function formatElementList(
           }
         })
       }
+      // 值与占位符判定：无实际数据且配置了 placeholder 时统一显示占位符
+      const hasActualValue =
+        (value && value.length) ||
+        (type === ControlType.SELECT && code && (!value || !value.length)) ||
+        ((type === ControlType.CHECKBOX || type === ControlType.RADIO) && code)
+      const shouldRenderValue =
+        hasActualValue ||
+        ((type === ControlType.CHECKBOX || type === ControlType.RADIO) &&
+          !placeholder)
+      const isPlaceholderControl = !shouldRenderValue && Boolean(placeholder)
+
       // 前后缀个性化设置
       const thePrePostfixArg: Omit<IElement, 'value'> = {
         ...controlDefaultStyle,
@@ -405,7 +428,8 @@ export function formatElementList(
           value,
           type: el.type,
           control: el.control,
-          controlComponent: ControlComponent.PREFIX
+          controlComponent: ControlComponent.PREFIX,
+          isPlaceholder: isPlaceholderControl
         })
         i++
       }
@@ -426,15 +450,6 @@ export function formatElementList(
           i++
         }
       }
-      // 值与占位符判定：无实际数据且配置了 placeholder 时统一显示占位符
-      const hasActualValue =
-        (value && value.length) ||
-        (type === ControlType.SELECT && code && (!value || !value.length)) ||
-        ((type === ControlType.CHECKBOX || type === ControlType.RADIO) && code)
-      const shouldRenderValue =
-        hasActualValue ||
-        ((type === ControlType.CHECKBOX || type === ControlType.RADIO) &&
-          !placeholder)
 
       if (shouldRenderValue) {
         let valueList: IElement[] = value ? deepClone(value) : []
@@ -592,7 +607,8 @@ export function formatElementList(
             value: value === '\n' ? ZERO : value,
             type: el.type,
             control: el.control,
-            controlComponent: ControlComponent.PLACEHOLDER
+            controlComponent: ControlComponent.PLACEHOLDER,
+            isPlaceholder: true
           })
           i++
         }
@@ -625,7 +641,8 @@ export function formatElementList(
           value,
           type: el.type,
           control: el.control,
-          controlComponent: ControlComponent.POSTFIX
+          controlComponent: ControlComponent.POSTFIX,
+          isPlaceholder: isPlaceholderControl
         })
         i++
       }
@@ -1972,11 +1989,82 @@ export function getTextFromElementList(
   )
 }
 
-export function getSlimCloneElementList(elementList: IElement[]) {
-  return deepCloneOmitKeys<IElement[], IRowElement>(elementList, [
-    'metrics',
-    'style'
-  ])
+export function getSlimCloneElementList(elementList: IElement[]): IElement[] {
+  if (!elementList || !elementList.length) return []
+  const len = elementList.length
+  const result: IElement[] = new Array(len)
+  for (let i = 0; i < len; i++) {
+    const el = elementList[i]
+    if (!el || typeof el !== 'object') {
+      result[i] = el
+      continue
+    }
+    const copy: any = { ...el }
+    if (copy.metrics) delete copy.metrics
+    if (copy.style) delete copy.style
+
+    // 针对复合元素精准克隆
+    if (copy.trList) {
+      // 表格元素
+      if (copy.colgroup) {
+        copy.colgroup = copy.colgroup.map((col: any) => ({ ...col }))
+      }
+      copy.trList = copy.trList.map((tr: any) => ({
+        ...tr,
+        tdList: tr.tdList.map((td: any) => {
+          const tdCopy: any = { ...td }
+          delete tdCopy.positionList
+          delete tdCopy._posRowList
+          delete tdCopy._posStartX
+          delete tdCopy._posStartY
+          delete tdCopy._posPageNo
+          delete tdCopy._posRowIndex
+          delete tdCopy._posColIndex
+          delete tdCopy.rowList
+          delete tdCopy._lastFingerprint
+          delete tdCopy._lastMode
+          delete tdCopy._lastWidth
+          delete tdCopy._lastScale
+          delete tdCopy._lastTextDir
+          delete tdCopy._isUnzipped
+
+          const clonedValue =
+            td.value && td.value.length ? getSlimCloneElementList(td.value) : []
+          tdCopy.value = clonedValue
+          return tdCopy
+        })
+      }))
+    } else if (copy.valueList && copy.valueList.length) {
+      copy.valueList = getSlimCloneElementList(copy.valueList)
+    }
+
+    if (copy.control) {
+      copy.control = { ...copy.control }
+      if (copy.control.value && copy.control.value.length) {
+        copy.control.value = getSlimCloneElementList(copy.control.value)
+      }
+    }
+    if (copy.checkbox) {
+      copy.checkbox = { ...copy.checkbox }
+    }
+    if (copy.radio) {
+      copy.radio = { ...copy.radio }
+    }
+    if (copy.imgFloatPosition) {
+      copy.imgFloatPosition = { ...copy.imgFloatPosition }
+    }
+    if (copy.imgCaption) {
+      copy.imgCaption = { ...copy.imgCaption }
+    }
+    if (copy.trace && copy.trace.length) {
+      copy.trace = copy.trace.map((t: any) => ({ ...t }))
+    }
+    if (copy.area) {
+      copy.area = { ...copy.area }
+    }
+    result[i] = copy
+  }
+  return result
 }
 
 export function getIsBlockElement(element?: IElement) {

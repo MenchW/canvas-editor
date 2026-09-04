@@ -43,4 +43,13 @@ export interface ITd {
   realMinHeight?: number // 真实最小高度（包含跨列）
   disabled?: boolean // 内容不可编辑
   deletable?: boolean // 内容不可删除
+  // 排版缓存（用于大表格场景下避免重复分行计算）
+  _cachedInnerWidth?: number
+  _cachedScale?: number
+  _cachedTextDirection?: TdTextDirection
+  _cachedValueRef?: IElement[]
+  _cachedValueLength?: number
+  _cachedV0?: string
+  _cachedVMid?: string
+  _cachedVEnd?: string
 }

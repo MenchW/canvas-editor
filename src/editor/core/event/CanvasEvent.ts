@@ -163,6 +163,7 @@ export class CanvasEvent {
   }
 
   public selectAll() {
+    this.draw.getPreviewer().clearResizer()
     // 光标在表格内时选择整个表格
     if (this.position.getPositionContext().isTable) {
       this.draw.getTableOperate().tableSelectAll()

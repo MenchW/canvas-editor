@@ -1,4 +1,5 @@
 import { EDITOR_PREFIX } from '../../../../dataset/constant/Editor'
+import { ImageDisplay } from '../../../../dataset/enum/Common'
 import { EditorMode } from '../../../../dataset/enum/Editor'
 import { IEditorOption } from '../../../../interface/Editor'
 import { IElement, IElementPosition } from '../../../../interface/Element'
@@ -77,6 +78,10 @@ export class Previewer {
     this.curHandleIndex = 0 // 默认右下角
     this.previewerContainer = null
     this.previewerImage = null
+  }
+
+  public getCurElement(): IElement | null {
+    return this.curElement
   }
 
   private _getElementPosition(
@@ -196,8 +201,24 @@ export class Previewer {
         if (this.curElement && !this.previewerDrawOption.dragDisable) {
           this.curElement.width = this.width
           this.curElement.height = this.height
+          // 表格单元格内图片尺寸调整：清空单元格排版缓存，强制触发单元格撑高与表格行高重排
+          const positionContext = this.draw.getPosition().getPositionContext()
+          if (positionContext.isTable) {
+            const originalEl = this.draw.getOriginalElementList()
+            const td = this.draw
+              .getPosition()
+              .getTableTdByContext(originalEl, positionContext)
+            if (td) {
+              delete (td as any)._lastFingerprint
+              delete (td as any)._lastMode
+              delete td.mainHeight
+              delete td.rowList
+            }
+          }
           this.draw.render({
+            isCompute: true,
             isSetCursor: true,
+            isSubmitHistory: true,
             curIndex: this.curPosition?.index
           })
         }
@@ -266,9 +287,35 @@ export class Previewer {
         break
     }
     // 图片实际宽高（变化大小除掉缩放比例）
-    const dw = this.curElement.width! + dx / scale
-    const dh = this.curElement.height! + dy / scale
+    let dw = this.curElement.width! + dx / scale
+    let dh = this.curElement.height! + dy / scale
     if (dw <= 0 || dh <= 0) return
+    // 非浮动图片限制最大尺寸不能超过画布/单元格最大可用宽度，超过等比缩放
+    const isFloat =
+      this.curElement.imgDisplay === ImageDisplay.SURROUND ||
+      this.curElement.imgDisplay === ImageDisplay.FLOAT_TOP ||
+      this.curElement.imgDisplay === ImageDisplay.FLOAT_BOTTOM
+    if (!isFloat) {
+      const positionContext = this.draw.getPosition().getPositionContext()
+      let maxAvailableWidth = this.draw.getOriginalInnerWidth()
+      if (positionContext.isTable) {
+        const originalEl = this.draw.getOriginalElementList()
+        const td = this.draw
+          .getPosition()
+          .getTableTdByContext(originalEl, positionContext)
+        if (td?.width) {
+          const tdPadding = this.options.table?.tdPadding || [0, 4, 0, 4]
+          maxAvailableWidth = Math.max(
+            20,
+            td.width - (tdPadding[1] + tdPadding[3])
+          )
+        }
+      }
+      if (dw > maxAvailableWidth) {
+        dh = (dh * maxAvailableWidth) / dw
+        dw = maxAvailableWidth
+      }
+    }
     this.width = dw
     this.height = dh
     // 图片显示宽高
@@ -586,6 +633,20 @@ export class Previewer {
 
   public clearResizer() {
     this.resizerSelection.style.display = 'none'
+    this.curElement = null
+    this.curPosition = null
     document.removeEventListener('keydown', this._keydown)
   }
+
+  public getIsResizerVisible(): boolean {
+    return this.resizerSelection.style.display !== 'none'
+  }
+
+  public destroy() {
+    this.clearResizer()
+    this._clearPreviewer()
+    this.resizerSelection?.remove()
+  }
 }
+
+

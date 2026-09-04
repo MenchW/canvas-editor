@@ -1,7 +1,8 @@
 /**
  * @file 宿主客户端 SDK 模块
- * @version 1.0.1
+ * @version 1.0.2
  * @author menchw
+ * @updateTime 2026-09-02
  */
 
 import { connect, WindowMessenger } from 'penpal'
@@ -294,17 +295,136 @@ export class EditorClient implements IEditorClient {
   }
 
   /**
+   * 从模板数据中提取顶层表单/占位符控件列表（遇到表格跳过内部 tr/td，提取表格本身名称和 key）
+   */
+  private extractControlsFromTemplate(template: any): IControl[] {
+    if (!template || typeof template !== 'object') return []
+
+    const rawData = template.data || template
+    const lists: any[][] = []
+    if (Array.isArray(rawData)) {
+      lists.push(rawData)
+    } else if (typeof rawData === 'object') {
+      if (Array.isArray(rawData.header)) lists.push(rawData.header)
+      if (Array.isArray(rawData.main)) lists.push(rawData.main)
+      if (Array.isArray(rawData.footer)) lists.push(rawData.footer)
+    }
+
+    const parseTableControl = (el: any): IControl | null => {
+      const tableKey =
+        el.conceptId ||
+        el.datasetId ||
+        el.fieldKey ||
+        el.code ||
+        (Array.isArray(el.trList)
+          ? el.trList.find((tr: any) => tr?.loopConfig?.datasetId)?.loopConfig?.datasetId
+          : '') ||
+        ''
+      const tableName =
+        el.name ||
+        el.placeholder ||
+        el.label ||
+        el.fieldName ||
+        el.title ||
+        tableKey ||
+        '表格'
+
+      if (el.control && typeof el.control === 'object') {
+        return {
+          ...el.control,
+          conceptId: el.control.conceptId || tableKey,
+          placeholder: el.control.placeholder || tableName
+        }
+      }
+      if (tableKey || el.name || el.label) {
+        return {
+          type: 'table' as any,
+          conceptId: tableKey,
+          placeholder: tableName,
+          code: tableKey,
+          value: null
+        }
+      }
+      return null
+    }
+
+    const controls: IControl[] = []
+    for (const list of lists) {
+      for (const el of list) {
+        if (!el || typeof el !== 'object') continue
+
+        // 遇到表格：不管里面的 tr/td，提取表格本身的名称和 key
+        if (el.type === 'table') {
+          const tableCtrl = parseTableControl(el)
+          if (tableCtrl) {
+            controls.push(tableCtrl)
+          }
+          continue
+        }
+
+        if (el.control && typeof el.control === 'object') {
+          controls.push(el.control)
+        } else if (el.type === 'control') {
+          controls.push(el.control || el)
+        } else if (Array.isArray(el.valueList)) {
+          // 处理标题等顶层容器元素内的控件
+          for (const subEl of el.valueList) {
+            if (!subEl || typeof subEl !== 'object') continue
+            if (subEl.type === 'table') {
+              const tableCtrl = parseTableControl(subEl)
+              if (tableCtrl) {
+                controls.push(tableCtrl)
+              }
+              continue
+            }
+            if (subEl.control && typeof subEl.control === 'object') {
+              controls.push(subEl.control)
+            } else if (subEl.type === 'control') {
+              controls.push(subEl.control || subEl)
+            }
+          }
+        }
+      }
+    }
+
+    return controls
+  }
+
+  /**
    * 获取当前画布中的所有表单/占位符控件列表
+   * 若无画布对象或 RPC 不可用，自动通过 getTemplate 提取顶层控件
    */
   public async getControlList(): Promise<IControl[]> {
-    if (!this.editorRpc) return []
-    const list = await this.editorRpc.getControlList()
-    if (!Array.isArray(list)) return []
-    return list.map(item => item?.control || item).filter(Boolean)
+    if (this.editorRpc) {
+      try {
+        const list = await this.editorRpc.getControlList()
+        if (Array.isArray(list) && list.length > 0) {
+          return list.map(item => item?.control || item).filter(Boolean)
+        }
+      } catch (err) {
+        console.warn('[EditorClient SDK] 从画布获取控件列表失败，尝试降级读取模板:', err)
+      }
+    }
+
+    // 无画布对象或获取失败时：从 getTemplate 获取并提取
+    if (this.options.getTemplate) {
+      try {
+        const template =
+          typeof this.options.getTemplate === 'function'
+            ? await this.options.getTemplate()
+            : this.options.getTemplate
+        return this.extractControlsFromTemplate(template)
+      } catch (err) {
+        console.error('[EditorClient SDK] 从 getTemplate 读取模板失败:', err)
+      }
+    }
+
+    return []
   }
 
   /**
    * 检查宿主业务数据与画布控件列表的字段对齐与假值情况
+   * 若无画布对象则通过 getTemplate 获取控件，缺省数据时自动通过 getData 获取
    */
   public async getMissingControlList(
     data?: Record<string, any>
@@ -314,7 +434,26 @@ export class EditorClient implements IEditorClient {
       return { missingControls: [], falsyControls: [] }
     }
 
-    const targetData = data || this.lastFilledData
+    let targetData = data || this.lastFilledData
+
+    // 若未传参且未缓存过数据，则尝试从 getData 拉取业务数据
+    if (!targetData && this.options.getData) {
+      try {
+        targetData =
+          typeof this.options.getData === 'function'
+            ? await this.options.getData()
+            : this.options.getData
+        if (
+          targetData &&
+          typeof targetData === 'object' &&
+          !Array.isArray(targetData)
+        ) {
+          this.lastFilledData = targetData
+        }
+      } catch (err) {
+        console.error('[EditorClient SDK] getMissingControlList 从 getData 获取数据失败:', err)
+      }
+    }
 
     if (
       !targetData ||
@@ -328,7 +467,7 @@ export class EditorClient implements IEditorClient {
     const falsyControls: IControl[] = []
 
     controls.forEach(ctrl => {
-      const conceptId = ctrl.conceptId || ctrl.code
+      const conceptId = ctrl.conceptId || (ctrl as any).fieldKey || ctrl.code
       if (!conceptId) return
 
       const hasKey = this.hasFieldInData(targetData, conceptId)

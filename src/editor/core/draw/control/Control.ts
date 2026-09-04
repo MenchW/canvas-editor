@@ -208,10 +208,6 @@ export class Control {
   // 是否属于控件可以捕获事件的选区
   public getIsRangeCanCaptureEvent(): boolean {
     if (!this.activeControl) return false
-    // 无痕编辑模式 (PREVIEW_EDIT) 下解包控件，允许光标自由在文字间编辑，按键不捕获为控件级整体操作
-    if (this.draw.getMode() === EditorMode.PREVIEW_EDIT) {
-      return false
-    }
     const { startIndex, endIndex } = this.getRange()
     if (!~startIndex && !~endIndex) return false
     const elementList = this.getElementList()
@@ -578,34 +574,45 @@ export class Control {
     this.destroyControl()
     // 激活控件
     const isReadonly = this.draw.isReadonly()
-    if (isReadonly) return
-    const control = element.control!
-    const isList = !!control.listType
-    if (control.type === ControlType.TEXT) {
+    if (isReadonly || !element?.control) return
+    const control = element.control
+    const rawType = (control.type || '').toLowerCase()
+    const listType = (control.listType || '').toLowerCase()
+    const isList = Boolean(listType)
+
+    let effectiveType = rawType
+    if (rawType === 'list' || !rawType) {
+      if (listType === 'radio') effectiveType = ControlType.RADIO
+      else if (listType === 'checkbox') effectiveType = ControlType.CHECKBOX
+      else if (listType === 'image') effectiveType = ControlType.IMAGE
+      else effectiveType = ControlType.TEXT
+    }
+
+    if (effectiveType === ControlType.TEXT) {
       this.activeControl = isList
         ? new ListTextControl(element, this)
         : new TextControl(element, this)
-    } else if (control.type === ControlType.SELECT) {
+    } else if (effectiveType === ControlType.SELECT) {
       const selectControl = new SelectControl(element, this)
       this.activeControl = selectControl
       selectControl.awake()
-    } else if (control.type === ControlType.CHECKBOX) {
+    } else if (effectiveType === ControlType.CHECKBOX) {
       this.activeControl = isList
         ? new ListCheckboxControl(element, this)
         : new CheckboxControl(element, this)
-    } else if (control.type === ControlType.RADIO) {
+    } else if (effectiveType === ControlType.RADIO) {
       this.activeControl = isList
         ? new ListRadioControl(element, this)
         : new RadioControl(element, this)
-    } else if (control.type === ControlType.IMAGE) {
+    } else if (effectiveType === ControlType.IMAGE) {
       this.activeControl = isList
         ? new ListImageControl(element, this)
         : new ImageControl(element, this)
-    } else if (control.type === ControlType.DATE) {
+    } else if (effectiveType === ControlType.DATE) {
       const dateControl = new DateControl(element, this)
       this.activeControl = dateControl
       dateControl.awake()
-    } else if (control.type === ControlType.NUMBER) {
+    } else if (effectiveType === ControlType.NUMBER) {
       const numberControl = new NumberControl(element, this)
       this.activeControl = numberControl
       numberControl.awake()
@@ -688,21 +695,33 @@ export class Control {
     // 格式化回调数据
     const controlValue =
       options?.controlValue || this.getControlElementList(options?.context)
-    let control: IControl
+    let control: IControl | undefined
     if (controlValue?.length) {
-      control = zipElementList(controlValue)[0].control!
+      const zipped = zipElementList(controlValue)
+      control = zipped[0]?.control || controlElement.control
     } else {
-      control = controlElement.control!
-      control.value = []
+      control = controlElement.control
+      if (control) {
+        control.value = []
+      }
     }
     if (!control) return
     const payload: IControlContentChangeResult = {
       control,
       controlId: controlElement.controlId!
     }
+    const tCb0 = performance.now()
     this.listener.controlContentChange?.(payload)
     if (isSubscribeControlContentChange) {
       this.eventBus.emit('controlContentChange', payload)
+    }
+    const tCb = performance.now() - tCb0
+    if (tCb > 1) {
+      console.log(
+        `%c[ControlChange Listener]%c id=${controlElement.controlId} callback耗时: ${tCb.toFixed(1)}ms`,
+        'color: #ff5722; font-weight: bold',
+        'color: inherit'
+      )
     }
   }
 
@@ -801,6 +820,27 @@ export class Control {
       }
     }
     // 控件内移动光标
+    const isPreviewEdit = this.draw.getMode() === EditorMode.PREVIEW_EDIT
+    if (isPreviewEdit && element.controlId) {
+      const hasValue = elementList.some(
+        el =>
+          el.controlId === element.controlId &&
+          el.controlComponent === ControlComponent.VALUE
+      )
+      if (!hasValue) {
+        // 无痕模式下未填值的空控件：光标统一定位到该控件首个节点
+        const firstControlIndex = elementList.findIndex(
+          el => el.controlId === element.controlId
+        )
+        if (~firstControlIndex) {
+          return {
+            newIndex: firstControlIndex,
+            newElement: elementList[firstControlIndex]
+          }
+        }
+      }
+    }
+
     if (element.controlComponent === ControlComponent.VALUE) {
       // VALUE-无需移动
       return {
@@ -853,7 +893,7 @@ export class Control {
     ) {
       // PLACEHOLDER或后文本-移动到第一个前缀或内容后
       let startIndex = newIndex - 1
-      while (startIndex > 0) {
+      while (startIndex >= 0) {
         const preElement = elementList[startIndex]
         if (
           preElement.controlId !== element.controlId ||
@@ -867,6 +907,15 @@ export class Control {
           }
         }
         startIndex--
+      }
+      // 前方无前缀时保底返回当前控件首节点
+      const firstControlIndex = elementList.findIndex(
+        el => el.controlId === element.controlId
+      )
+      const safeIndex = ~firstControlIndex ? firstControlIndex : 0
+      return {
+        newIndex: safeIndex,
+        newElement: elementList[safeIndex] || element
       }
     }
     return {
@@ -917,15 +966,18 @@ export class Control {
     context: IControlContext = {}
   ): number | null {
     const elementList = context.elementList || this.getElementList()
+    if (startIndex < 0 || startIndex >= elementList.length) return null
     const startElement = elementList[startIndex]
+    if (!startElement) return null
+
     // 设计模式 || 元素隐藏 => 不验证删除权限
     if (
       !this.draw.isDesignMode() &&
-      !startElement?.hide &&
-      !startElement?.control?.hide &&
-      !startElement?.area?.hide
+      !startElement.hide &&
+      !startElement.control?.hide &&
+      !startElement.area?.hide
     ) {
-      const { deletable = true } = startElement.control!
+      const { deletable = true } = startElement.control || {}
       if (!deletable) return null
       // 表单模式控件删除权限验证
       const mode = this.draw.getMode()
@@ -936,26 +988,32 @@ export class Control {
         return null
       }
       // 外层删除时，递归校验内部所有子控件的 deletable
-      const ownerId = startElement.controlId!
-      let scanIndex = startIndex
-      while (scanIndex < elementList.length) {
-        const scanEl = elementList[scanIndex]
-        // 找到外层 POSTFIX 即结束
-        if (
-          scanEl.controlId === ownerId &&
-          scanEl.controlComponent === ControlComponent.POSTFIX
-        ) {
-          break
+      const ownerId = startElement.controlId
+      if (ownerId) {
+        let scanIndex = startIndex
+        while (scanIndex < elementList.length) {
+          const scanEl = elementList[scanIndex]
+          if (!scanEl) {
+            scanIndex++
+            continue
+          }
+          // 找到外层 POSTFIX 即结束
+          if (
+            scanEl.controlId === ownerId &&
+            scanEl.controlComponent === ControlComponent.POSTFIX
+          ) {
+            break
+          }
+          // 遇到内层控件段 PREFIX，检查该内层控件的 deletable
+          if (
+            scanEl.controlId !== ownerId &&
+            scanEl.controlComponent === ControlComponent.PREFIX &&
+            scanEl.control?.deletable === false
+          ) {
+            return null
+          }
+          scanIndex++
         }
-        // 遇到内层控件段 PREFIX，检查该内层控件的 deletable
-        if (
-          scanEl.controlId !== ownerId &&
-          scanEl.controlComponent === ControlComponent.PREFIX &&
-          scanEl.control?.deletable === false
-        ) {
-          return null
-        }
-        scanIndex++
       }
     }
     let leftIndex = -1
@@ -1044,18 +1102,29 @@ export class Control {
       }
     }
     // 控件在最后
-    if (nextIndex >= elementList.length) {
-      rightIndex = elementList.length - 1
+    if (!~leftIndex && !~rightIndex) {
+      // 兜底扫描：若控件无显式前后缀（如图片控件），计算所有相同 controlId 元素的最小与最大索引
+      let minIdx = startIndex
+      let maxIdx = startIndex
+      for (let i = 0; i < elementList.length; i++) {
+        if (elementList[i]?.controlId === startElement.controlId) {
+          if (i < minIdx) minIdx = i
+          if (i > maxIdx) maxIdx = i
+        }
+      }
+      leftIndex = minIdx - 1
+      rightIndex = maxIdx
     }
-    if (!~leftIndex && !~rightIndex) return startIndex
-    leftIndex = ~leftIndex ? leftIndex : 0
-    // 删除元素
-    this.draw.deleteElementList(
-      elementList,
-      leftIndex + 1,
-      rightIndex - leftIndex
-    )
-    return leftIndex
+    const deleteStart = leftIndex + 1
+    const deleteCount = rightIndex - leftIndex
+    if (deleteStart >= 0 && deleteCount > 0) {
+      this.draw.deleteElementList(
+        elementList,
+        deleteStart,
+        deleteCount
+      )
+    }
+    return Math.max(0, leftIndex)
   }
 
   public removePlaceholder(startIndex: number, context: IControlContext = {}) {
@@ -1480,16 +1549,179 @@ export class Control {
     }
   }
 
+  public cleanSelectionDelete(
+    elementList: IElement[],
+    startIndex: number,
+    endIndex: number,
+    options: IControlRuleOption = {}
+  ): number {
+    const isPreviewEdit = this.draw.getMode() === EditorMode.PREVIEW_EDIT
+    // 1. 收集选区 [startIndex ... endIndex] 内触及的所有控件 controlId
+    const touchedControlIds = new Set<string>()
+    for (let i = startIndex; i <= endIndex; i++) {
+      const cId = elementList[i]?.controlId
+      if (cId) {
+        touchedControlIds.add(cId)
+      }
+    }
+
+    // 2. 执行选区元素删除
+    const isDeleteFromZero = startIndex === 0
+    const startAt = isDeleteFromZero ? 1 : startIndex + 1
+    const deleteCount = isDeleteFromZero ? endIndex : endIndex - startIndex
+
+    if (deleteCount > 0) {
+      this.draw.deleteElementList(elementList, startAt, deleteCount, options)
+    }
+
+    if (isDeleteFromZero && elementList.length > 0) {
+      elementList[0] = { value: ZERO }
+    }
+
+    // 3. 对受影响的控件进行闭环安全清理与前后缀自愈
+    if (touchedControlIds.size > 0) {
+      touchedControlIds.forEach(controlId => {
+        const indices: number[] = []
+        let hasValue = false
+        let hasPrefix = false
+        let hasPostfix = false
+        let sampleElement: IElement | null = null
+
+        for (let i = 0; i < elementList.length; i++) {
+          const el = elementList[i]
+          if (el?.controlId === controlId) {
+            indices.push(i)
+            if (!sampleElement) sampleElement = el
+            if (
+              el.controlComponent === ControlComponent.VALUE ||
+              el.controlComponent === ControlComponent.CHECKBOX ||
+              el.controlComponent === ControlComponent.RADIO
+            ) {
+              hasValue = true
+            }
+            if (
+              el.controlComponent === ControlComponent.PREFIX ||
+              el.controlComponent === ControlComponent.PRE_TEXT
+            ) {
+              hasPrefix = true
+            }
+            if (
+              el.controlComponent === ControlComponent.POSTFIX ||
+              el.controlComponent === ControlComponent.POST_TEXT
+            ) {
+              hasPostfix = true
+            }
+          }
+        }
+
+        if (indices.length === 0) return
+
+        if (!hasValue) {
+          // 该控件的内容已被全部删空
+          if (isPreviewEdit) {
+            // 无痕模式下：将其残留的前后缀/占位符全部彻底清除，不留任何痕迹
+            for (let k = indices.length - 1; k >= 0; k--) {
+              this.draw.deleteElementList(elementList, indices[k], 1, options)
+            }
+          } else if (sampleElement?.control?.placeholder) {
+            // 普通模式下：若只剩前后缀，恢复占位符
+            const firstIdx = indices[0]
+            if (hasPrefix && hasPostfix) {
+              this.addPlaceholder(firstIdx, { elementList })
+            }
+          }
+        } else {
+          // 该控件仍有部分文字，自愈补齐缺失的前后缀，确保成对闭环
+          const firstIdx = indices[0]
+          const anchor = sampleElement || elementList[firstIdx]
+          const anchorStyle = pickObject(anchor, [
+            'control',
+            'controlId',
+            ...CONTROL_STYLE_ATTR
+          ])
+
+          if (!hasPrefix) {
+            const prefixChar = anchor.control?.prefix || '{'
+            const prefixNode: IElement = {
+              ...anchorStyle,
+              value: prefixChar,
+              type: ElementType.CONTROL,
+              controlComponent: ControlComponent.PREFIX,
+              isPlaceholder: false
+            }
+            this.draw.spliceElementList(elementList, firstIdx, 0, [prefixNode])
+          }
+
+          if (!hasPostfix) {
+            let curLastIdx = -1
+            for (let i = 0; i < elementList.length; i++) {
+              if (elementList[i]?.controlId === controlId) {
+                curLastIdx = i
+              }
+            }
+            if (curLastIdx !== -1) {
+              const postfixChar = anchor.control?.postfix || '}'
+              const postfixNode: IElement = {
+                ...anchorStyle,
+                value: postfixChar,
+                type: ElementType.CONTROL,
+                controlComponent: ControlComponent.POSTFIX,
+                isPlaceholder: false
+              }
+              this.draw.spliceElementList(elementList, curLastIdx + 1, 0, [
+                postfixNode
+              ])
+            }
+          }
+
+          // 同步更新控件 control.value
+          const remainValues: IElement[] = []
+          for (let i = 0; i < elementList.length; i++) {
+            const el = elementList[i]
+            if (
+              el?.controlId === controlId &&
+              el.controlComponent === ControlComponent.VALUE
+            ) {
+              const copy = { ...el }
+              delete copy.control
+              delete copy.controlComponent
+              delete copy.controlId
+              remainValues.push(copy)
+            }
+          }
+          for (let i = 0; i < elementList.length; i++) {
+            const el = elementList[i]
+            if (el?.controlId === controlId && el.control) {
+              el.control.value = remainValues
+              el.isPlaceholder = false
+            }
+          }
+        }
+      })
+    }
+
+    return startIndex
+  }
+
   private dispatchSetControlValue(
     element: IElement,
     value: any,
     context: IControlContext,
     rule: IControlRuleOption
   ) {
-    const isList = !!element.control?.listType
-    const type = element.control?.type || ControlType.TEXT
+    const rawType = (element.control?.type || '').toLowerCase()
+    const listType = (element.control?.listType || '').toLowerCase()
+    const isList = Boolean(listType)
 
-    switch (type) {
+    let effectiveType = rawType
+    if (rawType === 'list' || !rawType) {
+      if (listType === 'radio') effectiveType = ControlType.RADIO
+      else if (listType === 'checkbox') effectiveType = ControlType.CHECKBOX
+      else if (listType === 'image') effectiveType = ControlType.IMAGE
+      else effectiveType = ControlType.TEXT
+    }
+
+    switch (effectiveType) {
       case ControlType.RADIO: {
         const radio = isList
           ? new ListRadioControl(element, this)

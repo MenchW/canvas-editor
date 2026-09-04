@@ -34,4 +34,6 @@ export interface IRow {
   fragmentPosition?: IElementPosition
   // 续页回显表头单元格的一次性位置列表（仅用于绘制，不参与命中）
   repeatTdPositionList?: { td: ITd; positionList: IElementPosition[] }[]
+  // 行内各元素计算出的精确渲染位置列表（与 elementList 严格 1:1 映射）
+  elementPositionList?: IElementPosition[]
 }

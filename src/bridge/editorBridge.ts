@@ -5,10 +5,31 @@ import {
   getValueByPath,
   deepClone,
   getUUID,
-  splitText
+  splitText,
+  getItemValue,
+  evaluateWhenCondition
 } from '../editor/utils/index'
 import { ZERO } from '../editor/dataset/constant/Common'
 import { applyDeclaredSameMerge } from '../editor/utils/dataEngine'
+
+/** 轻量模板行克隆（复用不变的单元格样式属性，仅克隆动态结构与元素数组，降低 GC 压力） */
+function cloneTrTemplate(tr: any): any {
+  if (!tr) return tr
+  const clonedTdList = Array.isArray(tr.tdList)
+    ? tr.tdList.map((td: any) => ({
+        ...td,
+        id: getUUID(),
+        value: Array.isArray(td.value) ? deepClone(td.value) : td.value
+      }))
+    : []
+  const clonedTr = {
+    ...tr,
+    id: getUUID(),
+    tdList: clonedTdList
+  }
+  delete clonedTr.loopConfig
+  return clonedTr
+}
 
 /** 对象数据转控件设值列表 */
 function toControlValueList(
@@ -33,9 +54,6 @@ function toControlValueList(
   })
   return result
 }
-
-// 收集克隆控件值列表
-const collectedValues: { id: string; value: any }[] = []
 
 /** 展开循环表格 */
 export function expandLoopTables(
@@ -133,13 +151,8 @@ export function expandLoopTables(
               ) {
                 return
               }
-              const clonedHeaderTr = deepClone(headerTr)
-              delete clonedHeaderTr.loopConfig
-              clonedHeaderTr.id = getUUID()
-              clonedHeaderTr.tdList.forEach((td: any) => {
-                td.id = getUUID()
-              })
-              remapControlIdsAndCollect(clonedHeaderTr, groupItem, true)
+              const clonedHeaderTr = cloneTrTemplate(headerTr)
+              remapControlIdsAndCollect(clonedHeaderTr, groupItem)
               walkTd(clonedHeaderTr.tdList, groupItem)
               newTrList.push(clonedHeaderTr)
             })
@@ -183,13 +196,8 @@ export function expandLoopTables(
                   !secondItem ||
                   evaluateWhenCondition(secondLevelTr.when, secondItem)
                 ) {
-                  const clonedContentTr = deepClone(secondLevelTr)
-                  delete clonedContentTr.loopConfig
-                  clonedContentTr.id = getUUID()
-                  clonedContentTr.tdList.forEach((td: any) => {
-                    td.id = getUUID()
-                  })
-                  remapControlIdsAndCollect(clonedContentTr, secondItem, true)
+                  const clonedContentTr = cloneTrTemplate(secondLevelTr)
+                  remapControlIdsAndCollect(clonedContentTr, secondItem)
                   walkTd(clonedContentTr.tdList, secondItem)
                   newTrList.push(clonedContentTr)
                 }
@@ -227,12 +235,7 @@ export function expandLoopTables(
                   ) {
                     return
                   }
-                  const clonedDetailTr = deepClone(thirdLevelTr)
-                  delete clonedDetailTr.loopConfig
-                  clonedDetailTr.id = getUUID()
-                  clonedDetailTr.tdList.forEach((td: any) => {
-                    td.id = getUUID()
-                  })
+                  const clonedDetailTr = cloneTrTemplate(thirdLevelTr)
                   remapControlIdsAndCollect(clonedDetailTr, thirdItem)
                   walkTd(clonedDetailTr.tdList, thirdItem)
                   newTrList.push(clonedDetailTr)
@@ -263,12 +266,7 @@ export function expandLoopTables(
                   ) {
                     return
                   }
-                  const clonedDetailTr = deepClone(detailTr)
-                  delete clonedDetailTr.loopConfig
-                  clonedDetailTr.id = getUUID()
-                  clonedDetailTr.tdList.forEach((td: any) => {
-                    td.id = getUUID()
-                  })
+                  const clonedDetailTr = cloneTrTemplate(detailTr)
                   remapControlIdsAndCollect(clonedDetailTr, subItem)
                   walkTd(clonedDetailTr.tdList, subItem)
                   newTrList.push(clonedDetailTr)
@@ -291,12 +289,7 @@ export function expandLoopTables(
               ) {
                 continue
               }
-              const clonedTr = deepClone(currentTemplateTr)
-              delete clonedTr.loopConfig
-              clonedTr.id = getUUID()
-              clonedTr.tdList.forEach((td: any) => {
-                td.id = getUUID()
-              })
+              const clonedTr = cloneTrTemplate(currentTemplateTr)
               remapControlIdsAndCollect(clonedTr, itemData)
               walkTd(clonedTr.tdList, itemData)
               newTrList.push(clonedTr)
@@ -339,146 +332,20 @@ export function expandLoopTables(
   }
 }
 
-/** 从 itemData 结构化数据中按 conceptId 安全提取字段值（支持多图数组、对象数组、[].url 等各种写法） */
-function getItemValue(itemData: any, conceptId: string): any {
-  if (!itemData || !conceptId) return undefined
 
-  // 1. 直接按原始键名取值
-  if (itemData[conceptId] !== undefined && itemData[conceptId] !== null) {
-    return itemData[conceptId]
-  }
 
-  // 逐级剥离循环前缀别名（例如 item.userName -> userName，order.detail.price -> detail.price -> price）
-  if (conceptId.includes('.')) {
-    const parts = conceptId.split('.')
-    for (let i = 1; i < parts.length; i++) {
-      const subKey = parts.slice(i).join('.')
-      if (itemData[subKey] !== undefined && itemData[subKey] !== null) {
-        return itemData[subKey]
-      }
-      const subVal = getValueByPath(itemData, subKey)
-      if (subVal !== undefined && subVal !== null) {
-        return subVal
-      }
-    }
-  }
 
-  // 2. 将 [] 转换为通配符 [*] 后按路径取值
-  const wildcardKey = conceptId.replace(/\[\]/g, '[*]')
-  const wildcardVal = getValueByPath(itemData, wildcardKey)
-  if (wildcardVal !== undefined && wildcardVal !== null) {
-    if (!Array.isArray(wildcardVal) || wildcardVal.length > 0) {
-      return wildcardVal
-    }
-  }
-
-  // 3. 去除 [] 后的标准点号路径取值
-  const cleanKey = conceptId.replace(/\[\]\./g, '.').replace(/\[\]/g, '')
-  const cleanVal = getValueByPath(itemData, cleanKey)
-  if (cleanVal !== undefined && cleanVal !== null) {
-    if (!Array.isArray(cleanVal) || cleanVal.length > 0) {
-      return cleanVal
-    }
-  }
-
-  // 4. 针对一维数组字段的通配提取场景 (如 records[].name 或 items.url)
-  if (conceptId.includes('[]') || conceptId.includes('.')) {
-    const mainProp = conceptId.split(/[.[\]]/)[0]
-    const rawVal = itemData[mainProp]
-    if (Array.isArray(rawVal)) {
-      const subPropMatch = /(?:\.|\[\]\.)(\w+)$/.exec(conceptId)
-      const subProp = subPropMatch ? subPropMatch[1] : ''
-      if (subProp) {
-        const extracted = rawVal
-          .map((item: any) =>
-            typeof item === 'object' && item !== null
-              ? item[subProp] !== undefined
-                ? item[subProp]
-                : item.url || item.src || item.value
-              : item
-          )
-          .filter((v: any) => v !== undefined && v !== null && v !== '')
-        if (extracted.length > 0) return extracted
-      }
-      return rawVal
-    }
-  }
-
-  return undefined
-}
-
-function evaluateWhenCondition(expr: string, itemData: any): boolean {
-  if (!expr || typeof expr !== 'string') return true
-  if (!itemData || typeof itemData !== 'object') return true
-  try {
-    const fn = new Function(
-      'item',
-      'data',
-      `try { with(data || {}) { with(item || {}) { return Boolean(${expr}); } } } catch(e) { return false; }`
-    )
-    return fn(itemData, itemData)
-  } catch {
-    const match = expr.match(/([\w\.]+)\s*(==|!=|>=|<=|>|<)\s*(.+)/)
-    if (match) {
-      const field = match[1].replace(/^(?:item|row)\./, '')
-      const op = match[2]
-      const targetVal = isNaN(Number(match[3].trim()))
-        ? match[3].trim().replace(/^['"]|['"]$/g, '')
-        : Number(match[3].trim())
-      const actualVal = (itemData as any)?.[field]
-      if (actualVal === undefined) return false
-      switch (op) {
-        case '>':
-          return actualVal > targetVal
-        case '<':
-          return actualVal < targetVal
-        case '>=':
-          return actualVal >= targetVal
-        case '<=':
-          return actualVal <= targetVal
-        case '==':
-          return String(actualVal) === String(targetVal)
-        case '!=':
-          return String(actualVal) !== String(targetVal)
-      }
-    }
-    return true
-  }
-}
-
-/** 构造带样式的单字符节点序列 (用于 innerLoop 占位符与文本展开) */
-function createStyledCharNodes(
-  text: string,
-  color: string | undefined,
-  baseStyle: any
-): any[] {
-  if (!text) return []
-  const nodes: any[] = []
-  splitText(text).forEach(ch => {
-    const node = deepClone(baseStyle || {})
-    delete node.innerLoop
-    delete node.control
-    delete node.controlId
-    delete node.controlComponent
-    node.type = undefined
-    if (color !== undefined) {
-      node.color = color
-    }
-    node.value = ch
-    nodes.push(node)
-  })
-  return nodes
-}
 
 function remapControlIdsAndCollect(
   tr: any,
-  itemData: any,
-  isGroupHeader = false
+  itemData: any
 ) {
   const idMap = new Map<string, string>()
 
   tr.tdList.forEach((td: any) => {
     if (!Array.isArray(td.value)) return
+
+    const processedControlIds = new Set<string>()
 
     // 0. 根据 when 条件过滤当前单元格内不满足条件的元素
     if (itemData) {
@@ -778,7 +645,7 @@ function remapControlIdsAndCollect(
                     expandedNodes.push({
                       type: 'image',
                       value: imgUrl,
-                      width: token.control?.width || 120,
+                      width: token.control?.width || 80,
                       height: token.control?.height || 80,
                       rowFlex: token.baseStyle?.rowFlex
                     })
@@ -801,68 +668,148 @@ function remapControlIdsAndCollect(
                   })
                 }
 
-              } else if (
-                subVal !== undefined &&
-                subVal !== null &&
-                String(subVal).length > 0
-              ) {
-                const finalStr = String(subVal)
-                if (prefixChar) {
-                  expandedNodes.push(
-                    ...createStyledCharNodes(
-                      prefixChar,
-                      bracketColor,
-                      token.baseStyle
-                    )
-                  )
-                }
-                expandedNodes.push(
-                  ...createStyledCharNodes(
-                    finalStr,
-                    token.baseStyle?.color || undefined,
-                    token.baseStyle
-                  )
-                )
-                if (postfixChar) {
-                  expandedNodes.push(
-                    ...createStyledCharNodes(
-                      postfixChar,
-                      bracketColor,
-                      token.baseStyle
-                    )
-                  )
-                }
               } else {
-                // 若无真实值，则保底保留【置灰】的占位符文本，如 {rule}
-                const fallbackPlaceholder = token.placeholder
-                  ? token.placeholder
-                  : cleanField
+                // 普通文本 / 数值字段：构建真实 Control 字符序列，使得回显后用户删除文字能自动退回占位符状态
+                const newControlId = getUUID()
+                processedControlIds.add(newControlId)
+                let conceptId = token.conceptId || token.control?.conceptId || ''
+                let placeholder = token.placeholder || token.control?.placeholder || ''
+                if (!conceptId && !placeholder && token.rawNodes) {
+                  const text = token.rawNodes
+                    .filter(
+                      (n: any) =>
+                        n.controlComponent === 'placeholder' ||
+                        n.controlComponent === 'value'
+                    )
+                    .map((n: any) => n.value)
+                    .join('')
+                  if (text) {
+                    placeholder = text
+                    conceptId = text
+                  }
+                }
+                if (!conceptId && placeholder) conceptId = placeholder
+                if (!placeholder && conceptId) placeholder = conceptId
 
-                if (prefixChar) {
-                  expandedNodes.push(
-                    ...createStyledCharNodes(
-                      prefixChar,
-                      bracketColor,
-                      token.baseStyle
-                    )
-                  )
+                let cleanField = conceptId
+                const itemAlias = blk.config.itemAlias || 'item'
+                if (cleanField.startsWith(`${itemAlias}.`)) {
+                  cleanField = cleanField.slice(itemAlias.length + 1)
+                } else if (cleanField.startsWith('tag.')) {
+                  cleanField = cleanField.slice(4)
+                } else if (cleanField.startsWith('item.')) {
+                  cleanField = cleanField.slice(5)
+                } else if (cleanField.includes('.')) {
+                  cleanField = cleanField.split('.').slice(1).join('.')
                 }
-                expandedNodes.push(
-                  ...createStyledCharNodes(
-                    fallbackPlaceholder,
-                    placeholderColor,
-                    token.baseStyle
-                  )
-                )
-                if (postfixChar) {
-                  expandedNodes.push(
-                    ...createStyledCharNodes(
-                      postfixChar,
-                      bracketColor,
-                      token.baseStyle
-                    )
-                  )
+
+                let subVal: any = undefined
+                if (subItem !== null && subItem !== undefined) {
+                  if (typeof subItem !== 'object') {
+                    subVal = subItem
+                  } else {
+                    subVal =
+                      subItem[cleanField] ??
+                      getItemValue(subItem, cleanField) ??
+                      subItem[conceptId] ??
+                      getItemValue(subItem, conceptId)
+
+                    if (subVal === undefined) {
+                      subVal =
+                        subItem.name ??
+                        subItem.label ??
+                        subItem.text ??
+                        subItem.value ??
+                        subItem.riskLevelName ??
+                        subItem.desc
+                    }
+                  }
                 }
+
+                const fallbackPlaceholder =
+                  placeholder || cleanField || conceptId
+                const hasRealValue =
+                  subVal !== undefined &&
+                  subVal !== null &&
+                  String(subVal).length > 0
+
+                const controlObj = {
+                  type: 'list',
+                  listType: 'text',
+                  conceptId: cleanField,
+                  placeholder: fallbackPlaceholder,
+                  prefix: prefixChar,
+                  postfix: postfixChar,
+                  bracketColor,
+                  placeholderColor,
+                  ...(token.control || {})
+                }
+
+                if (hasRealValue) {
+                  controlObj.value = [
+                    {
+                      value: String(subVal),
+                      rowFlex: token.baseStyle?.rowFlex,
+                      color: token.baseStyle?.color
+                    }
+                  ]
+                }
+
+                const baseNode = deepClone(token.baseStyle || {})
+                delete baseNode.innerLoop
+                delete baseNode.isPlaceholder
+
+                // 前缀 {
+                expandedNodes.push({
+                  ...baseNode,
+                  value: prefixChar,
+                  type: 'text',
+                  color: bracketColor,
+                  controlId: newControlId,
+                  control: controlObj,
+                  controlComponent: 'prefix',
+                  isPlaceholder: !hasRealValue
+                })
+
+                // 内容：有真实值展开真实值，无真实值展开置灰占位符
+                if (hasRealValue) {
+                  splitText(String(subVal)).forEach((ch: string) => {
+                    expandedNodes.push({
+                      ...baseNode,
+                      value: ch,
+                      type: 'text',
+                      controlId: newControlId,
+                      control: controlObj,
+                      controlComponent: 'value',
+                      isPlaceholder: false
+                    })
+                  })
+                } else {
+                  splitText(fallbackPlaceholder).forEach((ch: string) => {
+                    expandedNodes.push({
+                      ...baseNode,
+                      value: ch,
+                      type: 'text',
+                      color: placeholderColor,
+                      controlId: newControlId,
+                      control: controlObj,
+                      controlComponent: 'placeholder',
+                      isPlaceholder: true
+                    })
+                  })
+                }
+
+                // 后缀 }
+                expandedNodes.push({
+                  ...baseNode,
+                  value: postfixChar,
+                  type: 'text',
+                  color: bracketColor,
+                  controlId: newControlId,
+                  control: controlObj,
+                  controlComponent: 'postfix',
+                  isPlaceholder: !hasRealValue
+                })
               }
             } else {
               token.rawNodes.forEach(rawNode => {
@@ -921,6 +868,7 @@ function remapControlIdsAndCollect(
 
     // 1. 刷新 Remap 其余控件 ID，确保克隆出的每一行所有字符和控件节点都拥有独立的唯一 ID
     td.value.forEach((el: any) => {
+      if (el.controlId && processedControlIds.has(el.controlId)) return
       if (el.controlId || el.type === 'control' || el.control) {
         if (!el.controlId) {
           el.controlId = getUUID()
@@ -935,8 +883,6 @@ function remapControlIdsAndCollect(
     })
 
     // 2. 扫描并处理字段（支持单图/多图数组解包展开与文本直接回显）
-    const processedControlIds = new Set<string>()
-
     for (let i = 0; i < td.value.length; i++) {
       const el = td.value[i]
       const control = el.control
@@ -987,22 +933,261 @@ function remapControlIdsAndCollect(
               : [val]
             : []
         const validImages = rawUrls
-          .map((v: any) => (typeof v === 'object' ? v.url || v.src || String(v) : String(v)))
-          .filter((v: string) => v && (v.startsWith('http') || v.startsWith('data:image')))
+          .map((v: any) =>
+            typeof v === 'object' ? v.url || v.src || String(v) : String(v)
+          )
+          .filter(
+            (v: string) =>
+              v && (v.startsWith('http') || v.startsWith('data:image'))
+          )
 
         const newNodes: any[] = []
+        const baseNode = deepClone(td.value[matchingIndices[0]])
+        const phText = control?.placeholder || conceptId || '现场照片'
+        const bracketColor = control?.bracketColor || '#000000'
+        const placeholderColor = '#c0c4cc'
+
         if (validImages.length > 0) {
+          const imgListNodes: any[] = []
           validImages.forEach((imgUrl: string, idx: number) => {
-            if (idx > 0) newNodes.push({ value: ' ' })
-            newNodes.push({
+            if (idx > 0) imgListNodes.push({ value: ' ' })
+            imgListNodes.push({
               type: 'image',
               value: imgUrl,
-              width: control?.width || 42,
-              height: control?.height || 42
+              width: control?.width || 80,
+              height: control?.height || 80
+            })
+          })
+          const imgControlObj = {
+            ...control,
+            type: 'list',
+            listType: 'image',
+            conceptId,
+            placeholder: phText,
+            prefix: control?.prefix || '{',
+            postfix: control?.postfix || '}',
+            value: imgListNodes
+          }
+          // 前缀 {
+          newNodes.push({
+            ...baseNode,
+            value: control?.prefix || '{',
+            type: 'control',
+            color: bracketColor,
+            controlId: targetControlId,
+            control: imgControlObj,
+            controlComponent: 'prefix',
+            isPlaceholder: false
+          })
+          // 图片序列
+          imgListNodes.forEach(item => {
+            newNodes.push({
+              ...baseNode,
+              ...item,
+              controlId: targetControlId,
+              control: imgControlObj,
+              controlComponent: 'value',
+              isPlaceholder: false
+            })
+          })
+          // 后缀 }
+          newNodes.push({
+            ...baseNode,
+            value: control?.postfix || '}',
+            type: 'control',
+            color: bracketColor,
+            controlId: targetControlId,
+            control: imgControlObj,
+            controlComponent: 'postfix',
+            isPlaceholder: false
+          })
+        } else {
+          // 无图片数据：回退为标准置灰占位符控件
+          const imgControlObj = {
+            ...control,
+            type: 'list',
+            listType: 'image',
+            conceptId,
+            placeholder: phText,
+            prefix: control?.prefix || '{',
+            postfix: control?.postfix || '}',
+            value: null
+          }
+          newNodes.push({
+            ...baseNode,
+            value: control?.prefix || '{',
+            type: 'control',
+            color: bracketColor,
+            controlId: targetControlId,
+            control: imgControlObj,
+            controlComponent: 'prefix',
+            isPlaceholder: true
+          })
+          splitText(phText).forEach(ch => {
+            newNodes.push({
+              ...baseNode,
+              value: ch,
+              type: 'control',
+              color: placeholderColor,
+              controlId: targetControlId,
+              control: imgControlObj,
+              controlComponent: 'placeholder',
+              isPlaceholder: true
+            })
+          })
+          newNodes.push({
+            ...baseNode,
+            value: control?.postfix || '}',
+            type: 'control',
+            color: bracketColor,
+            controlId: targetControlId,
+            control: imgControlObj,
+            controlComponent: 'postfix',
+            isPlaceholder: true
+          })
+        }
+
+        const firstIdx = matchingIndices[0]
+        for (let m = matchingIndices.length - 1; m >= 0; m--) {
+          td.value.splice(matchingIndices[m], 1)
+        }
+        td.value.splice(firstIdx, 0, ...newNodes)
+        i = firstIdx + newNodes.length - 1
+        processedControlIds.add(targetControlId)
+      } else {
+        // 普通文本 / 数值 / 列表字段：原地展开为标准的已填充三段式控件节点
+        processedControlIds.add(targetControlId)
+        const isArrayVal = Array.isArray(val)
+        const hasVal =
+          val !== undefined &&
+          val !== null &&
+          (isArrayVal ? val.length > 0 : String(val).length > 0)
+
+        const baseNode = td.value[matchingIndices[0]]
+        const prefixChar = control?.prefix ?? '{'
+        const postfixChar = control?.postfix ?? '}'
+        const bracketColor = control?.bracketColor ?? '#000000'
+        const placeholderColor = control?.placeholderColor ?? '#9c9b9b'
+        const placeholderText = control?.placeholder || conceptId
+
+        const ctrlObj = {
+          type: isArrayVal ? 'list' : control?.type || 'text',
+          listType: isArrayVal ? 'text' : undefined,
+          conceptId,
+          placeholder: placeholderText,
+          prefix: prefixChar,
+          postfix: postfixChar,
+          bracketColor,
+          placeholderColor,
+          ...(control || {})
+        }
+
+        const newNodes: any[] = []
+
+        if (isArrayVal && val.length > 0) {
+          // 数组列表字段 (如 tags): 展开为多个分段列表项
+          val.forEach((item: any, idx: number) => {
+            if (idx > 0) {
+              newNodes.push({
+                ...baseNode,
+                value: ' ',
+                type: 'text',
+                controlId: targetControlId,
+                control: ctrlObj,
+                controlComponent: 'value',
+                isPlaceholder: false
+              })
+            }
+            const itemStr =
+              typeof item === 'object' && item !== null
+                ? item.name || item.value || item.label || item.text || String(item)
+                : String(item)
+
+            newNodes.push({
+              ...baseNode,
+              value: prefixChar,
+              type: 'text',
+              color: bracketColor,
+              controlId: targetControlId,
+              control: ctrlObj,
+              controlComponent: 'prefix',
+              isPlaceholder: false
+            })
+            splitText(itemStr).forEach((ch: string) => {
+              newNodes.push({
+                ...baseNode,
+                value: ch,
+                type: 'text',
+                color: baseNode.color,
+                controlId: targetControlId,
+                control: ctrlObj,
+                controlComponent: 'value',
+                isPlaceholder: false
+              })
+            })
+            newNodes.push({
+              ...baseNode,
+              value: postfixChar,
+              type: 'text',
+              color: bracketColor,
+              controlId: targetControlId,
+              control: ctrlObj,
+              controlComponent: 'postfix',
+              isPlaceholder: false
             })
           })
         } else {
-          newNodes.push({ value: '-' })
+          // 单个标量字段 (如 projectName, projectMax, score)
+          const strVal = hasVal ? String(val) : ''
+          newNodes.push({
+            ...baseNode,
+            value: prefixChar,
+            type: 'text',
+            color: bracketColor,
+            controlId: targetControlId,
+            control: ctrlObj,
+            controlComponent: 'prefix',
+            isPlaceholder: !hasVal
+          })
+
+          if (hasVal) {
+            splitText(strVal).forEach((ch: string) => {
+              newNodes.push({
+                ...baseNode,
+                value: ch,
+                type: 'text',
+                color: baseNode.color,
+                controlId: targetControlId,
+                control: ctrlObj,
+                controlComponent: 'value',
+                isPlaceholder: false
+              })
+            })
+          } else {
+            splitText(placeholderText).forEach((ch: string) => {
+              newNodes.push({
+                ...baseNode,
+                value: ch,
+                type: 'text',
+                color: placeholderColor,
+                controlId: targetControlId,
+                control: ctrlObj,
+                controlComponent: 'placeholder',
+                isPlaceholder: true
+              })
+            })
+          }
+
+          newNodes.push({
+            ...baseNode,
+            value: postfixChar,
+            type: 'text',
+            color: bracketColor,
+            controlId: targetControlId,
+            control: ctrlObj,
+            controlComponent: 'postfix',
+            isPlaceholder: !hasVal
+          })
         }
 
         const firstIdx = matchingIndices[0]
@@ -1011,44 +1196,6 @@ function remapControlIdsAndCollect(
         }
         td.value.splice(firstIdx, 0, ...newNodes)
         i = firstIdx + newNodes.length - 1
-      } else if (isGroupHeader) {
-        // 大标题行：直接展开为加粗标题文本
-        const strVal = val !== undefined && val !== null ? String(val) : ''
-        const baseNode = td.value[matchingIndices[0]]
-        const newNodes =
-          strVal.length > 0
-            ? splitText(strVal).map((ch: string) => ({
-                ...baseNode,
-                value: ch,
-                bold: true,
-                type: undefined,
-                control: undefined,
-                controlId: undefined,
-                controlComponent: undefined
-              }))
-            : []
-        const firstIdx = matchingIndices[0]
-        for (let m = matchingIndices.length - 1; m >= 0; m--) {
-          td.value.splice(matchingIndices[m], 1)
-        }
-        td.value.splice(firstIdx, 0, ...newNodes)
-        i = firstIdx + newNodes.length - 1
-      } else {
-        // 普通文本 / 数值字段：保留克隆控件结构，直接同步写入 control.value，并收集 ID 与值
-        processedControlIds.add(targetControlId)
-        if (control && val !== undefined && val !== null && String(val).length > 0) {
-          control.value = [
-            {
-              value: String(val),
-              rowFlex: el.rowFlex,
-              color: el.color
-            }
-          ]
-        }
-        collectedValues.push({
-          id: targetControlId,
-          value: val !== undefined && val !== null ? val : ''
-        })
       }
     }
   })
@@ -1068,8 +1215,6 @@ export class EditorBridge {
   private currentConfig: any = {}
   /** 宿主下发的业务数据(模式切换回显时复用) */
   private lastBusinessData: any = null
-  /** 纯净模板 AST 快照(用于异步/多次回显时保证模板 100% 纯净与幂等) */
-  private pureTemplate: any = null
 
   constructor(options: IBridgeOptions) {
     this.instance = options.instance
@@ -1180,10 +1325,7 @@ export class EditorBridge {
       if (payload) {
         const template = payload.template || payload
 
-        // 存储最纯净的模板 AST 快照（不受初次空数据展开污染）
-        if (template && typeof template === 'object') {
-          this.pureTemplate = deepClone(template)
-        }
+
 
         // 1. 设置排版 options
         if (template.options && typeof template.options === 'object') {
@@ -1332,55 +1474,17 @@ export class EditorBridge {
         // 直接下发 ID/conceptId 键值对数组
         this.instance.command.executeSetControlValueList(data)
       } else {
-        collectedValues.length = 0
-
-        // 1. 如果存在纯净模板快照，从纯净模板出发重构当前文档（保证幂等与结构完好）
-        if (this.pureTemplate) {
-          const clonedTemplate = deepClone(this.pureTemplate)
-          const templateData =
-            clonedTemplate.data ||
-            (Array.isArray(clonedTemplate)
-              ? { main: clonedTemplate }
-              : clonedTemplate)
-
-          if (templateData.main) {
-            expandLoopTables(templateData.main, data)
-          }
-          if (templateData.header) {
-            expandLoopTables(templateData.header, data)
-          }
-          if (templateData.footer) {
-            expandLoopTables(templateData.footer, data)
-          }
-
-          this.instance.command.executeSetValue(templateData)
-        } else {
-          // 降级：基于当前画布上的 ElementList 展开
-          const originalElementList = (
-            this.instance.command as any
-          ).getOriginalElementList()
-          expandLoopTables(originalElementList, data)
-        }
-
-        // 2. 批量向所有控件（文本、单选、多选、多图等）填充值并由 Control 体系多态展开
-        const rootValues = toControlValueList(data)
-        const uniqueCollected =
-          collectedValues.length > 0
-            ? Array.from(
-                new Map(
-                  collectedValues.map(item => [item.id, item.value])
-                ).entries()
-              ).map(([id, value]) => ({ id, value }))
-            : []
-
-        const allValues = [...rootValues, ...uniqueCollected]
-        if (allValues.length > 0) {
-          this.instance.command.executeSetControlValueList(allValues)
-        }
-
+        // 1. 基于当前画布上的 ElementList 动态展开循环表格
         const originalElementList = (
           this.instance.command as any
         ).getOriginalElementList()
+        expandLoopTables(originalElementList, data)
+
+        // 2. 批量向所有控件（文本、单选、多选、多图等）填充值并由 Control 体系多态展开
+        const rootValues = toControlValueList(data)
+        if (rootValues.length > 0) {
+          this.instance.command.executeSetControlValueList(rootValues)
+        }
 
         // 5. 声明式相邻相同数据垂直合并 (merge-same)
         const walkMerge = (list: any[]) => {

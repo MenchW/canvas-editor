@@ -21,11 +21,14 @@ export function input(data: string, host: CanvasEvent) {
   if (isComposing && host.compositionInfo?.value === data) return
   const rangeManager = draw.getRange()
   if (!rangeManager.getIsCanInput()) return
+  const tInputStart = performance.now()
   // 移除合成前，缓存设置的默认样式设置
   const defaultStyle =
     rangeManager.getDefaultStyle() || host.compositionInfo?.defaultStyle || null
   // 移除合成输入
+  const tRm0 = performance.now()
   removeComposingInput(host)
+  const tRmComp = performance.now() - tRm0
   if (!isComposing) {
     const cursor = draw.getCursor()
     cursor.clearAgentDomValue()
@@ -92,10 +95,16 @@ export function input(data: string, host: CanvasEvent) {
     if (!control.getActiveControl()) return
   }
   let curIndex: number
+  let tSetVal = 0
+  let tEmit = 0
   if (control.getActiveControl() && control.getIsRangeWithinControl()) {
+    const tC0 = performance.now()
     curIndex = control.setValue(inputData)
+    tSetVal = performance.now() - tC0
     if (!isComposing) {
+      const tE0 = performance.now()
       control.emitControlContentChange()
+      tEmit = performance.now() - tE0
     }
   } else {
     const start = startIndex + 1
@@ -112,12 +121,17 @@ export function input(data: string, host: CanvasEvent) {
     draw.spliceElementList(elementList, start, 0, inputData)
     curIndex = startIndex + inputData.length
   }
+  let tRender = 0
   if (~curIndex) {
     rangeManager.setRange(curIndex, curIndex)
+    const tR0 = performance.now()
     draw.render({
       curIndex,
-      isSubmitHistory: !isComposing
+      isComposing,
+      isSubmitHistory: !isComposing,
+      isSubmitHistoryDebounce: !isComposing
     })
+    tRender = performance.now() - tR0
     if (data) {
       draw.getAccessibility().input(data)
     }
@@ -131,6 +145,15 @@ export function input(data: string, host: CanvasEvent) {
       defaultStyle
     }
   }
+  const tTotal = performance.now() - tInputStart
+  console.log(
+    `%c[Input Handler]%c ` +
+    `isComposing=${isComposing} | text="${data}" | total=${tTotal.toFixed(1)}ms | ` +
+    `rmComp=${tRmComp.toFixed(1)}ms | setVal=${tSetVal.toFixed(1)}ms | ` +
+    `emitChange=${tEmit.toFixed(1)}ms | render=${tRender.toFixed(1)}ms`,
+    isComposing ? 'color: #2196f3' : 'color: #9c27b0; font-weight: bold',
+    'color: inherit'
+  )
 }
 
 export function removeComposingInput(host: CanvasEvent) {

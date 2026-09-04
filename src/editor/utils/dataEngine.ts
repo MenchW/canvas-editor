@@ -372,7 +372,70 @@ export function applyGenericDataEngine(
                                   it?.url
                               )
                             ) {
-                              cellElements.push(...formatListImageElements(val, { width: 42, height: 42 }))
+                              const imgElements = formatListImageElements(val, {
+                                width: e.control?.width || 80,
+                                height: e.control?.height || 80
+                              })
+                              const imgCtrl = {
+                                ...e.control,
+                                type: 'list',
+                                listType: 'image',
+                                value: imgElements
+                              }
+                              cellElements.push({
+                                ...e,
+                                value: e.control?.prefix || '{',
+                                controlComponent: 'prefix',
+                                isPlaceholder: false,
+                                control: imgCtrl
+                              })
+                              cellElements.push(...imgElements.map(img => ({
+                                ...e,
+                                ...img,
+                                controlComponent: 'value',
+                                isPlaceholder: false,
+                                control: imgCtrl
+                              })))
+                              cellElements.push({
+                                ...e,
+                                value: e.control?.postfix || '}',
+                                controlComponent: 'postfix',
+                                isPlaceholder: false,
+                                control: imgCtrl
+                              })
+                            } else if (Array.isArray(val) && val.length === 0) {
+                              // 空图片数组：回退为标准置灰占位符控件
+                              const ph = e.control?.placeholder || targetKey || key || '现场照片'
+                              const imgCtrl = {
+                                ...e.control,
+                                type: 'list',
+                                listType: 'image',
+                                value: null
+                              }
+                              cellElements.push({
+                                ...e,
+                                value: e.control?.prefix || '{',
+                                controlComponent: 'prefix',
+                                isPlaceholder: true,
+                                control: imgCtrl
+                              })
+                              splitText(ph).forEach(ch => {
+                                cellElements.push({
+                                  ...e,
+                                  value: ch,
+                                  color: '#c0c4cc',
+                                  controlComponent: 'placeholder',
+                                  isPlaceholder: true,
+                                  control: imgCtrl
+                                })
+                              })
+                              cellElements.push({
+                                ...e,
+                                value: e.control?.postfix || '}',
+                                controlComponent: 'postfix',
+                                isPlaceholder: true,
+                                control: imgCtrl
+                              })
                             } else {
                               const strVal =
                                 val !== undefined && val !== null ? String(val) : ''
@@ -391,7 +454,6 @@ export function applyGenericDataEngine(
                           }
                         })
 
-                        if (cellElements.length === 0) cellElements.push({ value: '-' })
                         rowTdList.push({
                           colspan: templateTd?.colspan || 1,
                           rowspan: 1,
@@ -421,7 +483,6 @@ export function applyGenericDataEngine(
                           )
                         ) {
                           const imgElements = formatListImageElements(cellVal, { width: 42, height: 42 })
-                          if (imgElements.length === 0) imgElements.push({ value: '-' })
                           rowTdList.push({
                             colspan: templateTd?.colspan || 1,
                             rowspan: 1,
@@ -571,7 +632,11 @@ export function applyGenericDataEngine(
                               it?.url
                           )
                         ) {
-                          cellElements.push(...formatListImageElements(val, { width: 42, height: 42 }))
+                          const imgElements = formatListImageElements(val, {
+                            width: e.control?.width || 80,
+                            height: e.control?.height || 80
+                          })
+                          cellElements.push(...imgElements)
                         } else {
                           const strVal =
                             val !== undefined && val !== null ? String(val) : ''
@@ -589,7 +654,6 @@ export function applyGenericDataEngine(
                       }
                     })
 
-                    if (cellElements.length === 0) cellElements.push({ value: '-' })
                     tdList.push({
                       colspan: templateTd?.colspan || 1,
                       rowspan: 1,
@@ -619,13 +683,12 @@ export function applyGenericDataEngine(
                       )
                     ) {
                       const imgElements = formatListImageElements(cellVal, { width: 42, height: 42 })
-                      if (imgElements.length === 0) imgElements.push({ value: '-' })
                       tdList.push({
                         colspan: templateTd?.colspan || 1,
                         rowspan: 1,
                         mergeSame: templateTd?.mergeSame,
                         backgroundColor: templateTd?.backgroundColor,
-                        value: imgElements
+                        value: imgElements.length > 0 ? imgElements : [{ value: '{现场照片}', color: '#c0c4cc' }]
                       })
                     } else {
                       const strVal =
@@ -709,3 +772,112 @@ export function applyGenericDataEngine(
   walkElements(elementList)
   return { rootValues }
 }
+
+/** 从 itemData 结构化数据中按 conceptId 安全提取字段值（支持多图数组、对象数组、[].url 等各种写法） */
+export function getItemValue(itemData: any, conceptId: string): any {
+  if (!itemData || !conceptId) return undefined
+
+  // 1. 直接按原始键名取值
+  if (itemData[conceptId] !== undefined && itemData[conceptId] !== null) {
+    return itemData[conceptId]
+  }
+
+  // 逐级剥离循环前缀别名（例如 item.userName -> userName，order.detail.price -> detail.price -> price）
+  if (conceptId.includes('.')) {
+    const parts = conceptId.split('.')
+    for (let i = 1; i < parts.length; i++) {
+      const subKey = parts.slice(i).join('.')
+      if (itemData[subKey] !== undefined && itemData[subKey] !== null) {
+        return itemData[subKey]
+      }
+      const subVal = getValueByPath(itemData, subKey)
+      if (subVal !== undefined && subVal !== null) {
+        return subVal
+      }
+    }
+  }
+
+  // 2. 将 [] 转换为通配符 [*] 后按路径取值
+  const wildcardKey = conceptId.replace(/\[\]/g, '[*]')
+  const wildcardVal = getValueByPath(itemData, wildcardKey)
+  if (wildcardVal !== undefined && wildcardVal !== null) {
+    if (!Array.isArray(wildcardVal) || wildcardVal.length > 0) {
+      return wildcardVal
+    }
+  }
+
+  // 3. 去除 [] 后的标准点号路径取值
+  const cleanKey = conceptId.replace(/\[\]\./g, '.').replace(/\[\]/g, '')
+  const cleanVal = getValueByPath(itemData, cleanKey)
+  if (cleanVal !== undefined && cleanVal !== null) {
+    if (!Array.isArray(cleanVal) || cleanVal.length > 0) {
+      return cleanVal
+    }
+  }
+
+  // 4. 针对一维数组字段的通配提取场景 (如 records[].name 或 items.url)
+  if (conceptId.includes('[]') || conceptId.includes('.')) {
+    const mainProp = conceptId.split(/[.[\]]/)[0]
+    const rawVal = itemData[mainProp]
+    if (Array.isArray(rawVal)) {
+      const subPropMatch = /(?:\.|\[\]\.)(\w+)$/.exec(conceptId)
+      const subProp = subPropMatch ? subPropMatch[1] : ''
+      if (subProp) {
+        const extracted = rawVal
+          .map((item: any) =>
+            typeof item === 'object' && item !== null
+              ? item[subProp] !== undefined
+                ? item[subProp]
+                : item.url || item.src || item.value
+              : item
+          )
+          .filter((v: any) => v !== undefined && v !== null && v !== '')
+        if (extracted.length > 0) return extracted
+      }
+      return rawVal
+    }
+  }
+
+  return undefined
+}
+
+/** 条件表达式求值 */
+export function evaluateWhenCondition(expr: string, itemData: any): boolean {
+  if (!expr || typeof expr !== 'string') return true
+  if (!itemData || typeof itemData !== 'object') return true
+  try {
+    const fn = new Function(
+      'item',
+      'data',
+      `try { with(data || {}) { with(item || {}) { return Boolean(${expr}); } } } catch(e) { return false; }`
+    )
+    return fn(itemData, itemData)
+  } catch {
+    const match = expr.match(/([\w\.]+)\s*(==|!=|>=|<=|>|<)\s*(.+)/)
+    if (match) {
+      const field = match[1].replace(/^(?:item|row)\./, '')
+      const op = match[2]
+      const targetVal = isNaN(Number(match[3].trim()))
+        ? match[3].trim().replace(/^['"]|['"]$/g, '')
+        : Number(match[3].trim())
+      const actualVal = (itemData as any)?.[field]
+      if (actualVal === undefined) return false
+      switch (op) {
+        case '>':
+          return actualVal > targetVal
+        case '<':
+          return actualVal < targetVal
+        case '>=':
+          return actualVal >= targetVal
+        case '<=':
+          return actualVal <= targetVal
+        case '==':
+          return String(actualVal) === String(targetVal)
+        case '!=':
+          return String(actualVal) !== String(targetVal)
+      }
+    }
+    return true
+  }
+}
+

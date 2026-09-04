@@ -84,9 +84,9 @@ describe('延迟回显与异步数据加载时序测试', () => {
     expandLoopTables(docList, businessData)
 
     const cellNodes = docList[0].trList[0].tdList[0].value
-    const textResult = cellNodes.map((v: any) => v.value).join('')
+    const textResult = cellNodes.map((v: any) => v.value || '').join('')
 
-    console.log('--- 展开后的文本结果 ---', textResult)
+    console.log('--- 展开后的画布字符文本 ---', textResult)
 
     const checkboxes = cellNodes.filter((v: any) => v.type === 'checkbox')
     expect(checkboxes.length).toBe(3)
@@ -94,8 +94,8 @@ describe('延迟回显与异步数据加载时序测试', () => {
     expect(checkboxes[1]?.checkbox?.value).toBe(false)
     expect(checkboxes[2]?.checkbox?.value).toBe(false)
 
-    expect(textResult).toContain('重大风险')
-    expect(textResult).toContain('较大风险')
-    expect(textResult).toContain('一般风险')
+    expect(textResult).toContain('{重大风险}')
+    expect(textResult).toContain('{较大风险}')
+    expect(textResult).toContain('{一般风险}')
   })
 })

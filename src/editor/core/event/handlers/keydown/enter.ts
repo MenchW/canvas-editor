@@ -59,7 +59,7 @@ export function enter(evt: KeyboardEvent, host: CanvasEvent) {
   // 最后一个列表项行首回车取消列表设置
   if (
     isCollapsed &&
-    endElement.listId &&
+    endElement?.listId &&
     endElement.value === ZERO &&
     elementList[endIndex + 1]?.listId !== endElement.listId
   ) {
@@ -175,7 +175,7 @@ export function enter(evt: KeyboardEvent, host: CanvasEvent) {
   }
   if (~curIndex) {
     rangeManager.setRange(curIndex, curIndex)
-    draw.render({ curIndex })
+    draw.render({ curIndex, isSubmitHistoryDebounce: true })
   }
   evt.preventDefault()
 }

@@ -2,6 +2,7 @@ import { ZERO } from '../../../../dataset/constant/Common'
 import { CONTROL_STYLE_ATTR } from '../../../../dataset/constant/Element'
 import { ControlComponent } from '../../../../dataset/enum/Control'
 import { ElementType } from '../../../../dataset/enum/Element'
+import { KeyMap } from '../../../../dataset/enum/KeyMap'
 import {
   IControlContext,
   IControlInstance,
@@ -74,23 +75,38 @@ export class ImageControl implements IControlInstance {
     ) {
       formatValue = data
     } else if (typeof data === 'string' && data) {
-      formatValue = [
-        {
-          type: ElementType.IMAGE,
-          value: data,
-          width: control?.width || 120,
-          height: control?.height || 120
-        }
-      ]
+      const isImgUrl =
+        data.startsWith('http') ||
+        data.startsWith('data:image') ||
+        data.startsWith('/') ||
+        data.startsWith('./') ||
+        data.startsWith('blob:')
+      if (isImgUrl) {
+        formatValue = [
+          {
+            type: ElementType.IMAGE,
+            value: data,
+            width: control?.width || 120,
+            height: control?.height || 120
+          }
+        ]
+      }
     } else if (firstItem && typeof firstItem === 'object') {
-      const url = firstItem.url || firstItem.src || firstItem.value || ''
+      const url =
+        firstItem.url ||
+        firstItem.src ||
+        (firstItem.type === ElementType.IMAGE ? firstItem.value : '')
       if (url) {
+        const itemWidth =
+          Number(firstItem.width) || control?.width || 120
+        const itemHeight =
+          Number(firstItem.height) || control?.height || 120
         formatValue = [
           {
             type: ElementType.IMAGE,
             value: url,
-            width: Number(firstItem.width) || control?.width || 120,
-            height: Number(firstItem.height) || control?.height || 120
+            width: itemWidth,
+            height: itemHeight
           }
         ]
       }
@@ -102,7 +118,7 @@ export class ImageControl implements IControlInstance {
         editorOptions: draw.getOptions()
       })
     } else if (control?.placeholder) {
-      const placeholderStrList = splitText(`@${control.placeholder}`)
+      const placeholderStrList = splitText(control.placeholder)
       const placeholderArgs: Omit<IElement, 'value'> = {
         color: draw.getOptions().control.placeholderColor
       }
@@ -132,9 +148,22 @@ export class ImageControl implements IControlInstance {
       }
     }
 
-    const insertAt = prefixIndex !== -1 ? prefixIndex + 1 : firstIndex
+    const isPlaceholderState = !formatValue.some(
+      v => v.controlComponent !== ControlComponent.PLACEHOLDER
+    )
+    const anchorElement = pickObject(
+      elementList[prefixIndex !== -1 ? prefixIndex : firstIndex !== -1 ? firstIndex : 0] ||
+        this.element,
+      ['control', 'controlId', ...CONTROL_STYLE_ATTR]
+    )
+
+    const insertAt = prefixIndex !== -1 ? prefixIndex + 1 : firstIndex !== -1 ? firstIndex : 0
     const deleteCount =
-      postfixIndex !== -1 ? postfixIndex - insertAt : lastIndex - firstIndex + 1
+      postfixIndex !== -1
+        ? postfixIndex - insertAt
+        : lastIndex !== -1
+        ? lastIndex - insertAt + 1
+        : 0
 
     if (deleteCount > 0) {
       draw.deleteElementList(elementList, insertAt, deleteCount, {
@@ -142,19 +171,50 @@ export class ImageControl implements IControlInstance {
       })
     }
 
-    const anchorElement = pickObject(
-      elementList[prefixIndex !== -1 ? prefixIndex : firstIndex] ||
-        this.element,
-      ['control', 'controlId', ...CONTROL_STYLE_ATTR]
-    )
+    const newNodes: IElement[] = []
+    if (prefixIndex === -1) {
+      newNodes.push({
+        ...anchorElement,
+        type: ElementType.CONTROL,
+        value: control?.prefix || '{',
+        controlComponent: ControlComponent.PREFIX,
+        isPlaceholder: isPlaceholderState
+      })
+    } else if (elementList[prefixIndex]) {
+      elementList[prefixIndex].isPlaceholder = isPlaceholderState
+    }
 
-    const newNodes: IElement[] = formatValue.map(item => ({
-      ...anchorElement,
-      ...item,
-      controlComponent: item.controlComponent || ControlComponent.VALUE
-    }))
+    formatValue.forEach(item => {
+      newNodes.push({
+        ...anchorElement,
+        ...item,
+        controlComponent: item.controlComponent || ControlComponent.VALUE,
+        isPlaceholder: isPlaceholderState
+      })
+    })
 
-    draw.spliceElementList(elementList, insertAt, 0, newNodes)
+    if (postfixIndex === -1) {
+      newNodes.push({
+        ...anchorElement,
+        type: ElementType.CONTROL,
+        value: control?.postfix || '}',
+        controlComponent: ControlComponent.POSTFIX,
+        isPlaceholder: isPlaceholderState
+      })
+    } else {
+      for (let k = 0; k < elementList.length; k++) {
+        if (
+          elementList[k]?.controlId === targetControlId &&
+          elementList[k]?.controlComponent === ControlComponent.POSTFIX
+        ) {
+          elementList[k].isPlaceholder = isPlaceholderState
+        }
+      }
+    }
+
+    if (newNodes.length) {
+      draw.spliceElementList(elementList, insertAt, 0, newNodes)
+    }
 
     this.control.emitControlContentChange({
       context
@@ -162,14 +222,35 @@ export class ImageControl implements IControlInstance {
     return insertAt + newNodes.length
   }
 
-  public keydown(): number | null {
+  public keydown(evt: KeyboardEvent): number | null {
     if (this.control.getIsDisabledControl()) {
+      return null
+    }
+    const elementList = this.control.getElementList()
+    const { startIndex, endIndex } = this.control.getRange()
+    const isCollapsed = startIndex === endIndex
+
+    if (evt.key === KeyMap.Backspace || evt.key === KeyMap.Delete) {
+      this.control.getDraw().getPreviewer().clearResizer()
+      if (!isCollapsed) {
+        return this.control.cleanSelectionDelete(elementList, startIndex, endIndex)
+      }
       return null
     }
     return null
   }
 
   public cut(): number {
-    return -1
+    if (this.control.getIsDisabledControl()) {
+      return -1
+    }
+    const elementList = this.control.getElementList()
+    const { startIndex, endIndex } = this.control.getRange()
+    this.control.getDraw().getPreviewer().clearResizer()
+    if (startIndex !== endIndex) {
+      return this.control.cleanSelectionDelete(elementList, startIndex, endIndex)
+    }
+    const res = this.control.removeControl(startIndex)
+    return res !== null ? res : -1
   }
 }

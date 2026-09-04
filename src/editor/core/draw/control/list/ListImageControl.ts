@@ -1,6 +1,7 @@
 import { ZERO } from '../../../../dataset/constant/Common'
 import { CONTROL_STYLE_ATTR } from '../../../../dataset/constant/Element'
 import { ControlComponent } from '../../../../dataset/enum/Control'
+import { EditorMode } from '../../../../dataset/enum/Editor'
 import { ElementType } from '../../../../dataset/enum/Element'
 import {
   IControlContext,
@@ -99,7 +100,7 @@ export class ListImageControl extends ImageControl {
         controlComponent: ControlComponent.VALUE
       })
     } else if (control?.placeholder) {
-      const placeholderStrList = splitText(`@${control.placeholder}`)
+      const placeholderStrList = splitText(control.placeholder)
       const placeholderArgs: Omit<IElement, 'value'> = {
         color: draw.getOptions().control.placeholderColor
       }
@@ -111,9 +112,17 @@ export class ListImageControl extends ImageControl {
       }))
     }
 
+    const isPlaceholderState = !newNodes.some(
+      v => v.controlComponent !== ControlComponent.PLACEHOLDER
+    )
+
     const insertAt = prefixIndex !== -1 ? prefixIndex + 1 : firstIndex !== -1 ? firstIndex : 0
     const deleteCount =
-      postfixIndex !== -1 ? postfixIndex - insertAt : lastIndex !== -1 ? lastIndex - insertAt + 1 : 0
+      postfixIndex !== -1
+        ? postfixIndex - insertAt
+        : lastIndex !== -1
+        ? lastIndex - insertAt + 1
+        : 0
 
     if (deleteCount > 0) {
       draw.deleteElementList(elementList, insertAt, deleteCount, {
@@ -121,17 +130,151 @@ export class ListImageControl extends ImageControl {
       })
     }
 
-    if (newNodes.length) {
-      formatElementList(newNodes, {
+    const fullNodes: IElement[] = []
+    if (prefixIndex === -1) {
+      fullNodes.push({
+        ...anchorElement,
+        type: ElementType.CONTROL,
+        value: control?.prefix || '{',
+        controlComponent: ControlComponent.PREFIX,
+        isPlaceholder: isPlaceholderState
+      })
+    } else if (elementList[prefixIndex]) {
+      elementList[prefixIndex].isPlaceholder = isPlaceholderState
+    }
+
+    newNodes.forEach(item => {
+      fullNodes.push({
+        ...anchorElement,
+        ...item,
+        isPlaceholder: isPlaceholderState
+      })
+    })
+
+    if (postfixIndex === -1) {
+      fullNodes.push({
+        ...anchorElement,
+        type: ElementType.CONTROL,
+        value: control?.postfix || '}',
+        controlComponent: ControlComponent.POSTFIX,
+        isPlaceholder: isPlaceholderState
+      })
+    } else {
+      for (let k = 0; k < elementList.length; k++) {
+        if (
+          elementList[k]?.controlId === targetControlId &&
+          elementList[k]?.controlComponent === ControlComponent.POSTFIX
+        ) {
+          elementList[k].isPlaceholder = isPlaceholderState
+        }
+      }
+    }
+
+    if (fullNodes.length) {
+      formatElementList(fullNodes, {
         isHandleFirstElement: false,
         editorOptions: draw.getOptions()
       })
-      draw.spliceElementList(elementList, insertAt, 0, newNodes)
+      draw.spliceElementList(elementList, insertAt, 0, fullNodes)
     }
 
     this.control.emitControlContentChange({
       context
     })
-    return insertAt + newNodes.length
+    return insertAt + fullNodes.length
+  }
+
+  public keydown(evt: KeyboardEvent): number | null {
+    if (this.control.getIsDisabledControl()) {
+      return null
+    }
+    const elementList = this.control.getElementList()
+    const { startIndex, endIndex } = this.control.getRange()
+    const isCollapsed = startIndex === endIndex
+    const startElement = elementList[startIndex]
+    const cId = startElement?.controlId || elementList[endIndex]?.controlId
+    const isPreviewEdit = this.control.getDraw().getMode() === EditorMode.PREVIEW_EDIT
+
+    if (evt.key === 'Backspace') {
+      if (!isCollapsed) {
+        return this.control.cleanSelectionDelete(elementList, startIndex, endIndex)
+      }
+
+      // 1. 如果光标在两张图片之间的空格处：只删除空格，绝对不删除图片！
+      if (
+        startElement?.controlId === cId &&
+        startElement?.controlComponent === ControlComponent.VALUE &&
+        (startElement?.value === ' ' || startElement?.value === '  ')
+      ) {
+        this.control.getDraw().deleteElementList(elementList, startIndex, 1)
+        return Math.max(0, startIndex - 1)
+      }
+
+      // 2. 如果光标位于单张图片处：仅删除当前这张图片
+      if (
+        startElement?.controlId === cId &&
+        startElement?.type === ElementType.IMAGE
+      ) {
+        this.control.getDraw().deleteElementList(elementList, startIndex, 1)
+        const newIdx = Math.max(0, startIndex - 1)
+        const remainImages = elementList.filter(
+          el => el.controlId === cId && el.type === ElementType.IMAGE
+        )
+        if (remainImages.length === 0) {
+          if (isPreviewEdit) {
+            return this.control.removeControl(newIdx)
+          } else {
+            this.control.addPlaceholder(newIdx)
+            return newIdx
+          }
+        }
+        return newIdx
+      }
+
+      // 3. 如果光标在占位符或前缀处
+      if (
+        startElement?.controlComponent === ControlComponent.PREFIX ||
+        startElement?.controlComponent === ControlComponent.PLACEHOLDER
+      ) {
+        return this.control.removeControl(startIndex)
+      }
+    } else if (evt.key === 'Delete') {
+      if (!isCollapsed) {
+        return this.control.cleanSelectionDelete(elementList, startIndex, endIndex)
+      }
+      const nextIdx = endIndex + 1
+      const nextElement = elementList[nextIdx]
+
+      // 1. 如果下一个元素是两张图片之间的空格：只删除空格
+      if (
+        nextElement?.controlId === cId &&
+        nextElement?.controlComponent === ControlComponent.VALUE &&
+        (nextElement?.value === ' ' || nextElement?.value === '  ')
+      ) {
+        this.control.getDraw().deleteElementList(elementList, nextIdx, 1)
+        return endIndex
+      }
+
+      // 2. 如果下一个元素是图片：仅删除该图片
+      if (
+        nextElement?.controlId === cId &&
+        nextElement?.type === ElementType.IMAGE
+      ) {
+        this.control.getDraw().deleteElementList(elementList, nextIdx, 1)
+        const remainImages = elementList.filter(
+          el => el.controlId === cId && el.type === ElementType.IMAGE
+        )
+        if (remainImages.length === 0) {
+          if (isPreviewEdit) {
+            return this.control.removeControl(endIndex)
+          } else {
+            this.control.addPlaceholder(endIndex)
+            return endIndex
+          }
+        }
+        return endIndex
+      }
+    }
+    return null
   }
 }

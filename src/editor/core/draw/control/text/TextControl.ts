@@ -44,6 +44,7 @@ export class TextControl implements IControlInstance {
     const { startIndex } = context.range || this.control.getRange()
     const startElement = elementList[startIndex]
     const data: IElement[] = []
+    if (!startElement?.controlId) return data
     if (
       startElement.controlComponent === ControlComponent.VALUE &&
       !isElementTraceDeleted(startElement)
@@ -204,7 +205,12 @@ export class TextControl implements IControlInstance {
     })
 
     const anchorElement: IElement = {
-      ...pickObject(startElement, ['control', 'controlId']),
+      ...pickObject(startElement, [
+        'control',
+        'controlId',
+        'rowMargin',
+        'rowFlex'
+      ]),
       ...controlStyle
     }
 
@@ -352,10 +358,8 @@ export class TextControl implements IControlInstance {
     if (this.control.getIsDisabledControl()) {
       return null
     }
-    // 无痕编辑模式 (PREVIEW_EDIT) 下解包控件，禁止触发整块 removeControl，统一交由全局逐字删除
-    if (this.control.getDraw().getMode() === EditorMode.PREVIEW_EDIT) {
-      return null
-    }
+    const draw = this.control.getDraw()
+    const isPreviewEdit = draw.getMode() === EditorMode.PREVIEW_EDIT
     const elementList = this.control.getElementList()
     const range = this.control.getRange()
     // 收缩边界到Value内
@@ -363,7 +367,7 @@ export class TextControl implements IControlInstance {
     const { startIndex, endIndex } = range
     const startElement = elementList[startIndex]
     const endElement = elementList[endIndex]
-    const draw = this.control.getDraw()
+
     // backspace
     if (evt.key === KeyMap.Backspace) {
       // 移除选区元素
@@ -375,25 +379,62 @@ export class TextControl implements IControlInstance {
         )
         const value = this.getValue()
         if (!value.length) {
-          this.control.addPlaceholder(startIndex)
+          if (isPreviewEdit) {
+            return this.control.removeControl(startIndex)
+          } else {
+            this.control.addPlaceholder(startIndex)
+          }
         }
         return startIndex
       } else {
         if (
           startElement.controlComponent === ControlComponent.PREFIX ||
           startElement.controlComponent === ControlComponent.PRE_TEXT ||
-          endElement.controlComponent === ControlComponent.POSTFIX ||
-          endElement.controlComponent === ControlComponent.POST_TEXT ||
           startElement.controlComponent === ControlComponent.PLACEHOLDER
         ) {
-          // 前缀、后缀、占位符
+          // 前缀、占位符
+          return this.control.removeControl(startIndex)
+        } else if (
+          endElement.controlComponent === ControlComponent.POSTFIX ||
+          endElement.controlComponent === ControlComponent.POST_TEXT
+        ) {
+          // 后缀
+          if (isPreviewEdit) {
+            // 无痕模式下光标在后缀处按退格，逐字删除末位文本字符
+            const leftValueIndex = startIndex - 1
+            if (
+              leftValueIndex >= 0 &&
+              elementList[leftValueIndex]?.controlId === startElement.controlId &&
+              elementList[leftValueIndex]?.controlComponent ===
+                ControlComponent.VALUE
+            ) {
+              draw.deleteElementList(elementList, leftValueIndex, 1)
+              const checkIndex = Math.max(0, leftValueIndex - 1)
+              const value = this.getValue({
+                range: { startIndex: checkIndex, endIndex: checkIndex },
+                elementList
+              })
+              if (!value.length) {
+                return this.control.removeControl(leftValueIndex - 1)
+              }
+              return leftValueIndex - 1
+            }
+          }
           return this.control.removeControl(startIndex)
         } else {
           // 文本
           draw.deleteElementList(elementList, startIndex, 1)
-          const value = this.getValue()
+          const checkIndex = Math.max(0, startIndex - 1)
+          const value = this.getValue({
+            range: { startIndex: checkIndex, endIndex: checkIndex },
+            elementList
+          })
           if (!value.length) {
-            this.control.addPlaceholder(startIndex - 1)
+            if (isPreviewEdit) {
+              return this.control.removeControl(startIndex - 1)
+            } else {
+              this.control.addPlaceholder(startIndex - 1)
+            }
           }
           return startIndex - 1
         }
@@ -408,7 +449,11 @@ export class TextControl implements IControlInstance {
         )
         const value = this.getValue()
         if (!value.length) {
-          this.control.addPlaceholder(startIndex)
+          if (isPreviewEdit) {
+            return this.control.removeControl(startIndex)
+          } else {
+            this.control.addPlaceholder(startIndex)
+          }
         }
         return startIndex
       } else {
@@ -428,7 +473,11 @@ export class TextControl implements IControlInstance {
           draw.deleteElementList(elementList, startIndex + 1, 1)
           const value = this.getValue()
           if (!value.length) {
-            this.control.addPlaceholder(startIndex)
+            if (isPreviewEdit) {
+              return this.control.removeControl(startIndex)
+            } else {
+              this.control.addPlaceholder(startIndex)
+            }
           }
           return startIndex
         }

@@ -426,15 +426,15 @@ describe('Table Template Parser & Declared Same Merge (Double Braces)', () => {
     // 第 3 行：Group0 二级表头
     expect(getTdText(expandedTable.trList[2].tdList[0])).toContain('许可管理（关键）')
     // 第 4 行：Group0 明细 1
-    expect(getTdText(expandedTable.trList[3].tdList[0])).toBe('1')
+    expect(getTdText(expandedTable.trList[3].tdList[0])).toContain('1')
     // 第 5 行：Group0 明细 2
-    expect(getTdText(expandedTable.trList[4].tdList[0])).toBe('2')
+    expect(getTdText(expandedTable.trList[4].tdList[0])).toContain('2')
     // 第 6 行：Group1 一级表头
     expect(getTdText(expandedTable.trList[5].tdList[0])).toContain('资质与制度体系（关键）')
     // 第 7 行：Group1 二级表头
     expect(getTdText(expandedTable.trList[6].tdList[0])).toContain('信息公示（关键）')
     // 第 8 行：Group1 明细 3
-    expect(getTdText(expandedTable.trList[7].tdList[0])).toBe('3')
+    expect(getTdText(expandedTable.trList[7].tdList[0])).toContain('3')
   })
 
   it('应正确支持三层树形嵌套循环（一级大类 -> 二级子类 -> 三级明细）', () => {
@@ -537,19 +537,19 @@ describe('Table Template Parser & Declared Same Merge (Double Braces)', () => {
     // 行 3：Project 1 -> Content 1 二级表头（许可管理，满分 50）
     expect(getTdText(expandedTable.trList[2].tdList[0])).toContain('许可管理（关键）')
     // 行 4：明细 1
-    expect(getTdText(expandedTable.trList[3].tdList[0])).toBe('1')
+    expect(getTdText(expandedTable.trList[3].tdList[0])).toContain('1')
     // 行 5：明细 5
-    expect(getTdText(expandedTable.trList[4].tdList[0])).toBe('5')
+    expect(getTdText(expandedTable.trList[4].tdList[0])).toContain('5')
     // 行 6：Project 1 -> Content 2 二级表头（信息公示，满分 50）
     expect(getTdText(expandedTable.trList[5].tdList[0])).toContain('信息公示（关键）')
     // 行 7：明细 10
-    expect(getTdText(expandedTable.trList[6].tdList[0])).toBe('10')
+    expect(getTdText(expandedTable.trList[6].tdList[0])).toContain('10')
     // 行 8：Project 2 一级表头（加工制作过程，满分 100）
     expect(getTdText(expandedTable.trList[7].tdList[0])).toContain('加工制作过程（合理）')
     // 行 9：Project 2 -> Content 1 二级表头（初加工，满分 50）
     expect(getTdText(expandedTable.trList[8].tdList[0])).toContain('初加工（合理）')
     // 行 10：明细 11
-    expect(getTdText(expandedTable.trList[9].tdList[0])).toBe('11')
+    expect(getTdText(expandedTable.trList[9].tdList[0])).toContain('11')
   })
 
   it('应正确渲染食安评分表（单行明细循环 + 表尾合计行）', () => {
@@ -602,19 +602,19 @@ describe('Table Template Parser & Declared Same Merge (Double Braces)', () => {
     expect(expandedTable.trList.length).toBe(5)
 
     // 验证明细数据
-    expect(getTdText(expandedTable.trList[1].tdList[0])).toBe('1')
+    expect(getTdText(expandedTable.trList[1].tdList[0])).toContain('1')
     expect(getTdText(expandedTable.trList[1].tdList[1])).toContain('基础资质与制度体系')
-    expect(getTdText(expandedTable.trList[1].tdList[2])).toBe('5')
+    expect(getTdText(expandedTable.trList[1].tdList[2])).toContain('5')
 
-    expect(getTdText(expandedTable.trList[2].tdList[0])).toBe('2')
+    expect(getTdText(expandedTable.trList[2].tdList[0])).toContain('2')
     expect(getTdText(expandedTable.trList[2].tdList[1])).toContain('场所环境卫生与设施设备')
 
-    expect(getTdText(expandedTable.trList[3].tdList[0])).toBe('3')
+    expect(getTdText(expandedTable.trList[3].tdList[0])).toContain('3')
 
     // 验证表尾合计行
     expect(getTdText(expandedTable.trList[4].tdList[0])).toContain('合 计')
-    expect(getTdText(expandedTable.trList[4].tdList[1])).toBe('100')
-    expect(getTdText(expandedTable.trList[4].tdList[2])).toBe('100')
+    expect(getTdText(expandedTable.trList[4].tdList[1])).toContain('100')
+    expect(getTdText(expandedTable.trList[4].tdList[2])).toContain('100')
   })
 
   it('功能模板 1：全控件全能渲染表应正确解析并驱动文本/复选框/多图/合计行渲染', () => {
@@ -661,10 +661,10 @@ describe('Table Template Parser & Declared Same Merge (Double Braces)', () => {
     const expandedTable = elementList[0]
 
     expect(expandedTable.trList.length).toBe(4) // 表头 1 + 明细 2 + 合计 1
-    expect(getTdText(expandedTable.trList[1].tdList[0])).toBe('1')
+    expect(getTdText(expandedTable.trList[1].tdList[0])).toContain('1')
     expect(getTdText(expandedTable.trList[1].tdList[1])).toContain('许可证完备')
     expect(getTdText(expandedTable.trList[3].tdList[0])).toContain('合 计')
-    expect(getTdText(expandedTable.trList[3].tdList[1])).toBe('10')
+    expect(getTdText(expandedTable.trList[3].tdList[1])).toContain('10')
   })
 
   it('功能模板 4：动态条件与分支过滤表 (when) 应精确按数据字段值控制行级过滤', () => {

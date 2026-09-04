@@ -22,6 +22,7 @@ import {
 } from '../../dataset/enum/Editor'
 import { ElementType } from '../../dataset/enum/Element'
 import { ElementStyleKey } from '../../dataset/enum/ElementStyle'
+import { KeyMap } from '../../dataset/enum/KeyMap'
 import { ListStyle, ListType } from '../../dataset/enum/List'
 import { MoveDirection } from '../../dataset/enum/Observer'
 import { RowFlex } from '../../dataset/enum/Row'
@@ -207,8 +208,110 @@ export class CommandAdapt {
     if (this.draw.isReadonly()) return
     const elementList = this.draw.getElementList()
     const { startIndex, endIndex } = this.range.getRange()
-    if (!~startIndex || !elementList[startIndex]) return
     const isCollapsed = startIndex === endIndex
+
+    // 1. 优先长选区直接删除（跨行、跨控件、Ctrl+A 全选清空）
+    if (~startIndex && !isCollapsed) {
+      this.draw.getPreviewer().clearResizer()
+      const curIndex = this.draw
+        .getControl()
+        .cleanSelectionDelete(elementList, startIndex, endIndex)
+      this.range.setRange(curIndex, curIndex)
+      this.draw.render({ curIndex })
+      return
+    }
+
+    // 2. 检查 Previewer 选中态图片直接删除（支持多图列表控件单张删除）
+    const previewCurElement = this.draw.getPreviewer().getCurElement()
+    if (previewCurElement) {
+      this.draw.getPreviewer().clearResizer()
+      let hitIdx = elementList.indexOf(previewCurElement)
+      if (hitIdx === -1 && previewCurElement.id) {
+        hitIdx = elementList.findIndex(el => el.id === previewCurElement.id)
+      }
+      if (hitIdx === -1 && previewCurElement.value) {
+        hitIdx = elementList.findIndex(
+          el =>
+            el.controlId === previewCurElement.controlId &&
+            el.value === previewCurElement.value
+        )
+      }
+      if (hitIdx !== -1) {
+        const cId = previewCurElement.controlId
+        const isList =
+          previewCurElement.control?.listType === 'image' ||
+          Boolean(previewCurElement.control?.listType)
+        if (cId && isList) {
+          this.draw.deleteElementList(elementList, hitIdx, 1)
+          if (
+            elementList[hitIdx]?.value === '  ' ||
+            elementList[hitIdx]?.value === ZERO
+          ) {
+            this.draw.deleteElementList(elementList, hitIdx, 1)
+          }
+          const remainImages: IElement[] = []
+          for (let i = 0; i < elementList.length; i++) {
+            if (
+              elementList[i]?.controlId === cId &&
+              elementList[i]?.type === ElementType.IMAGE
+            ) {
+              remainImages.push(elementList[i])
+            }
+          }
+          const cleanImages: IElement[] = remainImages.map(img => {
+            const copy = { ...img }
+            delete copy.control
+            delete copy.controlComponent
+            delete copy.controlId
+            return copy
+          })
+          for (let i = 0; i < elementList.length; i++) {
+            const item = elementList[i]
+            if (item?.controlId === cId && item.control) {
+              item.control.value = cleanImages
+            }
+          }
+          if (remainImages.length === 0) {
+            if (this.draw.getMode() === EditorMode.PREVIEW_EDIT) {
+              this.draw.getControl().removeControl(hitIdx)
+            } else {
+              this.draw.getControl().addPlaceholder(Math.max(0, hitIdx - 1))
+            }
+          }
+        } else if (cId) {
+          this.draw.getControl().removeControl(hitIdx)
+        } else {
+          this.draw.deleteElementList(elementList, hitIdx, 1)
+        }
+        const newIndex = Math.max(0, hitIdx - 1)
+        this.range.setRange(newIndex, newIndex)
+        this.draw.render({ curIndex: newIndex })
+        return
+      }
+    }
+
+    if (!~startIndex || !elementList[startIndex]) return
+
+    // 3. 选区折叠态下，检查是否在激活控件内部
+    const control = this.draw.getControl()
+    if (!control.getActiveControl()) {
+      control.initControl()
+    }
+    if (
+      control.getActiveControl() &&
+      control.getIsRangeCanCaptureEvent()
+    ) {
+      const curIndex = control.keydown(
+        new KeyboardEvent('keydown', { key: KeyMap.Backspace })
+      )
+      if (curIndex !== null) {
+        control.emitControlContentChange()
+        this.range.setRange(curIndex, curIndex)
+        this.draw.render({ curIndex })
+        return
+      }
+    }
+
     // 首字符禁止删除
     if (
       isCollapsed &&
@@ -217,38 +320,27 @@ export class CommandAdapt {
     ) {
       return
     }
-    if (!isCollapsed) {
-      this.draw.deleteElementList(
-        elementList,
-        startIndex + 1,
-        endIndex - startIndex
+
+    const startElement = elementList[startIndex]
+    if (
+      startElement?.controlId ||
+      (elementList[startIndex - 1]?.controlId &&
+        elementList[startIndex - 1]?.control?.type === ControlType.IMAGE)
+    ) {
+      const curIndex = control.removeControl(
+        startElement?.controlId ? startIndex : startIndex - 1
       )
-      const curIndex = startIndex
-      this.range.setRange(curIndex, curIndex)
-      this.draw.render({ curIndex })
-    } else {
-      let deleteIndex = startIndex
-      if (this.draw.getMode() === EditorMode.PREVIEW_EDIT) {
-        while (
-          deleteIndex > 0 &&
-          (elementList[deleteIndex]?.controlComponent ===
-            ControlComponent.POSTFIX ||
-            elementList[deleteIndex]?.controlComponent ===
-              ControlComponent.PREFIX ||
-            elementList[deleteIndex]?.controlComponent ===
-              ControlComponent.PLACEHOLDER)
-        ) {
-          this.draw.deleteElementList(elementList, deleteIndex, 1)
-          deleteIndex--
-        }
+      if (curIndex !== null) {
+        this.range.setRange(curIndex, curIndex)
+        this.draw.render({ curIndex })
+        return
       }
-      if (deleteIndex >= 0) {
-        this.draw.deleteElementList(elementList, deleteIndex, 1)
-      }
-      const curIndex = Math.max(0, deleteIndex - 1)
-      this.range.setRange(curIndex, curIndex)
-      this.draw.render({ curIndex })
     }
+
+    this.draw.deleteElementList(elementList, startIndex, 1)
+    const newIndex = Math.max(0, startIndex - 1)
+    this.range.setRange(newIndex, newIndex)
+    this.draw.render({ curIndex: newIndex })
   }
 
   public setRange(
@@ -337,12 +429,14 @@ export class CommandAdapt {
   public undo() {
     const isReadonly = this.draw.isReadonly()
     if (isReadonly) return
+    this.draw.flushHistory()
     this.historyManager.undo()
   }
 
   public redo() {
     const isReadonly = this.draw.isReadonly()
     if (isReadonly) return
+    this.draw.flushHistory()
     this.historyManager.redo()
   }
 
@@ -2669,6 +2763,10 @@ export class CommandAdapt {
 
   public getContainer(): HTMLDivElement {
     return this.draw.getContainer()
+  }
+
+  public getDraw(): Draw {
+    return this.draw
   }
 
   public getTitleValue(

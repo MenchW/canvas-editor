@@ -67,7 +67,7 @@
       class="editor-iframe"
       src="https://open-web.hnocc.com/canvas-editor/index.html"
       allowfullscreen="true"
-      allow="fullscreen"
+      allow="fullscreen; clipboard-read; clipboard-write"
       sandbox="allow-scripts allow-same-origin allow-modals allow-popups allow-forms allow-downloads"
     ></iframe>
   </div>
@@ -334,6 +334,7 @@
             data: savePayload
           });
           toast.success('保存成功');
+          console.log('[宿主系统] 收到 Editor 保存请求，当前完整 JSON:', documentJson);
         } catch (err) {
           toast.error(err.message || '保存失败');
         } finally {

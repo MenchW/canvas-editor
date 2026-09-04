@@ -18,11 +18,15 @@ export function copyWithCopyrightPlugin(
       if (!rangeText) return
       const text = `${rangeText}${copyrightText}`
       const plainText = new Blob([text], { type: 'text/plain' })
-      // @ts-ignore
-      const item = new ClipboardItem({
-        [plainText.type]: plainText
-      })
-      await window.navigator.clipboard.write([item])
+      try {
+        // @ts-ignore
+        const item = new ClipboardItem({
+          [plainText.type]: plainText
+        })
+        await window.navigator.clipboard.write([item])
+      } catch {
+        await copy()
+      }
     } else {
       await copy()
     }

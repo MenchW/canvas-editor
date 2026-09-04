@@ -1,5 +1,6 @@
 import { CURSOR_AGENT_OFFSET_HEIGHT } from '../../dataset/constant/Cursor'
 import { EDITOR_PREFIX } from '../../dataset/constant/Editor'
+import { ElementType } from '../../dataset/enum/Element'
 import { MoveDirection } from '../../dataset/enum/Observer'
 import { TdTextDirection } from '../../dataset/enum/table/Table'
 import { DeepRequired } from '../../interface/Common'
@@ -123,11 +124,28 @@ export class Cursor {
     // 设置光标代理
     const height = this.draw.getHeight()
     const pageGap = this.draw.getPageGap()
+    // 获取当前上下文与单元格文字方向
+    const positionContext = this.position.getPositionContext()
+    const td = positionContext.isTable
+      ? this.position.getTableTdByContext(
+          this.draw.getOriginalElementList(),
+          positionContext
+        )
+      : null
+    const isVertical = td?.textDirection === TdTextDirection.VERTICAL
+
     // 光标位置
     this.hitLineStartIndex = hitLineStartIndex
-    if (hitLineStartIndex) {
-      const positionList = this.position.getPositionList()
-      cursorPosition = positionList[hitLineStartIndex]
+    if (hitLineStartIndex !== undefined) {
+      let positionList: IElementPosition[]
+      if (positionContext.isTable && td?.positionList?.length) {
+        positionList = td.positionList
+      } else {
+        positionList = this.position.getPositionList()
+      }
+      if (positionList[hitLineStartIndex]) {
+        cursorPosition = positionList[hitLineStartIndex]
+      }
     }
     const {
       metrics,
@@ -140,10 +158,20 @@ export class Cursor {
       ? pageNo
       : this.draw.getPageNo()
     const preY = curPageNo * (height + pageGap)
+    // 获取当前上下文与元素
+    const element = positionContext.isTable
+      ? td?.value?.[cursorPosition.index]
+      : this.draw.getElementList()[cursorPosition.index]
+    const isImageElement = element?.type === ElementType.IMAGE
+    const standardFontHeight =
+      (element?.size || this.options.defaultSize) * scale
+
     // 默认偏移高度
     const defaultOffsetHeight = CURSOR_AGENT_OFFSET_HEIGHT * scale
     // 增加1/4字体大小（最小为defaultOffsetHeight即默认偏移高度）
-    const increaseHeight = Math.min(metrics.height / 4, defaultOffsetHeight)
+    const validMetricsHeight =
+      metrics.height > 0 ? metrics.height : standardFontHeight
+    const increaseHeight = Math.min(validMetricsHeight / 4, defaultOffsetHeight)
     const agentCursorDom = this.cursorAgent.getAgentCursorDom()
     if (isFocus) {
       setTimeout(() => {
@@ -154,21 +182,29 @@ export class Cursor {
     const descent =
       metrics.boundingBoxDescent < 0 ? 0 : metrics.boundingBoxDescent
 
-    // 获取当前上下文与单元格文字方向
-    const positionContext = this.position.getPositionContext()
-    const td = positionContext.isTable
-      ? this.position.getTableTdByContext(
-          this.draw.getOriginalElementList(),
-          positionContext
-        )
-      : null
-    const isVertical = td?.textDirection === TdTextDirection.VERTICAL
+    // 光标高度上限与下限保护：当高度为0时保底为标准字号高度，避免光标消失或异常拉长
+    const effectiveHeight =
+      isImageElement ||
+      metrics.height <= 0 ||
+      metrics.height > standardFontHeight * 1.5
+        ? standardFontHeight
+        : metrics.height
+
+    const validAscent = ascent || standardFontHeight * 0.8
+    const validDescent = descent || standardFontHeight * 0.2
 
     let cursorWidth = width * scale
-    let cursorHeight = metrics.height + increaseHeight * 2
+    let cursorHeight = effectiveHeight + increaseHeight * 2
     let cursorLeft = hitLineStartIndex ? leftTop[0] : rightTop[0]
-    let cursorTop =
-      leftTop[1] + ascent + descent - (cursorHeight - increaseHeight) + preY
+    if (!positionContext.isTable) {
+      const innerWidth = this.draw.getInnerWidth()
+      const margins = this.draw.getMargins()
+      const maxLeft = margins[3] + innerWidth
+      cursorLeft = Math.min(cursorLeft, maxLeft - cursorWidth)
+    }
+    let cursorTop = isImageElement
+      ? leftTop[1] + metrics.height - cursorHeight + preY
+      : leftTop[1] + validAscent + validDescent - (cursorHeight - increaseHeight) + preY
 
     if (isVertical) {
       // 竖排（直排）模式下：光标呈现为横向水平光标（与 Word 竖排一致）

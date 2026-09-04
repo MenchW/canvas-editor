@@ -1,4 +1,4 @@
-import { getUUID } from '../editor/utils'
+import { getUUID, splitText } from '../editor/utils'
 
 export function debounce<T extends unknown[]>(
   func: (...arg: T) => unknown,
@@ -175,7 +175,7 @@ function parseCellChildNodesToValueList(
     while ((match = placeholderRegex.exec(rawText)) !== null) {
       const textBefore = rawText.slice(lastIndex, match.index)
       if (textBefore) {
-        textBefore.split('').forEach(c => {
+        splitText(textBefore).forEach(c => {
           result.push({
             value: c,
             bold: inheritedStyle.isBold || undefined,
@@ -203,6 +203,13 @@ function parseCellChildNodesToValueList(
         cleanKey = cleanKey.slice(options.parentAlias.length + 1)
       }
 
+      const lowerKey = cleanKey.toLowerCase()
+      const isLikelyImage =
+        lowerKey.includes('image') ||
+        lowerKey.includes('photo') ||
+        lowerKey.includes('pic') ||
+        lowerKey.includes('avatar')
+
       result.push({
         type: 'control',
         value: '',
@@ -210,7 +217,7 @@ function parseCellChildNodesToValueList(
         rowFlex: inheritedStyle.rowFlex as any,
         when: inheritedStyle.when,
         control: {
-          type: 'text',
+          type: isLikelyImage ? 'image' : 'text',
           conceptId: cleanKey,
           placeholder: fullKey,
           when: inheritedStyle.when
@@ -223,7 +230,7 @@ function parseCellChildNodesToValueList(
     if (lastIndex < rawText.length) {
       const textAfter = rawText.slice(lastIndex)
       if (textAfter) {
-        textAfter.split('').forEach(c => {
+        splitText(textAfter).forEach(c => {
           result.push({
             value: c,
             bold: inheritedStyle.isBold || undefined,

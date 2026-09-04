@@ -165,15 +165,12 @@
       </td>
       <td align="center"><b>{{ content.contentActual }}</b></td>
     </tr>
-    <!-- 三级明细行 + 单元格内 span loop 多标签循环 -->
+    <!-- 三级明细行 + 单元格内 tags 列表控件 -->
     <tr loop="item in content.children">
       <td align="center">{{ item.index }}</td>
       <td>
         {{ item.title }}<br/>
-        <!-- 单元格内 span 循环多标签 -->
-        <span loop="tag in item.tags" style="background:#f0f0f0; padding:2px 4px; margin-right:4px;">
-          🏷️ {{ tag.name }}
-        </span>
+        {{ item.tags }}
       </td>
       <td>{{ item.problem }}</td>
       <td align="center">{{ item.photos }}</td>
@@ -425,17 +422,30 @@
   ]
 
   const STORAGE_KEY_COMPONENT_DICT = 'CE_COMPONENT_DICTIONARY'
+  const STORAGE_KEY_DICT_VERSION = 'CE_COMPONENT_DICTIONARY_VERSION'
+  const CURRENT_DICT_VERSION = '20260902_V3'
 
   // 组件字典 Provider
   function mockFetchComponentListApi() {
     try {
+      const savedVersion = localStorage.getItem(STORAGE_KEY_DICT_VERSION)
       const savedDict = localStorage.getItem(STORAGE_KEY_COMPONENT_DICT)
-      if (savedDict) {
+      if (savedDict && savedVersion === CURRENT_DICT_VERSION) {
         const parsed = JSON.parse(savedDict)
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return Promise.resolve(parsed)
+          // 检查是否残留旧版非标假标签
+          const dictStr = JSON.stringify(parsed)
+          if (!dictStr.includes('🏷') && !dictStr.includes('tag in')) {
+            return Promise.resolve(parsed)
+          }
         }
       }
+      // 自动自愈升级为最新标准字典
+      localStorage.setItem(STORAGE_KEY_DICT_VERSION, CURRENT_DICT_VERSION)
+      localStorage.setItem(
+        STORAGE_KEY_COMPONENT_DICT,
+        JSON.stringify(DEFAULT_COMPONENT_DATA)
+      )
     } catch (e) {
       console.warn(
         '[mockFetchComponentListApi] 读取本地字典缓存异常，降级至默认预设:',
@@ -1590,7 +1600,7 @@
                     {
                       index: 1,
                       title: '食堂持有效食品经营许可证且无涂改行为',
-                      tags: [{ name: '关键项' }, { name: '高频核查' }],
+                      tags: ['关键项', '高频核查'],
                       problem: '暂无问题',
                       photos: [],
                       score: 25
@@ -1598,7 +1608,7 @@
                     {
                       index: 2,
                       title: '从业人员健康证均在有效期内',
-                      tags: [{ name: '日常核查' }],
+                      tags: ['日常核查'],
                       problem: '暂无问题',
                       photos: [],
                       score: 25
@@ -1620,7 +1630,7 @@
                     {
                       index: 3,
                       title: '荤素水产清洗池分开设置且标识清晰',
-                      tags: [{ name: '关键项' }, { name: '硬件设施' }],
+                      tags: ['关键项', '硬件设施'],
                       problem: '水产清洗池标识脱落',
                       photos: ['https://picsum.photos/120/80?random=14'],
                       score: 15
@@ -1628,7 +1638,7 @@
                     {
                       index: 4,
                       title: '烹饪食品中心温度达 70℃ 以上',
-                      tags: [{ name: '过程控制' }],
+                      tags: ['过程控制'],
                       problem: '暂无问题',
                       photos: [],
                       score: 25
@@ -1974,7 +1984,7 @@
                       itemIndex: 1,
                       title: '食堂持有效食品经营许可证且无涂改行为',
                       evalContent: '★ 食堂持有效《食品经营许可证》且无涂改',
-                      tags: [{ name: '关键项' }, { name: '资质合规' }],
+                      tags: ['关键项', '资质合规'],
                       problem: '暂无问题',
                       problemDesc: '暂无',
                       photos: '-',
@@ -1987,7 +1997,7 @@
                       itemIndex: 2,
                       title: '从业人员健康证明均在有效期内',
                       evalContent: '★ 从业人员健康证明均在有效期内且醒目公示',
-                      tags: [{ name: '人员管理' }, { name: '每日晨检' }],
+                      tags: ['人员管理', '每日晨检'],
                       problem: '暂无问题',
                       problemDesc: '暂无',
                       photos: '-',
@@ -2020,7 +2030,7 @@
                       itemIndex: 3,
                       title: '分开设置荤素水产清洗池并设明显标识',
                       evalContent: '分开设置荤素水产清洗池',
-                      tags: [{ name: '洗消规范' }],
+                      tags: ['洗消规范'],
                       problem: '水产池标识轻微磨损',
                       problemDesc: '标识磨损',
                       photos: '-',
@@ -2033,7 +2043,7 @@
                       itemIndex: 4,
                       title: '餐饮具清洗消毒保洁设施运转正常',
                       evalContent: '餐饮具清洗消毒保洁设施运转正常',
-                      tags: [{ name: '消毒记录' }],
+                      tags: ['消毒记录'],
                       problem: '消毒温度记录完整',
                       problemDesc: '记录完整',
                       photos: '-',

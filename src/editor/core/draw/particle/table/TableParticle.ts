@@ -590,10 +590,11 @@ export class TableParticle {
   public getTableHeight(element: IElement): number {
     const trList = element.trList
     if (!trList?.length) return 0
-    return this.getTdListByColIndex(trList, 0).reduce(
-      (pre, cur) => pre + cur.height!,
-      0
-    )
+    let totalHeight = 0
+    for (let r = 0; r < trList.length; r++) {
+      totalHeight += trList[r].height || 0
+    }
+    return totalHeight
   }
 
   public getRowCountByColIndex(trList: ITr[], colIndex: number): number {
@@ -637,106 +638,83 @@ export class TableParticle {
 
   public computeRowColInfo(element: IElement) {
     const { colgroup, trList } = element
-    if (!colgroup || !trList) return
-    let preX = 0
-    for (let t = 0; t < trList.length; t++) {
+    if (!colgroup || !trList || !colgroup.length || !trList.length) return
+
+    const colCount = colgroup.length
+    const trCount = trList.length
+
+    // 1. 预计算列 X 坐标前缀和 O(Cols)
+    const colLeft: number[] = new Array(colCount + 1)
+    colLeft[0] = 0
+    for (let c = 0; c < colCount; c++) {
+      colLeft[c + 1] = colLeft[c] + colgroup[c].width
+    }
+
+    // 2. 预计算行 Y 坐标前缀和 O(Rows)
+    const trTop: number[] = new Array(trCount + 1)
+    trTop[0] = 0
+    for (let t = 0; t < trCount; t++) {
+      trTop[t + 1] = trTop[t] + (trList[t].height || 0)
+    }
+
+    // 3. 列占用向量（记录每列当前被上层跨行占用到第几行，初始均为 0）
+    const gridOccupiedUntilRow = new Int32Array(colCount)
+
+    // 4. 单次线性遍历计算各单元格几何布局 O(Rows * Cols)
+    for (let t = 0; t < trCount; t++) {
       const tr = trList[t]
-      // 表格最后一行
-      const isLastTr = trList.length - 1 === t
-      // 当前行最小高度
-      let rowMinHeight = 0
+      const isLastTr = trCount - 1 === t
+      let currentCol = 0
+
       for (let d = 0; d < tr.tdList.length; d++) {
         const td = tr.tdList[d]
-        // 计算当前td所属列索引
-        let colIndex = 0
-        // 第一行td位置为当前列索引+上一个单元格colspan，否则从第一行开始计算列偏移量
-        if (trList.length > 1 && t !== 0) {
-          // 当前列起始索引：以之前单元格为起始点
-          const preTd = tr.tdList[d - 1]
-          const start = preTd ? preTd.colIndex! + preTd.colspan : d
-          for (let c = start; c < colgroup.length; c++) {
-            // 查找相同索引列之前行数，相加判断是否位置被挤占
-            const rowCount = this.getRowCountByColIndex(trList.slice(0, t), c)
-            // 不存在挤占则默认当前单元格可以存在该位置
-            if (rowCount === t) {
-              colIndex = c
-              // 重置单元格起始位置坐标
-              let preColWidth = 0
-              for (let preC = 0; preC < c; preC++) {
-                preColWidth += colgroup[preC].width
-              }
-              preX = preColWidth
-              break
-            }
-          }
-        } else {
-          const preTd = tr.tdList[d - 1]
-          if (preTd) {
-            colIndex = preTd.colIndex! + preTd.colspan
-          }
+
+        // 寻找当前行未被上层 rowspan 占用的下一个可用列
+        while (currentCol < colCount && gridOccupiedUntilRow[currentCol] > t) {
+          currentCol++
         }
-        // 计算格宽高
-        let width = 0
-        for (let col = 0; col < td.colspan; col++) {
-          const colGroupItem = colgroup[col + colIndex]
-          // 防御:colgroup 数据异常(合并单元格/脏数据)时跳过缺失列,避免渲染崩溃
-          if (!colGroupItem) break
-          width += colGroupItem.width
+        const colIndex = currentCol
+
+        // 登记当前单元格对后续行的列占用
+        const spanEndCol = Math.min(colCount, colIndex + td.colspan)
+        const spanEndRow = t + td.rowspan
+        for (let c = colIndex; c < spanEndCol; c++) {
+          gridOccupiedUntilRow[c] = spanEndRow
         }
+
+        // 计算单元格宽与高
+        const width = colLeft[spanEndCol] - colLeft[colIndex]
         let height = 0
         for (let row = 0; row < td.rowspan; row++) {
           const curTr = trList[row + t] || trList[t]
-          height += curTr.height
+          height += curTr.height || 0
         }
-        // y偏移量
-        if (rowMinHeight === 0 || rowMinHeight > height) {
-          rowMinHeight = height
-        }
-        // 当前行最后一个td
+
+        // 单元格位置标记
         const isLastRowTd = tr.tdList.length - 1 === d
-        // 当前列最后一个td
         let isLastColTd = isLastTr
-        if (!isLastColTd) {
-          if (td.rowspan > 1) {
-            const nextTrLength = trList.length - 1 - t
-            isLastColTd = td.rowspan - 1 === nextTrLength
-          }
+        if (!isLastColTd && td.rowspan > 1) {
+          const nextTrLength = trCount - 1 - t
+          isLastColTd = td.rowspan - 1 === nextTrLength
         }
-        // 当前表格最后一个td
         const isLastTd = isLastTr && isLastRowTd
+
         td.isLastRowTd = isLastRowTd
         td.isLastColTd = isLastColTd
         td.isLastTd = isLastTd
-        // 修改当前格clientBox
-        td.x = preX
-        // 之前行相同列的高度
-        let preY = 0
-        for (let preR = 0; preR < t; preR++) {
-          const preTdList = trList[preR].tdList
-          for (let preD = 0; preD < preTdList.length; preD++) {
-            const td = preTdList[preD]
-            if (
-              colIndex >= td.colIndex! &&
-              colIndex < td.colIndex! + td.colspan
-            ) {
-              preY += td.height!
-              break
-            }
-          }
-        }
-        td.y = preY
+
+        // 设置单元格几何坐标与索引
+        td.x = colLeft[colIndex]
+        td.y = trTop[t]
         td.width = width
         td.height = height
         td.rowIndex = t
         td.colIndex = colIndex
         td.trIndex = t
         td.tdIndex = d
-        // 当前列x轴累加
-        preX += width
-        // 一行中的最后td
-        if (isLastRowTd && !isLastTd) {
-          preX = 0
-        }
+
+        // 下一个单元格起始列从当前单元格之后开始探测
+        currentCol = spanEndCol
       }
     }
   }

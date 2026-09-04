@@ -844,310 +844,311 @@ window.onload = function () {
     })
   }
 
-  const controlDom = document.querySelector<HTMLDivElement>(
-    '.menu-item__control'
-  )!
-  const controlOptionDom = controlDom.querySelector<HTMLDivElement>('.options')!
-  controlDom.onclick = function () {
-    console.log('control')
-    controlOptionDom.classList.toggle('visible')
-  }
-  controlOptionDom.onmousedown = function (evt) {
-    controlOptionDom.classList.toggle('visible')
-    const li = evt.target as HTMLLIElement
-    const type = <ControlType>li.dataset.control
-    switch (type) {
-      case ControlType.TEXT:
-        new Dialog({
-          title: '文本控件',
-          data: [
-            {
-              type: 'text',
-              label: '占位符',
-              name: 'placeholder',
-              required: true,
-              placeholder: '请输入占位符',
-              tips: '控件无内容时的提示文字（如：内容）'
-            },
-            {
-              type: 'text',
-              label: '默认值',
-              name: 'value',
-              placeholder: '请输入默认值',
-              tips: '控件创建时默认填入的内容'
-            },
-            {
-              type: 'text',
-              label: '前文本',
-              name: 'preText',
-              placeholder: '请输入前文本（可选，例：其他：）',
-              tips: '控件前面的固定文本（例：其他：，文本为空不显示）'
-            },
-            {
-              type: 'text',
-              label: '后文本',
-              name: 'postText',
-              placeholder: '请输入后文本（可选，例：。）',
-              tips: '控件后面的固定文本（例：。，文本为空不显示）'
-            }
-          ],
-          onConfirm: payload => {
-            const placeholder = payload.find(
-              p => p.name === 'placeholder'
-            )?.value
-            if (!placeholder) return
-            const value = payload.find(p => p.name === 'value')?.value || ''
-            const preText = payload.find(p => p.name === 'preText')?.value || ''
-            const postText =
-              payload.find(p => p.name === 'postText')?.value || ''
-            instance.command.executeInsertControl({
-              type: ElementType.CONTROL,
-              value: '',
-              control: {
-                type,
-                value: value
-                  ? [
-                      {
-                        value
-                      }
-                    ]
-                  : null,
-                placeholder,
-                preText,
-                postText
-              }
-            })
-          }
-        })
-        break
-      case ControlType.SELECT:
-        new Dialog({
-          title: '列举控件',
-          data: [
-            {
-              type: 'text',
-              label: '占位符',
-              name: 'placeholder',
-              required: true,
-              placeholder: '请输入占位符'
-            },
-            {
-              type: 'text',
-              label: '默认值',
-              name: 'code',
-              placeholder: '请输入默认值'
-            },
-            {
-              type: 'textarea',
-              label: '值集',
-              name: 'valueSets',
-              required: true,
-              height: 100,
-              placeholder: `请输入值集JSON，例：\n[{\n"value":"有",\n"code":"98175"\n}]`
-            }
-          ],
-          onConfirm: payload => {
-            const placeholder = payload.find(
-              p => p.name === 'placeholder'
-            )?.value
-            if (!placeholder) return
-            const valueSets = payload.find(p => p.name === 'valueSets')?.value
-            if (!valueSets) return
-            const code = payload.find(p => p.name === 'code')?.value
-            instance.command.executeInsertControl({
-              type: ElementType.CONTROL,
-              value: '',
-              control: {
-                type,
-                code,
-                value: null,
-                placeholder,
-                valueSets: JSON.parse(valueSets)
-              }
-            })
-          }
-        })
-        break
-      case ControlType.CHECKBOX:
-        new Dialog({
-          title: '复选框控件',
-          data: [
-            {
-              type: 'text',
-              label: '默认值',
-              name: 'code',
-              placeholder: '请输入默认值，多个值以英文逗号分割'
-            },
-            {
-              type: 'textarea',
-              label: '值集',
-              name: 'valueSets',
-              required: true,
-              height: 100,
-              placeholder: `请输入值集JSON，例：\n[{\n"value":"有",\n"code":"98175"\n}]`
-            }
-          ],
-          onConfirm: payload => {
-            const valueSets = payload.find(p => p.name === 'valueSets')?.value
-            if (!valueSets) return
-            const code = payload.find(p => p.name === 'code')?.value
-            instance.command.executeInsertControl({
-              type: ElementType.CONTROL,
-              value: '',
-              control: {
-                type,
-                code,
-                value: null,
-                valueSets: JSON.parse(valueSets)
-              }
-            })
-          }
-        })
-        break
-      case ControlType.RADIO:
-        new Dialog({
-          title: '单选框控件',
-          data: [
-            {
-              type: 'text',
-              label: '默认值',
-              name: 'code',
-              placeholder: '请输入默认值'
-            },
-            {
-              type: 'textarea',
-              label: '值集',
-              name: 'valueSets',
-              required: true,
-              height: 100,
-              placeholder: `请输入值集JSON，例：\n[{\n"value":"有",\n"code":"98175"\n}]`
-            }
-          ],
-          onConfirm: payload => {
-            const valueSets = payload.find(p => p.name === 'valueSets')?.value
-            if (!valueSets) return
-            const code = payload.find(p => p.name === 'code')?.value
-            instance.command.executeInsertControl({
-              type: ElementType.CONTROL,
-              value: '',
-              control: {
-                type,
-                code,
-                value: null,
-                valueSets: JSON.parse(valueSets)
-              }
-            })
-          }
-        })
-        break
-      case ControlType.DATE:
-        new Dialog({
-          title: '日期控件',
-          data: [
-            {
-              type: 'text',
-              label: '占位符',
-              name: 'placeholder',
-              required: true,
-              placeholder: '请输入占位符'
-            },
-            {
-              type: 'text',
-              label: '默认值',
-              name: 'value',
-              placeholder: '请输入默认值'
-            },
-            {
-              type: 'select',
-              label: '日期格式',
-              name: 'dateFormat',
-              value: 'yyyy-MM-dd hh:mm:ss',
-              required: true,
-              options: [
-                {
-                  label: 'yyyy-MM-dd hh:mm:ss',
-                  value: 'yyyy-MM-dd hh:mm:ss'
-                },
-                {
-                  label: 'yyyy-MM-dd',
-                  value: 'yyyy-MM-dd'
-                }
-              ]
-            }
-          ],
-          onConfirm: payload => {
-            const placeholder = payload.find(
-              p => p.name === 'placeholder'
-            )?.value
-            if (!placeholder) return
-            const value = payload.find(p => p.name === 'value')?.value || ''
-            const dateFormat =
-              payload.find(p => p.name === 'dateFormat')?.value || ''
-            instance.command.executeInsertControl({
-              type: ElementType.CONTROL,
-              value: '',
-              control: {
-                type,
-                dateFormat,
-                value: value
-                  ? [
-                      {
-                        value
-                      }
-                    ]
-                  : null,
-                placeholder
-              }
-            })
-          }
-        })
-        break
-      case ControlType.NUMBER:
-        new Dialog({
-          title: '数值控件',
-          data: [
-            {
-              type: 'text',
-              label: '占位符',
-              name: 'placeholder',
-              required: true,
-              placeholder: '请输入占位符'
-            },
-            {
-              type: 'text',
-              label: '默认值',
-              name: 'value',
-              placeholder: '请输入默认值'
-            }
-          ],
-          onConfirm: payload => {
-            const placeholder = payload.find(
-              p => p.name === 'placeholder'
-            )?.value
-            if (!placeholder) return
-            const value = payload.find(p => p.name === 'value')?.value || ''
-            instance.command.executeInsertControl({
-              type: ElementType.CONTROL,
-              value: '',
-              control: {
-                type,
-                value: value
-                  ? [
-                      {
-                        value
-                      }
-                    ]
-                  : null,
-                placeholder
-              }
-            })
-          }
-        })
-        break
-      default:
-        break
-    }
-  }
+  // 工具栏选择控件
+  // const controlDom = document.querySelector<HTMLDivElement>(
+  //   '.menu-item__control'
+  // )!
+  // const controlOptionDom = controlDom.querySelector<HTMLDivElement>('.options')!
+  // controlDom.onclick = function () {
+  //   console.log('control')
+  //   controlOptionDom.classList.toggle('visible')
+  // }
+  // controlOptionDom.onmousedown = function (evt) {
+  //   controlOptionDom.classList.toggle('visible')
+  //   const li = evt.target as HTMLLIElement
+  //   const type = <ControlType>li.dataset.control
+  //   switch (type) {
+  //     case ControlType.TEXT:
+  //       new Dialog({
+  //         title: '文本控件',
+  //         data: [
+  //           {
+  //             type: 'text',
+  //             label: '占位符',
+  //             name: 'placeholder',
+  //             required: true,
+  //             placeholder: '请输入占位符',
+  //             tips: '控件无内容时的提示文字（如：内容）'
+  //           },
+  //           {
+  //             type: 'text',
+  //             label: '默认值',
+  //             name: 'value',
+  //             placeholder: '请输入默认值',
+  //             tips: '控件创建时默认填入的内容'
+  //           },
+  //           {
+  //             type: 'text',
+  //             label: '前文本',
+  //             name: 'preText',
+  //             placeholder: '请输入前文本（可选，例：其他：）',
+  //             tips: '控件前面的固定文本（例：其他：，文本为空不显示）'
+  //           },
+  //           {
+  //             type: 'text',
+  //             label: '后文本',
+  //             name: 'postText',
+  //             placeholder: '请输入后文本（可选，例：。）',
+  //             tips: '控件后面的固定文本（例：。，文本为空不显示）'
+  //           }
+  //         ],
+  //         onConfirm: payload => {
+  //           const placeholder = payload.find(
+  //             p => p.name === 'placeholder'
+  //           )?.value
+  //           if (!placeholder) return
+  //           const value = payload.find(p => p.name === 'value')?.value || ''
+  //           const preText = payload.find(p => p.name === 'preText')?.value || ''
+  //           const postText =
+  //             payload.find(p => p.name === 'postText')?.value || ''
+  //           instance.command.executeInsertControl({
+  //             type: ElementType.CONTROL,
+  //             value: '',
+  //             control: {
+  //               type,
+  //               value: value
+  //                 ? [
+  //                     {
+  //                       value
+  //                     }
+  //                   ]
+  //                 : null,
+  //               placeholder,
+  //               preText,
+  //               postText
+  //             }
+  //           })
+  //         }
+  //       })
+  //       break
+  //     case ControlType.SELECT:
+  //       new Dialog({
+  //         title: '列举控件',
+  //         data: [
+  //           {
+  //             type: 'text',
+  //             label: '占位符',
+  //             name: 'placeholder',
+  //             required: true,
+  //             placeholder: '请输入占位符'
+  //           },
+  //           {
+  //             type: 'text',
+  //             label: '默认值',
+  //             name: 'code',
+  //             placeholder: '请输入默认值'
+  //           },
+  //           {
+  //             type: 'textarea',
+  //             label: '值集',
+  //             name: 'valueSets',
+  //             required: true,
+  //             height: 100,
+  //             placeholder: `请输入值集JSON，例：\n[{\n"value":"有",\n"code":"98175"\n}]`
+  //           }
+  //         ],
+  //         onConfirm: payload => {
+  //           const placeholder = payload.find(
+  //             p => p.name === 'placeholder'
+  //           )?.value
+  //           if (!placeholder) return
+  //           const valueSets = payload.find(p => p.name === 'valueSets')?.value
+  //           if (!valueSets) return
+  //           const code = payload.find(p => p.name === 'code')?.value
+  //           instance.command.executeInsertControl({
+  //             type: ElementType.CONTROL,
+  //             value: '',
+  //             control: {
+  //               type,
+  //               code,
+  //               value: null,
+  //               placeholder,
+  //               valueSets: JSON.parse(valueSets)
+  //             }
+  //           })
+  //         }
+  //       })
+  //       break
+  //     case ControlType.CHECKBOX:
+  //       new Dialog({
+  //         title: '复选框控件',
+  //         data: [
+  //           {
+  //             type: 'text',
+  //             label: '默认值',
+  //             name: 'code',
+  //             placeholder: '请输入默认值，多个值以英文逗号分割'
+  //           },
+  //           {
+  //             type: 'textarea',
+  //             label: '值集',
+  //             name: 'valueSets',
+  //             required: true,
+  //             height: 100,
+  //             placeholder: `请输入值集JSON，例：\n[{\n"value":"有",\n"code":"98175"\n}]`
+  //           }
+  //         ],
+  //         onConfirm: payload => {
+  //           const valueSets = payload.find(p => p.name === 'valueSets')?.value
+  //           if (!valueSets) return
+  //           const code = payload.find(p => p.name === 'code')?.value
+  //           instance.command.executeInsertControl({
+  //             type: ElementType.CONTROL,
+  //             value: '',
+  //             control: {
+  //               type,
+  //               code,
+  //               value: null,
+  //               valueSets: JSON.parse(valueSets)
+  //             }
+  //           })
+  //         }
+  //       })
+  //       break
+  //     case ControlType.RADIO:
+  //       new Dialog({
+  //         title: '单选框控件',
+  //         data: [
+  //           {
+  //             type: 'text',
+  //             label: '默认值',
+  //             name: 'code',
+  //             placeholder: '请输入默认值'
+  //           },
+  //           {
+  //             type: 'textarea',
+  //             label: '值集',
+  //             name: 'valueSets',
+  //             required: true,
+  //             height: 100,
+  //             placeholder: `请输入值集JSON，例：\n[{\n"value":"有",\n"code":"98175"\n}]`
+  //           }
+  //         ],
+  //         onConfirm: payload => {
+  //           const valueSets = payload.find(p => p.name === 'valueSets')?.value
+  //           if (!valueSets) return
+  //           const code = payload.find(p => p.name === 'code')?.value
+  //           instance.command.executeInsertControl({
+  //             type: ElementType.CONTROL,
+  //             value: '',
+  //             control: {
+  //               type,
+  //               code,
+  //               value: null,
+  //               valueSets: JSON.parse(valueSets)
+  //             }
+  //           })
+  //         }
+  //       })
+  //       break
+  //     case ControlType.DATE:
+  //       new Dialog({
+  //         title: '日期控件',
+  //         data: [
+  //           {
+  //             type: 'text',
+  //             label: '占位符',
+  //             name: 'placeholder',
+  //             required: true,
+  //             placeholder: '请输入占位符'
+  //           },
+  //           {
+  //             type: 'text',
+  //             label: '默认值',
+  //             name: 'value',
+  //             placeholder: '请输入默认值'
+  //           },
+  //           {
+  //             type: 'select',
+  //             label: '日期格式',
+  //             name: 'dateFormat',
+  //             value: 'yyyy-MM-dd hh:mm:ss',
+  //             required: true,
+  //             options: [
+  //               {
+  //                 label: 'yyyy-MM-dd hh:mm:ss',
+  //                 value: 'yyyy-MM-dd hh:mm:ss'
+  //               },
+  //               {
+  //                 label: 'yyyy-MM-dd',
+  //                 value: 'yyyy-MM-dd'
+  //               }
+  //             ]
+  //           }
+  //         ],
+  //         onConfirm: payload => {
+  //           const placeholder = payload.find(
+  //             p => p.name === 'placeholder'
+  //           )?.value
+  //           if (!placeholder) return
+  //           const value = payload.find(p => p.name === 'value')?.value || ''
+  //           const dateFormat =
+  //             payload.find(p => p.name === 'dateFormat')?.value || ''
+  //           instance.command.executeInsertControl({
+  //             type: ElementType.CONTROL,
+  //             value: '',
+  //             control: {
+  //               type,
+  //               dateFormat,
+  //               value: value
+  //                 ? [
+  //                     {
+  //                       value
+  //                     }
+  //                   ]
+  //                 : null,
+  //               placeholder
+  //             }
+  //           })
+  //         }
+  //       })
+  //       break
+  //     case ControlType.NUMBER:
+  //       new Dialog({
+  //         title: '数值控件',
+  //         data: [
+  //           {
+  //             type: 'text',
+  //             label: '占位符',
+  //             name: 'placeholder',
+  //             required: true,
+  //             placeholder: '请输入占位符'
+  //           },
+  //           {
+  //             type: 'text',
+  //             label: '默认值',
+  //             name: 'value',
+  //             placeholder: '请输入默认值'
+  //           }
+  //         ],
+  //         onConfirm: payload => {
+  //           const placeholder = payload.find(
+  //             p => p.name === 'placeholder'
+  //           )?.value
+  //           if (!placeholder) return
+  //           const value = payload.find(p => p.name === 'value')?.value || ''
+  //           instance.command.executeInsertControl({
+  //             type: ElementType.CONTROL,
+  //             value: '',
+  //             control: {
+  //               type,
+  //               value: value
+  //                 ? [
+  //                     {
+  //                       value
+  //                     }
+  //                   ]
+  //                 : null,
+  //               placeholder
+  //             }
+  //           })
+  //         }
+  //       })
+  //       break
+  //     default:
+  //       break
+  //   }
+  // }
 
   const checkboxDom = document.querySelector<HTMLDivElement>(
     '.menu-item__checkbox'
@@ -2664,7 +2665,7 @@ window.onload = function () {
     if (fType === 'list') {
       const listType = (comp.listType || 'text').toLowerCase()
       control.listType = listType
-      control.layout = comp.layout || 'vertical'
+      control.layout = comp.layout || 'horizontal'
       control.gridCols = Number(comp.gridCols) || 2
       if (listType === 'radio') {
         control.type = ControlType.RADIO
@@ -2688,8 +2689,13 @@ window.onload = function () {
     if (fType === 'date') {
       control.dateFormat = comp.dateFormat
     }
-    if (fType === 'select' || fType === 'checkbox' || fType === 'radio') {
-      control.code = null
+    if (
+      fType === 'select' ||
+      fType === 'checkbox' ||
+      fType === 'radio' ||
+      control.type === ControlType.RADIO ||
+      control.type === ControlType.CHECKBOX
+    ) {
       const opts = comp.options || comp.children || []
       const isVertical =
         comp.isVertical === true ||
@@ -3027,8 +3033,7 @@ window.onload = function () {
               cell => {
                 return {
                   colspan: parseInt(cell.getAttribute('colspan') || '1', 10),
-                  text:
-                    (cell.textContent?.trim() || '') || '···',
+                  text: cell.textContent?.trim() || '' || '···',
                   isTh: cell.tagName.toLowerCase() === 'th' || isHeader
                 }
               }
@@ -3353,7 +3358,11 @@ window.onload = function () {
   // -------------------------------------------------------------
   function updateComponents(components: any) {
     let rawGroups: any[] = []
-    if (!Array.isArray(components) && typeof components === 'object' && components !== null) {
+    if (
+      !Array.isArray(components) &&
+      typeof components === 'object' &&
+      components !== null
+    ) {
       rawGroups = [components]
     } else if (Array.isArray(components)) {
       rawGroups = components
@@ -3932,7 +3941,8 @@ window.onload = function () {
   // 统一绑定模板文件导入点击行为与解析逻辑 (.docx / .json)
   const importDom = document.querySelector<HTMLDivElement>('.menu-item__import')
   if (importDom) {
-    let importInput = document.querySelector<HTMLInputElement>('#import-file-input')
+    let importInput =
+      document.querySelector<HTMLInputElement>('#import-file-input')
     if (!importInput) {
       importInput = document.createElement('input')
       importInput.type = 'file'

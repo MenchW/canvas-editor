@@ -30,12 +30,19 @@ export class RadioControl extends CheckboxControl {
     const startElement = elementList[startIndex]
     const targetControlId = startElement?.controlId || this.element.controlId
 
-    // 解析下发数据：支持选项数组 [{label, code, checked}] 或普通 codes 字符串数组
+    // 解析下发数据：支持选项数组 [{label, code, checked}]、codes 数组或标量值 ('1', '男' 等)
     let codes: string[] = []
-    if (Array.isArray(payload) && payload.length > 0 && typeof payload[0] === 'object' && payload[0] !== null) {
+    if (
+      Array.isArray(payload) &&
+      payload.length > 0 &&
+      typeof payload[0] === 'object' &&
+      payload[0] !== null
+    ) {
       const valueSets: Array<{ value: string; code: string }> = []
       payload.forEach((item: any, idx: number) => {
-        const label = String(item.label ?? item.text ?? item.name ?? item.value ?? `选项${idx + 1}`)
+        const label = String(
+          item.label ?? item.text ?? item.name ?? item.value ?? `选项${idx + 1}`
+        )
         const code = String(item.value ?? item.code ?? item.id ?? `${idx + 1}`)
         const checked = item.checked === true || item.selected === true
         valueSets.push({ value: label, code })
@@ -46,9 +53,20 @@ export class RadioControl extends CheckboxControl {
       }
     } else if (Array.isArray(payload)) {
       codes = payload.map(String)
+    } else if (payload !== null && payload !== undefined && payload !== '') {
+      codes = [String(payload)]
     }
 
-    const selectedCode = codes[0] || (control?.code ? String(control.code) : null)
+    let selectedCode =
+      codes[0] || (control?.code ? String(control.code) : null)
+    if (selectedCode && control?.valueSets) {
+      const matchedByVal = control.valueSets.find(
+        vs => vs.value === selectedCode || vs.code === selectedCode
+      )
+      if (matchedByVal) {
+        selectedCode = matchedByVal.code
+      }
+    }
 
     // 检查是否存在 RADIO 选项元素，并定位 PREFIX / POSTFIX 边界
     let hasRadioEl = false
