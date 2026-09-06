@@ -2214,3 +2214,65 @@ ul {
 .editor-loading__retry-btn:hover {
   background: #2563eb;
 }
+
+/* -------------------------------------------------------------
+ * 顶部功能栏 (Menu) 与底部状态栏 (Footer) 显隐自适应样式
+ * 彻底消除顶部/底部留白塌陷与面板悬空，确保纯画布模式完美居中与滚动
+ * ------------------------------------------------------------- */
+#app.no-header .menu,
+body.no-header .menu {
+  display: none !important;
+}
+
+#app.no-footer .footer,
+body.no-footer .footer {
+  display: none !important;
+}
+
+/* 顶部功能栏隐藏时，画布顶部外边距自适应收紧为 20px，消除 80px 留白塌陷 */
+#app.no-header .editor > div,
+body.no-header .editor > div {
+  margin-top: 20px;
+}
+
+/* 底部状态栏隐藏时，画布底部外边距自适应收紧为 20px */
+#app.no-footer .editor > div,
+body.no-footer .editor > div {
+  margin-bottom: 20px;
+}
+
+/* 目录面板与右侧数据占位符面板自适应调整顶部定位与视口高度 */
+#app.no-header .catalog,
+body.no-header .catalog,
+#app.no-header .editor-aside-right,
+body.no-header .editor-aside-right {
+  top: 0;
+  height: calc(100vh - 30px);
+}
+
+#app.no-footer .catalog,
+body.no-footer .catalog,
+#app.no-footer .editor-aside-right,
+body.no-footer .editor-aside-right {
+  height: calc(100vh - 60px);
+}
+
+#app.no-header.no-footer .catalog,
+body.no-header.no-footer .catalog,
+#app.no-header.no-footer .editor-aside-right,
+body.no-header.no-footer .editor-aside-right {
+  top: 0;
+  height: 100vh;
+}
+
+/* 目录面板及底部目录开关隐藏 */
+#app.no-catalog .catalog,
+body.no-catalog .catalog {
+  display: none !important;
+}
+
+#app.no-catalog .footer .catalog-mode,
+body.no-catalog .footer .catalog-mode {
+  display: none !important;
+}
+

@@ -14,7 +14,23 @@ import { home } from './home'
 import { end } from './end'
 
 export function keydown(evt: KeyboardEvent, host: CanvasEvent) {
-  if (host.isComposing) return
+  if (host.isComposing || evt.isComposing || evt.keyCode === 229) {
+    if (evt.key === KeyMap.Enter || evt.keyCode === 13) {
+      evt.preventDefault?.()
+    }
+    return
+  }
+  if (
+    host.lastCompositionTime &&
+    performance.now() - host.lastCompositionTime < 40 &&
+    (evt.key === KeyMap.Enter || evt.keyCode === 13)
+  ) {
+    host.hasJustComposed = false
+    host.lastCompositionTime = 0
+    evt.preventDefault?.()
+    return
+  }
+  host.hasJustComposed = false
   const draw = host.getDraw()
   // 键盘事件逻辑分发
   if (evt.key === KeyMap.Backspace) {

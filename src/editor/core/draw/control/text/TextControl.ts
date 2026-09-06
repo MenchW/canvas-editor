@@ -265,6 +265,21 @@ export class TextControl implements IControlInstance {
       draw.getTraceParticle().markElementListInserted([newElement])
       draw.spliceElementList(elementList, start + i, 0, [newElement])
     }
+
+    // 插入真实值后：将该控件所属的所有元素（含前后缀）标记为已非占位符 (isPlaceholder = false)
+    const targetControlId = startElement?.controlId
+    if (targetControlId) {
+      for (let i = 0; i < elementList.length; i++) {
+        const el = elementList[i]
+        if (el?.controlId === targetControlId) {
+          el.isPlaceholder = false
+          if (el.control) {
+            delete (el.control as any).isPlaceholder
+          }
+        }
+      }
+    }
+
     return start + formatData.length - 1
   }
 
@@ -399,6 +414,19 @@ export class TextControl implements IControlInstance {
           endElement.controlComponent === ControlComponent.POST_TEXT
         ) {
           // 后缀
+          const isList = Boolean(
+            startElement.control?.listType ||
+              (startElement.control?.type as any) === 'list'
+          )
+          const targetCId = startElement.controlId
+          const hasValue = elementList.some(
+            el =>
+              el.controlId === targetCId &&
+              el.controlComponent === ControlComponent.VALUE
+          )
+          if (isList || !hasValue) {
+            return this.control.removeControl(startIndex)
+          }
           if (isPreviewEdit) {
             // 无痕模式下光标在后缀处按退格，逐字删除末位文本字符
             const leftValueIndex = startIndex - 1
@@ -410,17 +438,18 @@ export class TextControl implements IControlInstance {
             ) {
               draw.deleteElementList(elementList, leftValueIndex, 1)
               const checkIndex = Math.max(0, leftValueIndex - 1)
-              const value = this.getValue({
+              const curVal = this.getValue({
                 range: { startIndex: checkIndex, endIndex: checkIndex },
                 elementList
               })
-              if (!value.length) {
+              if (!curVal.length) {
                 return this.control.removeControl(leftValueIndex - 1)
               }
               return leftValueIndex - 1
             }
           }
-          return this.control.removeControl(startIndex)
+          // 普通已有内容的文本控件：光标安全移入控件内部末尾，供用户逐字退格编辑，绝不误删整段文字
+          return Math.max(0, startIndex - 1)
         } else {
           // 文本
           draw.deleteElementList(elementList, startIndex, 1)

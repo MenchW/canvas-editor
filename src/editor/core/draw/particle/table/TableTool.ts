@@ -92,7 +92,10 @@ export class TableTool {
   public render() {
     const positionContext = this.position.getPositionContext()
     const { isTable } = positionContext
-    if (!isTable) return
+    if (!isTable) {
+      this.dispose()
+      return
+    }
     const elementList = this.draw.getOriginalElementList()
     const positionList = this.position.getOriginalPositionList()
     const element = this.position.getTableElementByContext(
@@ -126,7 +129,7 @@ export class TableTool {
     // 表格跨页时锚定光标所在片段
     const fragment = position.tableFragment
     const fragmentStartTrIndex = fragment?.startTrIndex ?? 0
-    const fragmentEndTrIndex = fragment?.endTrIndex ?? trList!.length
+    const fragmentEndTrIndex = fragment?.endTrIndex ?? (trList?.length ?? 0)
     // 锚点未变化且布局未重排时不重复重建：
     // 键包含缩放、坐标、片段边界与行列尺寸，任一变化都会使缓存失效
     let layoutKey = `${scale}:${leftTop[0]}:${leftTop[1]}:${

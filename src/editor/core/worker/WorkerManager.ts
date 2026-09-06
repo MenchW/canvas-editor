@@ -53,7 +53,8 @@ export class WorkerManager {
       const positionList = this.draw.getPosition().getOriginalMainPositionList()
       this.catalogWorker.postMessage({
         elementList,
-        positionList
+        positionList,
+        mode: this.draw.getMode()
       })
     })
   }

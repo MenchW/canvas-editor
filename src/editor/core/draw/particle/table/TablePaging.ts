@@ -109,10 +109,10 @@ export class TablePaging {
           }
         }
       }
-      // 行内拆分条件：行内各单元格均有内容
+      // 行内拆分条件：行内存在有内容的单元格（空单元格可随行自然延展）
       // （跨行合并单元格按窗口裁剪续排，不再限制切分位置）
       const canSplitMidRow = (trIndex: number) =>
-        trList![trIndex].tdList.every(td => !!td.rowList?.length)
+        trList![trIndex].tdList.some(td => !!td.rowList?.length)
       // 拆分相关单元格：本行单元格 + 覆盖本行的跨行合并单元格
       const getSplitRelevantTdList = (trIndex: number) => {
         const tdList = [...trList![trIndex].tdList]
@@ -213,13 +213,27 @@ export class TablePaging {
           if (hasRemaining) {
             endSplitHeight = Math.min(consumedHeight, firstTrAvailable / scale)
             if (trList![0].height! - endSplitHeight < minContinuationHeight) {
-              endSplitHeight = trList![0].height! - minContinuationHeight
+              endSplitHeight = Math.min(
+                firstTrAvailable / scale,
+                trList![0].height! - minContinuationHeight
+              )
             }
           } else if (
             trList![0].height! - firstTrAvailable / scale >=
             minContinuationHeight
           ) {
             endSplitHeight = firstTrAvailable / scale
+          } else if (
+            firstTrAvailable / scale >= minContinuationHeight * 2 &&
+            trList![0].height! >= 200
+          ) {
+            const target = Math.min(
+              firstTrAvailable / scale,
+              trList![0].height! - minContinuationHeight
+            )
+            if (target >= minContinuationHeight) {
+              endSplitHeight = target
+            }
           }
         }
         if (endSplitHeight <= 0) {
@@ -364,7 +378,10 @@ export class TablePaging {
                 // 续页还有内容：拆分点取实际消耗高度，并给续留行盒留足最小高度
                 candidate = Math.min(consumedHeight, available / scale)
                 if (trList![end].height! - candidate < minContinuationHeight) {
-                  candidate = trList![end].height! - minContinuationHeight
+                  candidate = Math.min(
+                    available / scale,
+                    trList![end].height! - minContinuationHeight
+                  )
                 }
               } else if (
                 trList![end].height! - available / scale >=
@@ -372,6 +389,19 @@ export class TablePaging {
               ) {
                 // 内容全部放下且续留行盒非碎页：按可用高度拆分填满页面
                 candidate = available / scale
+              } else if (
+                available / scale >= minContinuationHeight * 2 &&
+                trList![end].height! >= 200
+              ) {
+                // 剩余可用高度显著且为超高行（放弃拆分会导致当前页大面积留白）：
+                // 拆分点微调至给续页保留最小续留高度，但绝对不超过当前页可用空间，消除跳变 Bug
+                const target = Math.min(
+                  available / scale,
+                  trList![end].height! - minContinuationHeight
+                )
+                if (target >= minContinuationHeight) {
+                  candidate = target
+                }
               }
             }
             if (candidate > 0) {

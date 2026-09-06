@@ -1,9 +1,12 @@
 import { ICatalog, ICatalogItem } from '../../../interface/Catalog'
 import { IElement, IElementPosition } from '../../../interface/Element'
+import { EditorMode } from '../../../dataset/enum/Editor'
+import { ControlComponent } from '../../../dataset/enum/Control'
 
-interface IGetCatalogPayload {
+export interface IGetCatalogPayload {
   elementList: IElement[]
   positionList: IElementPosition[]
+  mode?: EditorMode
 }
 
 type ICatalogElement = IElement & {
@@ -66,8 +69,10 @@ function isTextLikeElement(element: IElement): boolean {
   return !element.type || TEXTLIKE_ELEMENT_TYPE.includes(element.type)
 }
 
-function getCatalog(payload: IGetCatalogPayload): ICatalog | null {
-  const { elementList, positionList } = payload
+export function getCatalog(payload: IGetCatalogPayload): ICatalog | null {
+  const { elementList, positionList, mode } = payload
+  const isHideControlAffix =
+    mode === EditorMode.PREVIEW_EDIT || mode === EditorMode.CLEAN
   // 筛选标题
   const titleElementList: ICatalogElement[] = []
   let t = 0
@@ -97,8 +102,36 @@ function getCatalog(payload: IGetCatalogPayload): ICatalog | null {
         valueList.push(titleE)
         position++
       }
+      const hasRealContent = valueList.some(
+        el =>
+          isTextLikeElement(el) &&
+          el.value &&
+          el.value !== ZERO &&
+          el.controlComponent !== ControlComponent.PREFIX &&
+          el.controlComponent !== ControlComponent.POSTFIX &&
+          el.controlComponent !== ControlComponent.PLACEHOLDER &&
+          !el.isPlaceholder
+      )
       titleElement.value = valueList
-        .filter(el => isTextLikeElement(el))
+        .filter(el => {
+          if (!isTextLikeElement(el)) return false
+          if (isHideControlAffix) {
+            if (
+              el.controlComponent === ControlComponent.PREFIX ||
+              el.controlComponent === ControlComponent.POSTFIX
+            ) {
+              return false
+            }
+            if (
+              hasRealContent &&
+              (el.controlComponent === ControlComponent.PLACEHOLDER ||
+                el.isPlaceholder)
+            ) {
+              return false
+            }
+          }
+          return true
+        })
         .map(el => el.value)
         .join('')
         .replace(new RegExp(ZERO, 'g'), '')

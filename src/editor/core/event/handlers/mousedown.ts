@@ -1,4 +1,5 @@
 import { ImageDisplay } from '../../../dataset/enum/Common'
+import { ControlType } from '../../../dataset/enum/Control'
 import { EditorMode } from '../../../dataset/enum/Editor'
 import { ElementType } from '../../../dataset/enum/Element'
 import { MouseEventButton } from '../../../dataset/enum/Event'
@@ -25,8 +26,8 @@ export function setRangeCache(host: CanvasEvent) {
 
 export function hitCheckbox(element: IElement, draw: Draw) {
   const { checkbox, control } = element
-  // 复选框不在控件内独立控制
-  if (!control) {
+  // 复选框不在控件内独立控制，或控件类型非复选框（避免被误包在文本等控件中无法切换）
+  if (!control || control.type !== ControlType.CHECKBOX) {
     draw.getCheckboxParticle().setSelect(element)
   } else {
     if (typeof draw.getControl()?.initControl === 'function') {
@@ -59,8 +60,8 @@ export function hitCheckbox(element: IElement, draw: Draw) {
 
 export function hitRadio(element: IElement, draw: Draw) {
   const { radio, control } = element
-  // 单选框不在控件内独立控制
-  if (!control) {
+  // 单选框不在控件内独立控制，或控件类型非单选框（避免被误包在文本等控件中无法切换）
+  if (!control || control.type !== ControlType.RADIO) {
     draw.getRadioParticle().setSelect(element)
   } else {
     if (typeof draw.getControl()?.initControl === 'function') {

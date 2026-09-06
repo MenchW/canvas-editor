@@ -43,6 +43,12 @@ export class TableOperate {
     this.options = draw.getOptions()
   }
 
+  private clearRawTrList(element?: IElement) {
+    if (element && (element as any).rawTrList) {
+      delete (element as any).rawTrList
+    }
+  }
+
   public insertTable(row: number, col: number) {
     const { startIndex, endIndex } = this.range.getRange()
     if (!~startIndex && !~endIndex) return
@@ -112,6 +118,7 @@ export class TableOperate {
     const { index, trIndex, tableId } = positionContext
     const originalElementList = this.draw.getOriginalElementList()
     const element = originalElementList[index!]
+    this.clearRawTrList(element)
     const curTrList = element.trList!
     const curTr = curTrList[trIndex!]
     // 之前跨行的增加跨行数
@@ -175,6 +182,7 @@ export class TableOperate {
     const { index, trIndex, tableId } = positionContext
     const originalElementList = this.draw.getOriginalElementList()
     const element = originalElementList[index!]
+    this.clearRawTrList(element)
     const curTrList = element.trList!
     const curTr = curTrList[trIndex!]
     const anchorTr =
@@ -264,6 +272,7 @@ export class TableOperate {
     const { index, tdIndex, tableId } = positionContext
     const originalElementList = this.draw.getOriginalElementList()
     const element = originalElementList[index!]
+    this.clearRawTrList(element)
     const curTrList = element.trList!
     const curTdIndex = tdIndex!
     // 增加列
@@ -314,6 +323,7 @@ export class TableOperate {
     const { index, tdIndex, tableId } = positionContext
     const originalElementList = this.draw.getOriginalElementList()
     const element = originalElementList[index!]
+    this.clearRawTrList(element)
     const curTrList = element.trList!
     const curTdIndex = tdIndex! + 1
     // 增加列
@@ -363,6 +373,7 @@ export class TableOperate {
     const { index, trIndex, tdIndex } = positionContext
     const originalElementList = this.draw.getOriginalElementList()
     const element = originalElementList[index!]
+    this.clearRawTrList(element)
     const trList = element.trList!
     const curTr = trList[trIndex!]
     const curTdRowIndex = curTr.tdList[tdIndex!].rowIndex!
@@ -424,6 +435,7 @@ export class TableOperate {
     const { index, tdIndex, trIndex } = positionContext
     const originalElementList = this.draw.getOriginalElementList()
     const element = originalElementList[index!]
+    this.clearRawTrList(element)
     const curTrList = element.trList!
     const curTd = curTrList[trIndex!].tdList[tdIndex!]
     const curColIndex = curTd.colIndex!
@@ -496,6 +508,7 @@ export class TableOperate {
       originalElementList,
       positionContext
     )!
+    this.clearRawTrList(element)
     const curTrList = element.trList!
     let startTd = curTrList[startTrIndex!].tdList[startTdIndex!]
     let endTd = curTrList[endTrIndex!].tdList[endTdIndex!]
@@ -632,6 +645,7 @@ export class TableOperate {
       originalElementList,
       positionContext
     )!
+    this.clearRawTrList(element)
     const curTrList = element.trList!
     const curTr = curTrList[trIndex!]!
     const curTd = curTr.tdList[tdIndex!]
@@ -698,6 +712,7 @@ export class TableOperate {
     const { index, tdIndex, trIndex } = positionContext
     const originalElementList = this.draw.getOriginalElementList()
     const element = originalElementList[index!]
+    this.clearRawTrList(element)
     const curTrList = element.trList!
     const curTr = curTrList[trIndex!]!
     const curTd = curTr.tdList[tdIndex!]
@@ -757,6 +772,7 @@ export class TableOperate {
     const { index, tdIndex, trIndex } = positionContext
     const originalElementList = this.draw.getOriginalElementList()
     const element = originalElementList[index!]
+    this.clearRawTrList(element)
     const curTrList = element.trList!
     const curTr = curTrList[trIndex!]!
     const curTd = curTr.tdList[tdIndex!]
@@ -855,6 +871,7 @@ export class TableOperate {
         }
         // 重设文字方向
         td.textDirection = payload
+        console.log(`[Table TextDirection] 单元格(${r}, ${c})文字方向更新为:`, payload, 'tdId:', td.id)
       }
     }
     const { endIndex } = this.range.getRange()

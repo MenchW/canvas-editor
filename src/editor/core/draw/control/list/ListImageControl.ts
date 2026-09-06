@@ -220,6 +220,18 @@ export class ListImageControl extends ImageControl {
         const remainImages = elementList.filter(
           el => el.controlId === cId && el.type === ElementType.IMAGE
         )
+        const cleanImages = remainImages.map(img => {
+          const copy = { ...img }
+          delete copy.control
+          delete copy.controlComponent
+          delete copy.controlId
+          return copy
+        })
+        for (let i = 0; i < elementList.length; i++) {
+          if (elementList[i]?.controlId === cId && elementList[i].control) {
+            elementList[i].control!.value = cleanImages
+          }
+        }
         if (remainImages.length === 0) {
           if (isPreviewEdit) {
             return this.control.removeControl(newIdx)
@@ -237,6 +249,56 @@ export class ListImageControl extends ImageControl {
         startElement?.controlComponent === ControlComponent.PLACEHOLDER
       ) {
         return this.control.removeControl(startIndex)
+      }
+
+      // 4. 如果光标在后缀 POSTFIX 处
+      if (startElement?.controlComponent === ControlComponent.POSTFIX) {
+        if (isPreviewEdit) {
+          // 无痕模式下花括号不可见，末尾退格等同于删除最后一张图片
+          let lastImgIdx = -1
+          for (let i = startIndex - 1; i >= 0; i--) {
+            if (elementList[i]?.controlId === cId) {
+              if (elementList[i].type === ElementType.IMAGE) {
+                lastImgIdx = i
+                break
+              }
+            } else {
+              break
+            }
+          }
+          if (lastImgIdx !== -1) {
+            this.control.getDraw().deleteElementList(elementList, lastImgIdx, 1)
+            if (
+              elementList[lastImgIdx]?.value === ' ' ||
+              elementList[lastImgIdx]?.value === '  ' ||
+              elementList[lastImgIdx]?.value === ZERO
+            ) {
+              this.control.getDraw().deleteElementList(elementList, lastImgIdx, 1)
+            }
+            const remainImages = elementList.filter(
+              el => el.controlId === cId && el.type === ElementType.IMAGE
+            )
+            const cleanImages = remainImages.map(img => {
+              const copy = { ...img }
+              delete copy.control
+              delete copy.controlComponent
+              delete copy.controlId
+              return copy
+            })
+            for (let i = 0; i < elementList.length; i++) {
+              if (elementList[i]?.controlId === cId && elementList[i].control) {
+                elementList[i].control!.value = cleanImages
+              }
+            }
+            if (remainImages.length === 0) {
+              return this.control.removeControl(Math.max(0, lastImgIdx - 1))
+            }
+            return Math.max(0, lastImgIdx - 1)
+          }
+          return Math.max(0, startIndex - 1)
+        } else {
+          return this.control.removeControl(startIndex)
+        }
       }
     } else if (evt.key === 'Delete') {
       if (!isCollapsed) {
@@ -264,6 +326,18 @@ export class ListImageControl extends ImageControl {
         const remainImages = elementList.filter(
           el => el.controlId === cId && el.type === ElementType.IMAGE
         )
+        const cleanImages = remainImages.map(img => {
+          const copy = { ...img }
+          delete copy.control
+          delete copy.controlComponent
+          delete copy.controlId
+          return copy
+        })
+        for (let i = 0; i < elementList.length; i++) {
+          if (elementList[i]?.controlId === cId && elementList[i].control) {
+            elementList[i].control!.value = cleanImages
+          }
+        }
         if (remainImages.length === 0) {
           if (isPreviewEdit) {
             return this.control.removeControl(endIndex)

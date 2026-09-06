@@ -150,7 +150,7 @@ describe('EditorClient - getMissingControlList', () => {
     expect(result.falsyControls.length).toBe(0)
   })
 
-  it('直接调用不传参且无 getData 时：返回空结果', async () => {
+  it('直接调用不传参且无 getData 时：抛出异常错误', async () => {
     const client = new EditorClient({
       iframe: document.createElement('iframe'),
       onSave: vi.fn()
@@ -162,8 +162,7 @@ describe('EditorClient - getMissingControlList', () => {
 
     vi.spyOn(client, 'getControlList').mockResolvedValue(mockControls as any)
 
-    const result = await client.getMissingControlList()
-    expect(result).toEqual({ missingControls: [], falsyControls: [] })
+    await expect(client.getMissingControlList()).rejects.toThrow('缺少有效的 data 参数')
   })
 
   it('直接调用不传参时：若已填充数据，则自动比对已填充的业务数据', async () => {
@@ -313,4 +312,236 @@ describe('EditorClient - getMissingControlList', () => {
     expect(auditResult.falsyControls.length).toBe(1)
     expect(auditResult.falsyControls[0].conceptId).toBe('age')
   })
+
+  it('支持手动传 { template, data } 对象筛选 miss 和 falseControls', async () => {
+    const customTemplate = {
+      data: {
+        main: [
+          { type: 'control', control: { conceptId: 'field_a', placeholder: '字段A' } },
+          { type: 'control', control: { conceptId: 'field_b', placeholder: '字段B' } },
+          { type: 'control', control: { conceptId: 'field_c', placeholder: '字段C' } }
+        ]
+      }
+    }
+    const customData = {
+      field_a: '值有效',
+      field_b: null // 假值
+      // 缺少 field_c
+    }
+
+    const client = new EditorClient({
+      iframe: document.createElement('iframe'),
+      onSave: vi.fn()
+    })
+
+    const result = await client.getMissingControlList({
+      template: customTemplate,
+      data: customData
+    })
+
+    expect(result.missingControls.length).toBe(1)
+    expect(result.missingControls[0].conceptId).toBe('field_c')
+    expect(result.falsyControls.length).toBe(1)
+    expect(result.falsyControls[0].conceptId).toBe('field_b')
+
+    // 验证别名
+    expect(result.missControls).toBe(result.missingControls)
+    expect(result.falseControls).toBe(result.falsyControls)
+  })
+
+  it('支持手动传双参数 (template, data) 筛选', async () => {
+    const customTemplate = [
+      { type: 'control', control: { conceptId: 't1' } },
+      { type: 'control', control: { conceptId: 't2' } }
+    ]
+    const customData = { t1: 'ok' }
+
+    const client = new EditorClient({
+      iframe: document.createElement('iframe'),
+      onSave: vi.fn()
+    })
+
+    const result = await client.getMissingControlList(customTemplate, customData)
+    expect(result.missingControls.length).toBe(1)
+    expect(result.missingControls[0].conceptId).toBe('t2')
+    expect(result.falsyControls.length).toBe(0)
+  })
+
+  it('只传 template 时，data 自动回退找 getData；若无 getData 则抛出异常', async () => {
+    const customTemplate = [
+      { type: 'control', control: { conceptId: 'dept' } },
+      { type: 'control', control: { conceptId: 'doc' } }
+    ]
+
+    // 1. 配置了 getData 时回退成功
+    const clientWithData = new EditorClient({
+      iframe: document.createElement('iframe'),
+      getData: () => ({ dept: '内科', doc: '' }),
+      onSave: vi.fn()
+    })
+    const res = await clientWithData.getMissingControlList({ template: customTemplate })
+    expect(res.falsyControls.length).toBe(1)
+    expect(res.falsyControls[0].conceptId).toBe('doc')
+
+    // 2. 未配置 getData 时抛出异常
+    const clientWithoutData = new EditorClient({
+      iframe: document.createElement('iframe'),
+      onSave: vi.fn()
+    })
+    await expect(
+      clientWithoutData.getMissingControlList({ template: customTemplate })
+    ).rejects.toThrow('缺少有效的 data 参数')
+  })
+
+  it('只传 data 时，template 自动回退找 getTemplate；若无 getTemplate 则抛出异常', async () => {
+    const customData = { username: 'admin' }
+
+    // 1. 配置了 getTemplate 时回退成功
+    const clientWithTpl = new EditorClient({
+      iframe: document.createElement('iframe'),
+      getTemplate: () => ({
+        data: {
+          main: [
+            { type: 'control', control: { conceptId: 'username' } },
+            { type: 'control', control: { conceptId: 'password' } }
+          ]
+        }
+      }),
+      onSave: vi.fn()
+    })
+    const res = await clientWithTpl.getMissingControlList(customData)
+    expect(res.missingControls.length).toBe(1)
+    expect(res.missingControls[0].conceptId).toBe('password')
+
+    // 2. 未配置 getTemplate 时抛出异常
+    const clientWithoutTpl = new EditorClient({
+      iframe: document.createElement('iframe'),
+      onSave: vi.fn()
+    })
+    await expect(clientWithoutTpl.getMissingControlList(customData)).rejects.toThrow(
+      '缺少有效的 template 参数'
+    )
+  })
+
+  it('若 template 和 data 均未传且配置项中也均无，则抛出异常错误', async () => {
+    const emptyClient = new EditorClient({
+      iframe: document.createElement('iframe'),
+      onSave: vi.fn()
+    })
+    await expect(emptyClient.getMissingControlList()).rejects.toThrow(
+      '缺少有效的 template 参数'
+    )
+    // 传空配置对象同样能正确触发校验抛错
+    await expect(emptyClient.getMissingControlList({})).rejects.toThrow(
+      '缺少有效的 template 参数'
+    )
+  })
+
+  it('支持直接传入 template 数组（单参），data 自动回退找 getData', async () => {
+    const templateArray = [
+      { type: 'control', control: { conceptId: 'field1' } },
+      { type: 'control', control: { conceptId: 'field2' } }
+    ]
+    const client = new EditorClient({
+      iframe: document.createElement('iframe'),
+      getData: () => ({ field1: '已填', field2: '' }),
+      onSave: vi.fn()
+    })
+
+    const result = await client.getMissingControlList(templateArray)
+    expect(result.missControls.length).toBe(0)
+    expect(result.falseControls.length).toBe(1)
+    expect(result.falseControls[0].conceptId).toBe('field2')
+  })
+
+  it('支持传入 (undefined, customData) 双参，template 自动从 options.getTemplate 获取', async () => {
+    const client = new EditorClient({
+      iframe: document.createElement('iframe'),
+      getTemplate: () => [
+        { type: 'control', control: { conceptId: 'dept' } },
+        { type: 'control', control: { conceptId: 'doctor' } }
+      ],
+      onSave: vi.fn()
+    })
+
+    const result = await client.getMissingControlList(undefined, { dept: '呼吸科' })
+    expect(result.missControls.length).toBe(1)
+    expect(result.missControls[0].conceptId).toBe('doctor')
+    expect(result.falseControls.length).toBe(0)
+  })
+
+  it('显式传了 template 且传了空数据对象 data: {} 时，所有控件均为 missControls', async () => {
+    const template = [
+      { type: 'control', control: { conceptId: 'itemA' } },
+      { type: 'control', control: { conceptId: 'itemB' } }
+    ]
+    const client = new EditorClient({
+      iframe: document.createElement('iframe'),
+      onSave: vi.fn()
+    })
+
+    const result = await client.getMissingControlList({
+      template,
+      data: {}
+    })
+    expect(result.missControls.length).toBe(2)
+    expect(result.missControls.map(c => c.conceptId)).toEqual(['itemA', 'itemB'])
+    expect(result.falseControls.length).toBe(0)
+  })
+
+  it('显式传了无控件模板和数据时，正常返回空数组而不是抛出异常', async () => {
+    const emptyTemplate = { main: [] }
+    const client = new EditorClient({
+      iframe: document.createElement('iframe'),
+      onSave: vi.fn()
+    })
+
+    const result = await client.getMissingControlList(emptyTemplate, { foo: 'bar' })
+    expect(result.missControls).toEqual([])
+    expect(result.falseControls).toEqual([])
+    expect(result.missingControls).toEqual([])
+    expect(result.falsyControls).toEqual([])
+  })
+
+  it('支持在 config 中配置 header/footer/catalog 并在 setConfig 中动态下发更新', async () => {
+    const client = new EditorClient({
+      iframe: document.createElement('iframe'),
+      config: {
+        mode: 'readonly',
+        header: false,
+        footer: false,
+        catalog: false,
+        features: {
+          header: false,
+          footer: false,
+          catalog: false
+        }
+      },
+      onSave: vi.fn()
+    })
+
+    expect(client['options'].config?.header).toBe(false)
+    expect(client['options'].config?.footer).toBe(false)
+    expect(client['options'].config?.catalog).toBe(false)
+
+    const setCustomConfigSpy = vi.fn()
+    client['editorRpc'] = {
+      setCustomConfig: setCustomConfigSpy
+    } as any
+
+    await client.setConfig({
+      features: {
+        catalog: true
+      }
+    })
+
+    expect(setCustomConfigSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        features: expect.objectContaining({
+          catalog: true
+        })
+      })
+    )
+  })
 })
+

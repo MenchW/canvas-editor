@@ -14,6 +14,7 @@ export class HistoryManager {
 
   public undo() {
     this.draw.flushHistory()
+    this.draw.clearSideEffect()
     console.log(`%c[History] undo called | stack length=${this.undoStack.length}`, 'color: #e91e63; font-weight: bold')
     if (this.undoStack.length > 1) {
       const pop = this.undoStack.pop()!
@@ -26,6 +27,7 @@ export class HistoryManager {
 
   public redo() {
     this.draw.flushHistory()
+    this.draw.clearSideEffect()
     console.log(`%c[History] redo called | redoStack length=${this.redoStack.length}`, 'color: #9c27b0; font-weight: bold')
     if (this.redoStack.length) {
       const pop = this.redoStack.pop()!

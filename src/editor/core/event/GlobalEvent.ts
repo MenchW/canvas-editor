@@ -75,9 +75,10 @@ export class GlobalEvent {
 
   public clearSideEffect = (evt: Event) => {
     if (!this.cursor) return
-    // window.blur 事件处理：窗口/页面失焦时直接隐藏模拟光标，避免误导用户
+    // window.blur 事件处理：窗口/页面失焦时直接隐藏模拟光标与表格工具条，避免误导用户
     if (evt?.type === 'blur') {
       this.cursor.recoveryCursor()
+      this.tableTool.dispose()
       return
     }
     // 编辑器内部dom

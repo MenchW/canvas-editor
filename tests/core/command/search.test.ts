@@ -63,9 +63,49 @@ describe('搜索替换命令', () => {
     expect(() => {
       ctx.editor.command.executeReplace('')
     }).not.toThrow()
-
     const range = ctx.editor.command.getRange()
     expect(range.startIndex).toBeGreaterThanOrEqual(0)
     expect(range.endIndex).toBeGreaterThanOrEqual(0)
+  })
+
+  it('包含表格以及表格后面的正文内容均可正确搜索匹配', () => {
+    ctx = createTestEditor({
+      data: {
+        header: [],
+        main: [
+          { value: '前置文本\n' },
+          {
+            type: 'table' as any,
+            value: '',
+            trList: [
+              {
+                height: 40,
+                tdList: [
+                  {
+                    colspan: 1,
+                    rowspan: 1,
+                    value: [{ value: '单元格内容' }]
+                  }
+                ]
+              }
+            ]
+          },
+          { value: '后置文本标记' }
+        ],
+        footer: []
+      }
+    })
+
+    // 搜索表格前面的内容
+    ctx.editor.command.executeSearch('前置文本')
+    expect(ctx.editor.command.getSearchNavigateInfo()?.count).toBe(1)
+
+    // 搜索表格内部的内容
+    ctx.editor.command.executeSearch('单元格内容')
+    expect(ctx.editor.command.getSearchNavigateInfo()?.count).toBe(1)
+
+    // 搜索表格后面的内容（验证修复了表格后内容被截断丢弃的严重缺陷）
+    ctx.editor.command.executeSearch('后置文本标记')
+    expect(ctx.editor.command.getSearchNavigateInfo()?.count).toBe(1)
   })
 })

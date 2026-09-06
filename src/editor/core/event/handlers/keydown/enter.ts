@@ -128,6 +128,7 @@ export function enter(evt: KeyboardEvent, host: CanvasEvent) {
     }
   }
   inheritListLevel(elementList, enterText, listAnchorIndex)
+
   // 控件或文档插入换行元素
   const control = draw.getControl()
   const activeControl = control.getActiveControl()

@@ -214,30 +214,32 @@ export class Search {
         tableIndexList.push(e)
       }
     }
-    let i = 0
     let elementIndex = 0
-    while (elementIndex < originalElementListLength - 1) {
-      const endIndex = tableIndexList.length
-        ? tableIndexList[i]
-        : originalElementListLength
-      const pageElement = originalElementList.slice(elementIndex, endIndex)
-      if (pageElement.length) {
+    for (let t = 0; t < tableIndexList.length; t++) {
+      const tableIdx = tableIndexList[t]
+      if (tableIdx > elementIndex) {
         elementListGroup.push({
           index: elementIndex,
           type: EditorContext.PAGE,
-          elementList: pageElement
+          elementList: originalElementList.slice(elementIndex, tableIdx)
         })
       }
-      const tableElement = originalElementList[endIndex]
-      if (tableElement) {
-        elementListGroup.push({
-          index: endIndex,
-          type: EditorContext.TABLE,
-          elementList: [tableElement]
-        })
-      }
-      elementIndex = endIndex + 1
-      i++
+      elementListGroup.push({
+        index: tableIdx,
+        type: EditorContext.TABLE,
+        elementList: [originalElementList[tableIdx]]
+      })
+      elementIndex = tableIdx + 1
+    }
+    if (elementIndex < originalElementListLength) {
+      elementListGroup.push({
+        index: elementIndex,
+        type: EditorContext.PAGE,
+        elementList: originalElementList.slice(
+          elementIndex,
+          originalElementListLength
+        )
+      })
     }
     // 搜索文本
     const traceParticle = this.draw.getTraceParticle()
@@ -247,9 +249,12 @@ export class Search {
       elementList: IElement[],
       restArgs?: ISearchResultRestArgs
     ) {
-      if (!payload) return
-      let text = elementList
-        .map(e =>
+      if (!payload || !elementList || !elementList.length) return
+      const charToElementIndex: number[] = []
+      let text = ''
+      for (let eIdx = 0; eIdx < elementList.length; eIdx++) {
+        const e = elementList[eIdx]
+        const isMatchable =
           !e.type ||
           (TEXTLIKE_ELEMENT_TYPE.includes(e.type) &&
             e.controlComponent !== ControlComponent.CHECKBOX &&
@@ -258,11 +263,17 @@ export class Search {
             !e.control?.hide &&
             !e.area?.hide &&
             !traceParticle.isTraceHidden(e))
-            ? e.value
-            : ZERO
-        )
-        .filter(Boolean)
-        .join('')
+        const val = isMatchable ? e.value : ZERO
+        if (val) {
+          for (let c = 0; c < val.length; c++) {
+            text += val[c]
+            charToElementIndex.push(eIdx)
+          }
+        } else {
+          text += ZERO
+          charToElementIndex.push(eIdx)
+        }
+      }
       if (isIgnoreCase) {
         text = text.toLocaleLowerCase()
       }
@@ -281,16 +292,25 @@ export class Search {
         length = matchResult.length
       }
       for (let m = 0; m < matchList.length; m++) {
-        const { index: startIndex, length: matchLength } = matchList[m]
+        const { index: startCharIndex, length: matchLength } = matchList[m]
         const groupId = getUUID()
+        const matchedElementIndices = new Set<number>()
         for (let i = 0; i < matchLength; i++) {
-          const index = startIndex + i + (restArgs?.startIndex || 0)
-          searchMatchList.push({
-            type,
-            index,
-            groupId,
-            ...restArgs
-          })
+          const charIdx = startCharIndex + i
+          const elementRelIndex = charToElementIndex[charIdx]
+          if (
+            elementRelIndex !== undefined &&
+            !matchedElementIndices.has(elementRelIndex)
+          ) {
+            matchedElementIndices.add(elementRelIndex)
+            const index = elementRelIndex + (restArgs?.startIndex || 0)
+            searchMatchList.push({
+              type,
+              index,
+              groupId,
+              ...restArgs
+            })
+          }
         }
       }
     }

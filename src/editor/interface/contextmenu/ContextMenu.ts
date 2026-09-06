@@ -3,6 +3,7 @@ import { EditorZone } from '../../dataset/enum/Editor'
 import { DeepRequired } from '../Common'
 import { IEditorOption } from '../Editor'
 import { IElement } from '../Element'
+import { ITd } from '../table/Td'
 
 export interface IContextMenuContext {
   startElement: IElement | null
@@ -16,6 +17,7 @@ export interface IContextMenuContext {
   trIndex: number | null
   tdIndex: number | null
   tableElement: IElement | null
+  td?: ITd | null
   options: DeepRequired<IEditorOption>
 }
 
@@ -27,6 +29,7 @@ export interface IRegisterContextMenu {
   name?: string
   shortCut?: string
   disable?: boolean
+  isChecked?: boolean | ((payload: IContextMenuContext) => boolean)
   when?: (payload: IContextMenuContext) => boolean
   callback?: (command: Command, context: IContextMenuContext) => void
   childMenus?: IRegisterContextMenu[]

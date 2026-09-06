@@ -63,6 +63,9 @@ window.onload = function () {
   // 0. 顶层安全的细粒度功能控制 (IFeatureConfig) 状态机与归一化解析器
   // -------------------------------------------------------------
   const DEFAULT_FEATURE_CONFIG = {
+    header: true,
+    footer: true,
+    catalog: true,
     save: true,
     print: true,
     export: true,
@@ -79,6 +82,9 @@ window.onload = function () {
   const resolveFeatureConfig = (features?: any) => {
     if (features === true) {
       return {
+        header: true,
+        footer: true,
+        catalog: true,
         save: true,
         print: true,
         export: true,
@@ -94,6 +100,28 @@ window.onload = function () {
       const isAll = Boolean(features.all)
       const hasAll = features.all !== undefined
       return {
+        header:
+          features.header !== undefined
+            ? Boolean(features.header)
+            : features.toolbar !== undefined
+              ? Boolean(features.toolbar)
+              : hasAll
+                ? isAll
+                : DEFAULT_FEATURE_CONFIG.header,
+        footer:
+          features.footer !== undefined
+            ? Boolean(features.footer)
+            : features.statusBar !== undefined
+              ? Boolean(features.statusBar)
+              : hasAll
+                ? isAll
+                : DEFAULT_FEATURE_CONFIG.footer,
+        catalog:
+          features.catalog !== undefined
+            ? Boolean(features.catalog)
+            : hasAll
+              ? isAll
+              : DEFAULT_FEATURE_CONFIG.catalog,
         save:
           features.save !== undefined
             ? Boolean(features.save)
@@ -199,6 +227,18 @@ window.onload = function () {
     updateComponents,
     setCustomConfig
   })
+
+  // 支持从 URL Query 快速声明 header/footer/catalog 显隐 (如 ?header=false&footer=false&catalog=false)
+  const queryHeader = urlParams.get('header') ?? urlParams.get('toolbar')
+  const queryFooter = urlParams.get('footer') ?? urlParams.get('statusBar')
+  const queryCatalog = urlParams.get('catalog')
+  if (queryHeader !== null || queryFooter !== null || queryCatalog !== null) {
+    setCustomConfig({
+      header: queryHeader !== null ? queryHeader !== 'false' && queryHeader !== '0' : undefined,
+      footer: queryFooter !== null ? queryFooter !== 'false' && queryFooter !== '0' : undefined,
+      catalog: queryCatalog !== null ? queryCatalog !== 'false' && queryCatalog !== '0' : undefined
+    })
+  }
 
   // -------------------------------------------------------------
   // 核心 2：拦截画布全局粘贴 Ctrl+V 中的图片，统一发给宿主 onUploadImage 异步换 OSS 地址
@@ -1348,6 +1388,7 @@ window.onload = function () {
   const searchCollapseDom = document.querySelector<HTMLDivElement>(
     '.menu-item__search__collapse'
   )!
+  searchCollapseDom.setAttribute('editor-component', 'search')
   const searchInputDom = document.querySelector<HTMLInputElement>(
     '.menu-item__search__collapse__search input'
   )!
@@ -1412,7 +1453,18 @@ window.onload = function () {
     searchCaseInputDom &&
     searchSelectionInputDom
   ) {
-    searchInputDom.oninput = emitSearch
+    let isSearchComposing = false
+    searchInputDom.addEventListener('compositionstart', () => {
+      isSearchComposing = true
+    })
+    searchInputDom.addEventListener('compositionend', () => {
+      isSearchComposing = false
+      emitSearch()
+    })
+    searchInputDom.oninput = function () {
+      if (isSearchComposing) return
+      emitSearch()
+    }
     searchRegInputDom.onchange = emitSearch
     searchCaseInputDom.onchange = emitSearch
     searchSelectionInputDom.onchange = emitSearch
@@ -1532,8 +1584,8 @@ window.onload = function () {
       appendCatalog(catalogMainDom, catalog)
     }
   }
-  // 窄屏 / 笔记本视口下默认折叠目录
-  let isCatalogShow = window.innerWidth > 1440
+  // 窄屏 / 笔记本视口下默认折叠目录；若配置关闭 catalog 则初始强制不展开
+  let isCatalogShow = activeFeatureConfig.catalog && window.innerWidth > 1440
   const catalogDom = document.querySelector<HTMLElement>('.catalog')!
   if (catalogDom) {
     catalogDom.classList.toggle('hidden', !isCatalogShow)
@@ -1545,6 +1597,7 @@ window.onload = function () {
     '.catalog__header__close'
   )
   const switchCatalog = () => {
+    if (!activeFeatureConfig.catalog) return
     isCatalogShow = !isCatalogShow
     if (catalogDom) {
       catalogDom.classList.toggle('hidden', !isCatalogShow)
@@ -2230,7 +2283,7 @@ window.onload = function () {
       wordCount || 0
     }`
     // 目录
-    if (isCatalogShow) {
+    if (activeFeatureConfig.catalog && isCatalogShow) {
       nextTick(() => {
         updateCatalog()
       })
@@ -3800,8 +3853,107 @@ window.onload = function () {
     }
 
     // A. 细粒度 Feature 开关控制 (使用顶层安全的 resolveFeatureConfig 解析)
-    if (features !== undefined) {
-      activeFeatureConfig = resolveFeatureConfig(features)
+    const hasHeaderConfig =
+      config.header !== undefined ||
+      (typeof toolbar === 'boolean'
+        ? true
+        : typeof toolbar === 'object' && toolbar !== null
+          ? toolbar.visible !== undefined
+          : false)
+    const hasFooterConfig =
+      config.footer !== undefined || config.statusBar !== undefined
+    const hasCatalogConfig = config.catalog !== undefined
+
+    if (
+      features !== undefined ||
+      hasHeaderConfig ||
+      hasFooterConfig ||
+      hasCatalogConfig
+    ) {
+      const mergedFeatures =
+        typeof features === 'object' && features !== null
+          ? { ...features }
+          : features === true
+            ? { all: true }
+            : {}
+
+      if (config.header !== undefined && mergedFeatures.header === undefined) {
+        mergedFeatures.header = config.header
+      }
+      if (typeof toolbar === 'boolean' && mergedFeatures.header === undefined) {
+        mergedFeatures.header = toolbar
+      } else if (
+        typeof toolbar === 'object' &&
+        toolbar !== null &&
+        toolbar.visible !== undefined &&
+        mergedFeatures.header === undefined
+      ) {
+        mergedFeatures.header = toolbar.visible
+      }
+      if (config.footer !== undefined && mergedFeatures.footer === undefined) {
+        mergedFeatures.footer = config.footer
+      }
+      if (config.statusBar !== undefined && mergedFeatures.footer === undefined) {
+        mergedFeatures.footer = config.statusBar
+      }
+      if (
+        config.catalog !== undefined &&
+        mergedFeatures.catalog === undefined
+      ) {
+        mergedFeatures.catalog = config.catalog
+      }
+
+      activeFeatureConfig = resolveFeatureConfig(mergedFeatures)
+
+      // 0. 顶部功能栏显隐及纯画布自适应收紧
+      const menuDom = document.querySelector<HTMLDivElement>('.menu')
+      const appDom = document.querySelector<HTMLDivElement>('#app')
+      if (menuDom) {
+        menuDom.style.display = activeFeatureConfig.header ? 'flex' : 'none'
+      }
+      if (activeFeatureConfig.header) {
+        document.body.classList.remove('no-header')
+        appDom?.classList.remove('no-header')
+      } else {
+        document.body.classList.add('no-header')
+        appDom?.classList.add('no-header')
+      }
+
+      // 0. 底部状态栏显隐及纯画布自适应贴底
+      const footerDom = document.querySelector<HTMLDivElement>('.footer')
+      if (footerDom) {
+        footerDom.style.display = activeFeatureConfig.footer ? 'flex' : 'none'
+      }
+      if (activeFeatureConfig.footer) {
+        document.body.classList.remove('no-footer')
+        appDom?.classList.remove('no-footer')
+      } else {
+        document.body.classList.add('no-footer')
+        appDom?.classList.add('no-footer')
+      }
+
+      // 0. 目录面板及底部状态栏目录开关显隐控制
+      const catalogEl = document.querySelector<HTMLElement>('.catalog')
+      const catalogBtn = document.querySelector<HTMLDivElement>('.catalog-mode')
+      if (activeFeatureConfig.catalog) {
+        document.body.classList.remove('no-catalog')
+        appDom?.classList.remove('no-catalog')
+        if (catalogBtn) {
+          catalogBtn.style.display = 'inline-flex'
+        }
+      } else {
+        document.body.classList.add('no-catalog')
+        appDom?.classList.add('no-catalog')
+        if (catalogEl) {
+          catalogEl.classList.remove('open')
+          catalogEl.classList.add('hidden')
+        }
+        if (catalogBtn) {
+          catalogBtn.style.display = 'none'
+          catalogBtn.classList.remove('active')
+        }
+        isCatalogShow = false
+      }
 
       // 1. 保存按钮显隐
       if (saveDom) {
@@ -3888,13 +4040,6 @@ window.onload = function () {
         asidePanelDom?.classList.remove('hidden')
         if (asideToggleDom) asideToggleDom.style.display = 'flex'
       }
-    }
-
-    // D. 工具栏显示
-    if (toolbar) {
-      const footerDom = document.querySelector<HTMLDivElement>('.footer')
-      if (footerDom)
-        footerDom.style.display = toolbar.visible === false ? 'none' : 'flex'
     }
   }
 

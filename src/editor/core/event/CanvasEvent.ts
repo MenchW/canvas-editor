@@ -34,6 +34,9 @@ export class CanvasEvent {
   public isAllowSelection: boolean
   public isComposing: boolean
   public compositionInfo: ICompositionInfo | null
+  public lastCompositionData: string | null
+  public lastCompositionTime: number
+  public hasJustComposed: boolean
 
   public isAllowDrag: boolean
   public isAllowDrop: boolean
@@ -59,6 +62,9 @@ export class CanvasEvent {
     this.isAllowSelection = false
     this.isComposing = false
     this.compositionInfo = null
+    this.lastCompositionData = null
+    this.lastCompositionTime = 0
+    this.hasJustComposed = false
     this.isAllowDrag = false
     this.isAllowDrop = false
     this.cacheRange = null

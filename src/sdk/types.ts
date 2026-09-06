@@ -24,7 +24,12 @@ export interface IEditorClientOptions extends IHostHooks {
   config?: {
     /** 初始渲染使用的编辑器模式 */
     mode: TEditorMode
-    asidePanel?: { visible?: boolean }
+    /** 顶部功能栏/工具栏显示开关 (默认: true) */
+    header?: boolean
+    /** 底部功能栏/状态栏显示开关 (默认: true) */
+    footer?: boolean
+    /** 目录面板及底部目录开关显示开关 (默认: true) */
+    catalog?: boolean
     features?: boolean | IFeatureConfig
     /** 动态导出文件名（支持固定字符串或动态生成函数；未配置时默认: 报告_${timestamp}） */
     exportFileName?: string | (() => string)
@@ -51,6 +56,10 @@ export interface IControlDataAuditResult {
   missingControls: IControl[]
   /** 字段 Key 存在但值为假值（排除 0 和 false，如 null, undefined, '', 空数组等）的控件列表 */
   falsyControls: IControl[]
+  /** 别名：missControls (对应 miss) */
+  missControls: IControl[]
+  /** 别名：falseControls (对应 falseControls) */
+  falseControls: IControl[]
 }
 
 /**
@@ -75,10 +84,15 @@ export interface IEditorClient {
 
   /**
    * 检查宿主业务数据与画布控件列表的字段对齐及值有效性情况
-   * @param data 待校验的业务数据对象，缺省时自动使用 getData()
+   * 支持手动传入 template 和 data；缺省时自动从 getTemplate / getData 中查找；若均无则返回异常错误
+   * @param optionsOrTemplateOrData 可为 { template?: any, data?: any }、或手动传入的 template/data
+   * @param customData 当首参为 template 时，次参为可选的业务数据
    * @returns 包含 missingControls (字段缺失) 和 falsyControls (除0和false外的假值) 的结果对象
    */
-  getMissingControlList(data?: Record<string, any>): Promise<IControlDataAuditResult>
+  getMissingControlList(
+    optionsOrTemplateOrData?: { template?: any; data?: any } | any,
+    customData?: Record<string, any>
+  ): Promise<IControlDataAuditResult>
 
 
   /**
@@ -107,6 +121,16 @@ export interface IEditorClient {
 export interface IFeatureConfig {
   /** 快捷通配符：设为 true 一键开启全部功能 */
   all?: boolean
+  /** 顶部功能栏/工具栏 (默认: true 开启；设为 false 时彻底隐藏顶部菜单栏并自适应收紧画布边距) */
+  header?: boolean
+  /** 顶部功能栏/工具栏别名 (等价于 header) */
+  toolbar?: boolean
+  /** 底部功能栏/状态栏 (默认: true 开启；设为 false 时彻底隐藏底部状态栏并自适应贴底) */
+  footer?: boolean
+  /** 底部功能栏/状态栏别名 (等价于 footer) */
+  statusBar?: boolean
+  /** 目录面板及底部目录开关 (默认: true 开启；设为 false 时彻底隐藏目录面板与底部目录按钮) */
+  catalog?: boolean
   /** 保存按钮 (默认: false 隐藏) */
   save?: boolean
   /** 打印按钮 (默认: true 开启) */

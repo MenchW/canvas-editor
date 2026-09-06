@@ -8,6 +8,7 @@ import {
   IContextMenuContext,
   IRegisterContextMenu
 } from '../../interface/contextmenu/ContextMenu'
+import { ITd } from '../../interface/table/Td'
 import { findParent } from '../../utils'
 import { zipElementList } from '../../utils/element'
 import { Command } from '../command/Command'
@@ -152,16 +153,21 @@ export class ContextMenu {
     // 是否存在选区
     const editorHasSelection = editorTextFocus && startIndex !== endIndex
     // 是否在表格内
-    const { isTable, trIndex, tdIndex, index } =
-      this.position.getPositionContext()
+    const positionContext = this.position.getPositionContext()
+    const { isTable, trIndex, tdIndex } = positionContext
     let tableElement: IElement | null = null
+    let td: ITd | null = null
     if (isTable) {
       const originalElementList = this.draw.getOriginalElementList()
-      const originTableElement = originalElementList[index!] || null
+      const originTableElement = this.position.getTableElementByContext(
+        originalElementList,
+        positionContext
+      )
       if (originTableElement) {
         tableElement = zipElementList([originTableElement], {
           extraPickAttrs: ['id']
         })[0]
+        td = originTableElement.trList?.[trIndex!]?.tdList?.[tdIndex!] || null
       }
     }
     // 是否存在跨行/列
@@ -184,6 +190,7 @@ export class ContextMenu {
       trIndex: trIndex ?? null,
       tdIndex: tdIndex ?? null,
       tableElement,
+      td,
       options: this.options
     }
   }
@@ -293,6 +300,17 @@ export class ContextMenu {
           span.classList.add(`${EDITOR_PREFIX}-shortcut`)
           span.append(document.createTextNode(menu.shortCut))
           menuItem.append(span)
+        }
+        // 选中状态提示（对勾）
+        const isChecked =
+          typeof menu.isChecked === 'function'
+            ? menu.isChecked(this.context!)
+            : Boolean(menu.isChecked)
+        if (isChecked) {
+          const checkSpan = document.createElement('span')
+          checkSpan.classList.add(`${EDITOR_PREFIX}-contextmenu-check`)
+          checkSpan.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.5 6.5L4.8 8.8L9.5 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+          menuItem.append(checkSpan)
         }
         contextMenuContent.append(menuItem)
       }

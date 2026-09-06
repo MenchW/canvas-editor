@@ -1,4 +1,4 @@
-import { ElementType, ListStyle, RowFlex, VerticalAlign } from '../..'
+import { ElementType, ListStyle, RowFlex } from '../..'
 import { ZERO } from '../../dataset/constant/Common'
 import { ControlComponent } from '../../dataset/enum/Control'
 import {
@@ -19,6 +19,7 @@ import {
   ITablePositionContext
 } from '../../interface/Position'
 import { Draw } from '../draw/Draw'
+import { TablePositioner } from '../draw/particle/table/TablePositioner'
 import { EditorMode, EditorZone } from '../../dataset/enum/Editor'
 import { deepClone, isRectIntersect } from '../../utils'
 import { ImageDisplay } from '../../dataset/enum/Common'
@@ -36,15 +37,7 @@ export class Position {
   // 片段位置按页索引（命中与片段查找只扫当前页，避免全表线性扫描）
   private tablePagingPositionMap: Map<number, IElementPosition[]>
   private floatPositionList: IFloatPosition[]
-  // 续页回显表头模板缓存（跨页直接平移坐标，消除数百次重复递归排版）
-  private repeatHeaderTemplateMap: Map<
-    IElement,
-    {
-      basePreX: number
-      basePreY: number
-      list: Array<{ td: ITd; positionList: IElementPosition[] }>
-    }
-  >
+  private tablePositioner: TablePositioner
 
   private draw: Draw
   private eventBus: EventBus<EventBusMap>
@@ -54,7 +47,7 @@ export class Position {
     this.positionList = []
     this.tablePagingPositionList = []
     this.tablePagingPositionMap = new Map()
-    this.repeatHeaderTemplateMap = new Map()
+    this.tablePositioner = new TablePositioner(draw, this)
     this.floatPositionList = []
     this.cursorPosition = null
     this.positionContext = {
@@ -402,10 +395,7 @@ export class Position {
       zone,
       tablePosition
     } = payload
-    const {
-      scale,
-      table: { tdPadding }
-    } = this.options
+    const { scale } = this.options
     let x = startX
     let y = startY
     let index = startIndex
@@ -561,173 +551,16 @@ export class Position {
           !element.hide &&
           !traceParticle.isTraceHidden(element)
         ) {
-          const tdPaddingWidth = tdPadding[1] + tdPadding[3]
-          // 遍历片段范围行与进位合并单元格，按窗口计算位置（跨页按页累积）
-          const fragmentTdList = tableFragment
-            ? this.draw
-                .getTableParticle()
-                .getFragmentTdList(element, tableFragment)
-            : element.trList!.flatMap(tr => tr.tdList)
-          for (const td of fragmentTdList) {
-            let isSplitWindow = false
-            let isContinuation = false
-            let windowStart = 0
-            let windowEnd = td.height!
-            if (tableFragment) {
-              ;[windowStart, windowEnd] = this.draw
-                .getTableParticle()
-                .getTdWindowInFragment(td, element, tableFragment)
-              if (windowEnd <= windowStart) continue
-              isSplitWindow = windowStart > 0 || windowEnd < td.height!
-              isContinuation = windowStart > 0
-            }
-            // 拆分窗口：本片段仅计算窗口内的内容行位置
-            let rowList = td.rowList!
-            let startIndex = 0
-            let startRowIndex = 0
-            if (isSplitWindow) {
-              const visible = this.draw
-                .getTableParticle()
-                .getTdVisibleRowListByWindow(td, windowStart, windowEnd)
-              rowList = visible.rowList
-              startIndex = visible.startIndex
-              startRowIndex = visible.startRowIndex
-            }
-            // 片段内单元格内容纵坐标偏移（窗口顶部在片段内的位置）
-            const drawnOffsetY = tableFragment
-              ? this.draw
-                  .getTableParticle()
-                  .getTdWindowOffsetY(windowStart, tableFragment)
-              : 0
-            const curStartX =
-              (td.x! + tdPadding[3]) * scale +
-              tablePreX +
-              (element.translateX || 0) * scale
-            const curStartY =
-              (td.y! + tdPadding[0]) * scale + tablePreY + drawnOffsetY
-
-            // 单元格位置列表缓存复用：未跨页分窗、绝对坐标未变、排版行未变时直接复用
-            const isCanReusePosition =
-              !isSplitWindow &&
-              !isContinuation &&
-              Array.isArray(td.positionList) &&
-              td.positionList.length > 0 &&
-              (td as any)._posStartX === curStartX &&
-              (td as any)._posStartY === curStartY &&
-              (td as any)._posPageNo === pageNo &&
-              (td as any)._posRowList === rowList
-
-            if (!isCanReusePosition) {
-              if (!Array.isArray(td.positionList) || !isContinuation) {
-                td.positionList = []
-              }
-              const tdPositionList = td.positionList
-              const drawRowResult = this.computePageRowPosition({
-                positionList: tdPositionList,
-                rowList,
-                pageNo,
-                startRowIndex,
-                startIndex,
-                startX: curStartX,
-                startY: curStartY,
-                innerWidth: (td.width! - tdPaddingWidth) * scale,
-                isTable: true,
-                index: index - 1,
-                tdIndex: td.tdIndex!,
-                trIndex: td.rowIndex!,
-                zone,
-                tablePosition: positionItem
-              })
-              // 垂直对齐方式（拆分窗口单元格按顶端对齐）
-              if (!isSplitWindow) {
-                this._offsetTdPositionByVerticalAlign(td, tdPositionList)
-              }
-              ;(td as any)._posStartX = curStartX
-              ;(td as any)._posStartY = curStartY
-              ;(td as any)._posPageNo = pageNo
-              ;(td as any)._posRowList = rowList
-              x = drawRowResult.x
-              y = drawRowResult.y
-            }
-          }
-          // 续页回显表头：仅用于绘制的一次性位置，不参与命中
-          if (tableFragment?.repeatTrIndexes?.length) {
-            curRow.repeatTdPositionList = []
-            const cachedTemplate = this.repeatHeaderTemplateMap.get(element)
-            if (cachedTemplate) {
-              const deltaX = tablePreX - cachedTemplate.basePreX
-              const deltaY = tablePreY - cachedTemplate.basePreY
-              for (let c = 0; c < cachedTemplate.list.length; c++) {
-                const item = cachedTemplate.list[c]
-                const clonedPositions: IElementPosition[] = new Array(
-                  item.positionList.length
-                )
-                for (let p = 0; p < item.positionList.length; p++) {
-                  const orig = item.positionList[p]
-                  const { leftTop, rightTop, leftBottom, rightBottom } =
-                    orig.coordinate
-                  clonedPositions[p] = {
-                    ...orig,
-                    pageNo,
-                    coordinate: {
-                      leftTop: [leftTop[0] + deltaX, leftTop[1] + deltaY],
-                      rightTop: [rightTop[0] + deltaX, rightTop[1] + deltaY],
-                      leftBottom: [leftBottom[0] + deltaX, leftBottom[1] + deltaY],
-                      rightBottom: [rightBottom[0] + deltaX, rightBottom[1] + deltaY]
-                    }
-                  }
-                }
-                curRow.repeatTdPositionList.push({
-                  td: item.td,
-                  positionList: clonedPositions
-                })
-              }
-            } else {
-              const templateList: Array<{
-                td: ITd
-                positionList: IElementPosition[]
-              }> = []
-              let repeatAccHeight = 0
-              for (const trIndex of tableFragment.repeatTrIndexes) {
-                const tr = element.trList![trIndex]
-                for (let d = 0; d < tr.tdList.length; d++) {
-                  const td = tr.tdList[d]
-                  const positionList: IElementPosition[] = []
-                  const startX =
-                    (td.x! + tdPadding[3]) * scale +
-                    tablePreX +
-                    (element.translateX || 0) * scale
-                  const startY =
-                    (repeatAccHeight + tdPadding[0]) * scale + tablePreY
-                  this.computePageRowPosition({
-                    positionList,
-                    rowList: td.rowList!,
-                    pageNo,
-                    startRowIndex: 0,
-                    startIndex: 0,
-                    startX,
-                    startY,
-                    innerWidth: (td.width! - tdPaddingWidth) * scale,
-                    isTable: true,
-                    index: index - 1,
-                    tdIndex: d,
-                    trIndex,
-                    zone,
-                    tablePosition: positionItem
-                  })
-                  this._offsetTdPositionByVerticalAlign(td, positionList)
-                  templateList.push({ td, positionList })
-                  curRow.repeatTdPositionList.push({ td, positionList })
-                }
-                repeatAccHeight += tr.height!
-              }
-              this.repeatHeaderTemplateMap.set(element, {
-                basePreX: tablePreX,
-                basePreY: tablePreY,
-                list: templateList
-              })
-            }
-          }
+          this.tablePositioner.computeTablePositions({
+            element,
+            curRow,
+            index,
+            pageNo,
+            tablePreX,
+            tablePreY,
+            positionItem,
+            zone
+          })
           // 恢复初始x、y
           x = tablePreX
           y = tablePreY
@@ -742,56 +575,26 @@ export class Position {
   // 单元格内容按垂直对齐方式偏移位置
   public _offsetTdPositionByVerticalAlign(
     td: ITd,
-    positionList: IElementPosition[]
+    positionList: IElementPosition[],
+    customTdHeight?: number
   ) {
-    this.offsetTdPositionByVerticalAlign(td, positionList)
+    this.tablePositioner.offsetTdPositionByVerticalAlign(
+      td,
+      positionList,
+      customTdHeight
+    )
   }
 
   public offsetTdPositionByVerticalAlign(
     td: ITd,
-    positionList: IElementPosition[]
+    positionList: IElementPosition[],
+    customTdHeight?: number
   ) {
-    if (!td.rowList?.length || !positionList?.length) return
-    // 多行内容默认按顶端对齐，避免居中下移溢出；仅单行或显式声明时居中/靠底
-    const verticalAlign =
-      td.verticalAlign ||
-      (td.rowList.length > 1 ? VerticalAlign.TOP : VerticalAlign.MIDDLE)
-    if (
-      verticalAlign !== VerticalAlign.MIDDLE &&
-      verticalAlign !== VerticalAlign.BOTTOM
-    ) {
-      return
-    }
-    const {
-      scale,
-      table: { tdPadding }
-    } = this.options
-    const tdPaddingTop = tdPadding[0] * scale
-    const tdPaddingBottom = tdPadding[2] * scale
-    const rowsHeight = td.rowList.reduce((pre, cur) => pre + cur.height, 0)
-    const tdHeight = (td.realHeight || td.height!) * scale
-    const maxAvailableContentHeight = Math.max(
-      0,
-      tdHeight - tdPaddingTop - tdPaddingBottom
+    this.tablePositioner.offsetTdPositionByVerticalAlign(
+      td,
+      positionList,
+      customTdHeight
     )
-    const blankHeight = maxAvailableContentHeight - rowsHeight
-    if (blankHeight <= 1) return
-
-    const targetOffset =
-      verticalAlign === VerticalAlign.MIDDLE ? blankHeight / 2 : blankHeight
-    const safeOffset = Math.min(targetOffset, blankHeight)
-
-    if (Math.floor(safeOffset) > 0) {
-      positionList.forEach(tdPosition => {
-        const {
-          coordinate: { leftTop, leftBottom, rightBottom, rightTop }
-        } = tdPosition
-        leftTop[1] += safeOffset
-        leftBottom[1] += safeOffset
-        rightBottom[1] += safeOffset
-        rightTop[1] += safeOffset
-      })
-    }
   }
 
   public computePositionList() {
@@ -799,7 +602,7 @@ export class Position {
     this.positionList = []
     this.tablePagingPositionList = []
     this.tablePagingPositionMap.clear()
-    this.repeatHeaderTemplateMap.clear()
+    this.tablePositioner.clearCache()
     // 按每页行计算
     const innerWidth = this.draw.getInnerWidth()
     const pageRowList = this.draw.getPageRowList()
@@ -856,6 +659,10 @@ export class Position {
 
   public getPositionContext(): IPositionContext {
     return this.positionContext
+  }
+
+  public getTablePositioner(): TablePositioner {
+    return this.tablePositioner
   }
 
   public setPositionContext(payload: IPositionContext) {

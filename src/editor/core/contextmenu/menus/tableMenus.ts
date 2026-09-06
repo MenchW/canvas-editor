@@ -189,6 +189,10 @@ export const tableMenus: IRegisterContextMenu[] = [
         i18nPath: 'contextmenu.table.verticalAlignTop',
         icon: 'vertical-align-top',
         when: () => true,
+        isChecked: context => {
+          const verticalAlign = context.td?.verticalAlign || VerticalAlign.TOP
+          return verticalAlign === VerticalAlign.TOP
+        },
         callback: (command: Command) => {
           command.executeTableTdVerticalAlign(VerticalAlign.TOP)
         }
@@ -198,6 +202,9 @@ export const tableMenus: IRegisterContextMenu[] = [
         i18nPath: 'contextmenu.table.verticalAlignMiddle',
         icon: 'vertical-align-middle',
         when: () => true,
+        isChecked: context => {
+          return context.td?.verticalAlign === VerticalAlign.MIDDLE
+        },
         callback: (command: Command) => {
           command.executeTableTdVerticalAlign(VerticalAlign.MIDDLE)
         }
@@ -207,6 +214,9 @@ export const tableMenus: IRegisterContextMenu[] = [
         i18nPath: 'contextmenu.table.verticalAlignBottom',
         icon: 'vertical-align-bottom',
         when: () => true,
+        isChecked: context => {
+          return context.td?.verticalAlign === VerticalAlign.BOTTOM
+        },
         callback: (command: Command) => {
           command.executeTableTdVerticalAlign(VerticalAlign.BOTTOM)
         }
@@ -230,6 +240,12 @@ export const tableMenus: IRegisterContextMenu[] = [
         i18nPath: 'contextmenu.table.textDirectionHorizontal',
         icon: 'text-direction-horizontal',
         when: () => true,
+        isChecked: context => {
+          return (
+            !context.td?.textDirection ||
+            context.td?.textDirection === TdTextDirection.HORIZONTAL
+          )
+        },
         callback: (command: Command) => {
           command.executeTableTdTextDirection(TdTextDirection.HORIZONTAL)
         }
@@ -239,6 +255,9 @@ export const tableMenus: IRegisterContextMenu[] = [
         i18nPath: 'contextmenu.table.textDirectionVertical',
         icon: 'text-direction-vertical',
         when: () => true,
+        isChecked: context => {
+          return context.td?.textDirection === TdTextDirection.VERTICAL
+        },
         callback: (command: Command) => {
           command.executeTableTdTextDirection(TdTextDirection.VERTICAL)
         }

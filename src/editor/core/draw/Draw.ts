@@ -82,7 +82,7 @@ import {
   getIsBlockElement,
   getSlimCloneElementList,
   pickSurroundElementList,
-  unzipElementList,
+  getControlEndIndex,
   zipElementList
 } from '../../utils/element'
 import { CheckboxParticle } from './particle/CheckboxParticle'
@@ -93,7 +93,6 @@ import {
   ControlIndentation
 } from '../../dataset/enum/Control'
 import { formatElementList } from '../../utils/element'
-import { shrinkColgroupToWidth } from '../../utils/table'
 import { WorkerManager } from '../worker/WorkerManager'
 import { Previewer } from './particle/previewer/Previewer'
 import { DateParticle } from './particle/date/DateParticle'
@@ -132,22 +131,8 @@ import { Badge } from './frame/Badge'
 import { Graffiti } from './graffiti/Graffiti'
 import { Magnifier } from './interactive/Magnifier'
 import { Accessibility } from '../accessibility/Accessibility'
-
-export function getTdFingerprint(td: ITd, mode?: EditorMode): string {
-  const val = td.value
-  const len = val ? val.length : 0
-  if (len === 0) return `0_${mode || ''}`
-  let imgDims = ''
-  for (let i = 0; i < len; i++) {
-    const el = val[i]
-    if (el?.type === ElementType.IMAGE) {
-      imgDims += `_img${i}:${el.width}x${el.height}`
-    }
-  }
-  if (len === 1) return `1_${val[0].value || ''}_${val[0].size || ''}_${mode || ''}${imgDims}`
-  const mid = len >> 1
-  return `${len}_${val[0].value || ''}_${val[mid].value || ''}_${val[len - 1].value || ''}_${val[0].size || ''}_${mode || ''}${imgDims}`
-}
+import { TableLayout, getTdFingerprint } from './particle/table/TableLayout'
+export { getTdFingerprint }
 
 
 export class Draw {
@@ -189,6 +174,7 @@ export class Draw {
   private laTexParticle: LaTexParticle
   private textParticle: TextParticle
   private tableParticle: TableParticle
+  private tableLayout: TableLayout
   private tablePaging: TablePaging
   private tableTool: TableTool
   private tableOperate: TableOperate
@@ -283,6 +269,7 @@ export class Draw {
     this.laTexParticle = new LaTexParticle(this)
     this.textParticle = new TextParticle(this)
     this.tableParticle = new TableParticle(this)
+    this.tableLayout = new TableLayout(this)
     this.tablePaging = new TablePaging(this)
     this.tableTool = new TableTool(this)
     this.tableOperate = new TableOperate(this)
@@ -876,6 +863,31 @@ export class Draw {
       this.control.initControl()
       activeControl = this.control.getActiveControl()
     }
+    // 核心安全防线：控件内禁止嵌套叠加控件或单选/复选框（除表格外）
+    // 若插入控件类元素且光标在控件内，跳出当前控件，在末尾之后并列插入
+    const isControlLike = payload.some(
+      el =>
+        el.type === ElementType.CONTROL ||
+        el.type === ElementType.CHECKBOX ||
+        el.type === ElementType.RADIO ||
+        el.controlId
+    )
+    if (isControlLike && this.control.getIsRangeWithinControl()) {
+      const elementList = this.getElementList()
+      const controlEndIndex = getControlEndIndex(elementList, startIndex)
+      if (~controlEndIndex) {
+        // 直接在当前控件最外层 POSTFIX 后面并列插入，坚决杜绝递归重入死循环
+        const start = controlEndIndex + 1
+        this.spliceElementList(elementList, start, 0, payload)
+        curIndex = controlEndIndex + payload.length
+        this.range.setRange(curIndex, curIndex)
+        this.render({
+          curIndex,
+          isSubmitHistory
+        })
+        return
+      }
+    }
     if (activeControl && this.control.getIsRangeWithinControl()) {
       curIndex = activeControl.setValue(payload, undefined, {
         isIgnoreDisabledRule: true
@@ -1082,6 +1094,10 @@ export class Draw {
 
   public getTableParticle(): TableParticle {
     return this.tableParticle
+  }
+
+  public getTableLayout(): TableLayout {
+    return this.tableLayout
   }
 
   public getBlockParticle(): BlockParticle {
@@ -1756,168 +1772,22 @@ export class Draw {
           }
         }
       } else if (element.type === ElementType.TABLE) {
-        const tdPaddingWidth = tdPadding[1] + tdPadding[3]
-        const tdPaddingHeight = tdPadding[0] + tdPadding[2]
-        // 表格跨页在渲染层拆分行（数据层保持单一表格）
-        const trList = element.trList!
-        // 表格不允许超出正文区域时：等比例压缩列宽至内容区内，并清除横向偏移
-        if (!overflow) {
-          shrinkColgroupToWidth(
-            element.colgroup!,
-            this.getOriginalInnerWidth(),
-            defaultColMinWidth
-          )
-          element.translateX = 0
-        }
-        // 初次排版或尚未初始化几何信息时计算行列
-        const isFirstTableLayout = !element.height
-        if (isFirstTableLayout) {
-          this.tableParticle.computeRowColInfo(element)
-        }
-        const tdMinHeight =
-          tdPaddingHeight + defaultSize + (rowMargin * 2) / scale
-
-        // 1. 计算表格内各单元格内容排版与实际内容高度（仅对脏单元格计算）
-        let hasAnyTdHeightChanged = isFirstTableLayout
-        for (let t = 0; t < trList.length; t++) {
-          const tr = trList[t]
-          for (let d = 0; d < tr.tdList.length; d++) {
-            const td = tr.tdList[d]
-            const curValue = td.value
-            const curFingerprint = getTdFingerprint(td, this.mode)
-
-            // 极速短路：单元格排版结果存在且特征指纹、模式、宽度、缩放、文字方向完全一致时直接复用
-            if (
-              td.rowList &&
-              td.mainHeight !== undefined &&
-              (td as any)._lastFingerprint === curFingerprint &&
-              (td as any)._lastMode === this.mode &&
-              (td as any)._lastWidth === td.width &&
-              ((td as any)._lastScale === undefined || (td as any)._lastScale === scale) &&
-              ((td as any)._lastTextDir === undefined || (td as any)._lastTextDir === td.textDirection)
-            ) {
-              ;(td as any)._lastScale = scale
-              ;(td as any)._lastTextDir = td.textDirection
-              continue
-            }
-
-            if (curValue?.length && !(td as any)._isUnzipped) {
-              const hasLongText = curValue.some(
-                el =>
-                  el.type !== ElementType.IMAGE &&
-                  el.type !== ElementType.LATEX &&
-                  el.type !== ElementType.SEPARATOR &&
-                  el.type !== ElementType.TABLE &&
-                  el.value &&
-                  el.value.length > 1
-              )
-              if (hasLongText) {
-                td.value = unzipElementList(curValue)
-                td.value.forEach(el => {
-                  el.tdId = td.id
-                  el.trId = tr.id
-                  el.tableId = element.id
-                })
-              }
-              ;(td as any)._isUnzipped = true
-            }
-
-            const targetInnerWidth = (td.width! - tdPaddingWidth) * scale
-            const rowList = this.computeRowList({
-              innerWidth: targetInnerWidth,
-              elementList: td.value,
-              isFromTable: true,
-              isPagingMode,
-              textDirection: td.textDirection
-            })
-            const rowHeight = rowList.reduce((pre, cur) => pre + cur.height, 0)
-            td.rowList = rowList
-            // 移除缩放导致的行高变化-渲染时会进行缩放调整，向上取整并为多行文本保留动态行距呼吸裕度，彻底撑高单元格
-            const extraPadding =
-              rowList.length > 1 ? Math.max(12, rowList.length * 2 + 8) : 0
-            const curTdHeight =
-              Math.ceil(rowHeight / scale + tdPaddingHeight + extraPadding)
-
-            if (td.mainHeight !== curTdHeight) {
-              hasAnyTdHeightChanged = true
-            }
-            td.mainHeight = curTdHeight
-
-            // 记录排版指纹
-            ;(td as any)._lastFingerprint = curFingerprint
-            ;(td as any)._lastMode = this.mode
-            ;(td as any)._lastValue = td.value
-            ;(td as any)._lastLen = td.value?.length || 0
-            ;(td as any)._lastWidth = td.width
-            ;(td as any)._lastScale = scale
-            ;(td as any)._lastTextDir = td.textDirection
-          }
-        }
-
-        // 2~4. 自适应推导：仅在初次排版或有单元格内容高度发生变动时执行
-        if (hasAnyTdHeightChanged) {
-          // 2. 第一轮自适应：由单行单元格（rowspan === 1）的最大内容高度确定各行高度
-          for (let t = 0; t < trList.length; t++) {
-            const tr = trList[t]
-            let maxSingleHeight = Math.max(tdMinHeight, tr.minHeight || 0)
-            for (let d = 0; d < tr.tdList.length; d++) {
-              const td = tr.tdList[d]
-              if (td.rowspan === 1) {
-                maxSingleHeight = Math.max(maxSingleHeight, td.mainHeight || 0)
-              }
-            }
-            tr.height = maxSingleHeight
-          }
-
-          // 3. 第二轮自适应：由跨行合并单元格（rowspan > 1）补齐高度差额
-          for (let t = 0; t < trList.length; t++) {
-            const tr = trList[t]
-            for (let d = 0; d < tr.tdList.length; d++) {
-              const td = tr.tdList[d]
-              if (td.rowspan > 1) {
-                let spannedHeight = 0
-                for (let r = 0; r < td.rowspan; r++) {
-                  spannedHeight += (trList[t + r] || tr).height
-                }
-                if (spannedHeight < td.mainHeight!) {
-                  const diff = td.mainHeight! - spannedHeight
-                  const lastTr = trList[t + td.rowspan - 1] || tr
-                  lastTr.height += diff
-                }
-              }
-            }
-          }
-
-          // 4. 最终同步每个单元格的 height 与 realHeight
-          for (let t = 0; t < trList.length; t++) {
-            const tr = trList[t]
-            for (let d = 0; d < tr.tdList.length; d++) {
-              const td = tr.tdList[d]
-              let totalHeight = 0
-              let totalMinHeight = 0
-              for (let r = 0; r < td.rowspan; r++) {
-                const curTr = trList[t + r] || tr
-                totalHeight += curTr.height
-                totalMinHeight += curTr.minHeight || tdMinHeight
-              }
-              td.height = totalHeight
-              td.realHeight = totalHeight
-              td.realMinHeight = totalMinHeight
-            }
-          }
-          // 重新同步表格行列几何信息
-          this.tableParticle.computeRowColInfo(element)
-        }
-        // 计算出表格高度
-        const tableHeight = this.tableParticle.getTableHeight(element)
-        const tableWidth = this.tableParticle.getTableWidth(element)
-        element.width = tableWidth
-        element.height = tableHeight
-        const elementWidth = tableWidth * scale
-        const elementHeight = tableHeight * scale
-        metrics.width = elementWidth
-        metrics.height = elementHeight
-        metrics.boundingBoxDescent = elementHeight
+        const tableDims = this.tableLayout.computeTableLayout({
+          element,
+          scale,
+          defaultSize,
+          rowMargin,
+          tdPadding,
+          defaultColMinWidth,
+          overflow,
+          mode: this.mode,
+          isPagingMode,
+          getOriginalInnerWidth: this.getOriginalInnerWidth.bind(this),
+          computeRowList: this.computeRowList.bind(this)
+        })
+        metrics.width = tableDims.width
+        metrics.height = tableDims.height
+        metrics.boundingBoxDescent = tableDims.height
         metrics.boundingBoxAscent = -rowMargin
         // 后一个元素也是表格则移除行间距
         if (elementList[i + 1]?.type === ElementType.TABLE) {
@@ -2197,7 +2067,12 @@ export class Draw {
           !(element.area?.hide && !this.isAreaHideDisabled())) ||
         (i !== 0 &&
           textDirection === TdTextDirection.VERTICAL &&
-          preElement?.value !== ZERO)
+          preElement?.value !== ZERO &&
+          !(
+            this.mode === EditorMode.PREVIEW_EDIT &&
+            (preElement?.controlComponent === ControlComponent.PREFIX ||
+              element.controlComponent === ControlComponent.POSTFIX)
+          ))
       // 是否宽度不足导致换行
       const isWidthNotEnough = curRowWidth > availableWidth
       const isWrap = isForceBreak || isWidthNotEnough
@@ -2443,13 +2318,24 @@ export class Draw {
       // 每页页眉/页脚禁用状态可能不同，按页计算外部占位高度
       let pageHeight = this.getMainOuterHeight(0)
       let prevColumnIndex: number | undefined = undefined
+      let isCurrentPageCreatedByOverflow = false
       const isRowEmpty = (r?: IRow) => {
         if (!r || r.isPageBreak || r.tableFragment) return false
         return r.elementList.every(el => {
+          if (el.hide || (el.area?.hide && !this.isAreaHideDisabled())) {
+            return true
+          }
           if (el.type && el.type !== ElementType.TEXT) return false
           if (el.control || el.controlComponent) return false
           if (el.underline || el.strikeout || el.highlight) return false
-          return !el.value || el.value === '\n' || el.value === '\r'
+          const val = el.value
+          return (
+            !val ||
+            val === '\n' ||
+            val === '\r' ||
+            val === ZERO ||
+            val.trim() === ''
+          )
         })
       }
       const isRemainingRowsEmpty = (startIndex: number) => {
@@ -2470,10 +2356,25 @@ export class Draw {
         if (columnChanged) {
           pageHeight = this.getMainOuterHeight(pageNo) + row.height + rowOffsetY
           pageRowList[pageNo].push(row)
+          isCurrentPageCreatedByOverflow = false
         } else if (
           row.height + rowOffsetY + pageHeight > height ||
           this.rowList[i - 1]?.isPageBreak
         ) {
+          const isPrePageBreak = !!this.rowList[i - 1]?.isPageBreak
+          // 关键防御：如果上一行是分页符，且当前页是因为前一页高度自然溢出而新建的空页，且当前页在遇到该分页符前没有任何实质内容：
+          // 说明该分页符本就是因前页放不下而溢出到新页顶部的，它已位于新页，绝不能再次触发二次换页产生完全空白页
+          if (
+            isPrePageBreak &&
+            isCurrentPageCreatedByOverflow &&
+            pageRowList[pageNo].every(r => r.isPageBreak || isRowEmpty(r))
+          ) {
+            isCurrentPageCreatedByOverflow = false
+            pageHeight = this.getMainOuterHeight(pageNo) + row.height + rowOffsetY
+            pageRowList[pageNo].push(row)
+            prevColumnIndex = row.columnIndex
+            continue
+          }
           if (Number.isInteger(maxPageNo) && pageNo >= maxPageNo!) {
             // 跨页表格片段共享元素索引：按片段边界裁剪表格，
             // 保留已展示片段内容，不能直接按共享索引整体截断
@@ -2509,9 +2410,13 @@ export class Draw {
           pageNo++
           pageHeight = this.getMainOuterHeight(pageNo) + row.height + rowOffsetY
           pageRowList.push([row])
+          isCurrentPageCreatedByOverflow = !isPrePageBreak
         } else {
           pageHeight += row.height + rowOffsetY
           pageRowList[pageNo].push(row)
+          if (!isRowEmpty(row) && !row.isPageBreak) {
+            isCurrentPageCreatedByOverflow = false
+          }
         }
         prevColumnIndex = row.columnIndex
       }
@@ -3106,7 +3011,7 @@ export class Draw {
     this.blockParticle.clear()
   }
 
-  private _drawPage(payload: IDrawPagePayload) {
+  public _drawPage(payload: IDrawPagePayload) {
     const { elementList, positionList, rowList, pageNo } = payload
     const {
       inactiveAlpha,
@@ -3282,87 +3187,12 @@ export class Draw {
 
     // 拼音合成（IME Composing）期极速局部排版通道：
     // 在表格单元格打拼音期间，若单元格高度未撑破当前行，仅更新当前单元格排版并重绘当前页，彻底跳过全局54页重排
-    const positionContext = this.position.getPositionContext()
-    if (isComposing && positionContext.isTable && curIndex !== undefined) {
-      const originalElementList = this.getOriginalElementList()
-      const td = this.position.getTableTdByContext(originalElementList, positionContext)
-      const tableElement = this.position.getTableElementByContext(originalElementList, positionContext)
-      if (td && tableElement) {
-        const scale = this.options.scale
-        const tdPadding = this.options.table.tdPadding
-        const tdPaddingWidth = tdPadding[1] + tdPadding[3]
-        const targetInnerWidth = (td.width! - tdPaddingWidth) * scale
-        const rowList = this.computeRowList({
-          innerWidth: targetInnerWidth,
-          elementList: td.value,
-          isFromTable: true,
-          isPagingMode: false,
-          textDirection: td.textDirection
-        })
-        const rowHeight = rowList.reduce((pre, cur) => pre + cur.height, 0)
-        const tdPaddingHeight = tdPadding[0] + tdPadding[2]
-        const extraPadding = rowList.length > 1 ? Math.max(12, rowList.length * 2 + 8) : 0
-        const curTdHeight = Math.ceil(rowHeight / scale + tdPaddingHeight + extraPadding)
-
-        // 仅在单元格高度未超出既有行高度时走局部极速渲染（绝大多数拼音输入场景）
-        if (curTdHeight <= (td.realHeight || td.height || 0)) {
-          td.rowList = rowList
-          const curFp = getTdFingerprint(td, this.mode)
-          ;(td as any)._lastFingerprint = curFp
-          ;(td as any)._lastMode = this.mode
-          ;(td as any)._lastValue = td.value
-          ;(td as any)._lastLen = td.value?.length || 0
-          ;(td as any)._lastWidth = td.width
-          ;(td as any)._lastScale = scale
-          ;(td as any)._lastTextDir = td.textDirection
-
-          const cursorPosition = this.position.getCursorPosition()
-          const curPageNo = cursorPosition ? cursorPosition.pageNo : this.getPageNo()
-          const curStartX = (td as any)._posStartX || 0
-          const curStartY = (td as any)._posStartY || 0
-          td.positionList = []
-          this.position.computePageRowPosition({
-            positionList: td.positionList,
-            rowList,
-            pageNo: curPageNo,
-            startRowIndex: 0,
-            startIndex: 0,
-            startX: curStartX,
-            startY: curStartY,
-            innerWidth: targetInnerWidth,
-            isTable: true,
-            index: (positionContext.index || 1) - 1,
-            tdIndex: td.tdIndex!,
-            trIndex: td.rowIndex!,
-            zone: EditorZone.MAIN
-          })
-          this.position.offsetTdPositionByVerticalAlign(td, td.positionList)
-          ;(td as any)._posRowList = rowList
-
-          // 重绘当前页
-          if (this.pageRowList[curPageNo]) {
-            this._drawPage({
-              elementList: this.getOriginalMainElementList(),
-              positionList: this.position.getOriginalMainPositionList(),
-              rowList: this.pageRowList[curPageNo],
-              pageNo: curPageNo
-            })
-          }
-
-          // 光标重绘
-          if (isSetCursor) {
-            curIndex = this.setCursor(curIndex)
-          }
-
-          const total = performance.now() - perfStart
-          console.log(
-            `%c[Render Perf (FastComposing)]%c total=${total.toFixed(1)}ms | cell fast rendered (0ms lag)`,
-            'color: #4caf50; font-weight: bold',
-            'color: inherit'
-          )
-          return
-        }
-      }
+    if (isComposing) {
+      const fastHandled = this.tableLayout.tryFastLayoutCell({
+        curIndex,
+        isSetCursor
+      })
+      if (fastHandled) return
     }
 
     let tRow = 0
@@ -3528,6 +3358,8 @@ export class Draw {
         this.position.getPositionContext().isTable
       ) {
         this.tableTool.render()
+      } else if (isCompute) {
+        this.tableTool.dispose()
       }
       // 页眉指示器重新渲染
       if (isCompute && !this.zone.isMainActive()) {
@@ -3621,6 +3453,7 @@ export class Draw {
       // 跨页表格光标所在片段可能变化，光标确定后重新锚定表格工具
       this.tableTool.render()
     } else {
+      this.tableTool.dispose()
       let cursorPosition =
         curIndex !== undefined ? positionList[curIndex] : null
       const pageNo = this.getPageNo()
@@ -3696,6 +3529,27 @@ export class Draw {
         isShowCursor = false
         const position = this.position.getCursorPosition()
         this.previewer.updateResizer(element, position)
+      } else {
+        this.previewer.clearResizer()
+      }
+    } else if (this.previewer.getIsResizerVisible()) {
+      // 当前非直接命中有效图片元素时，若尺寸调整器仍残留显示，主动销毁
+      const curPreviewEl = this.previewer.getCurElement()
+      const allElements = this.getOriginalElementList()
+      let isStillExist = false
+      if (curPreviewEl) {
+        isStillExist = allElements.some(el => {
+          if (el === curPreviewEl) return true
+          if (el.type === ElementType.TABLE && el.trList) {
+            return el.trList.some(tr =>
+              tr.tdList.some(td => td.value && td.value.includes(curPreviewEl))
+            )
+          }
+          return false
+        })
+      }
+      if (!isStillExist || !positionContext.isDirectHit) {
+        this.previewer.clearResizer()
       }
     }
     this.cursor.drawCursor({

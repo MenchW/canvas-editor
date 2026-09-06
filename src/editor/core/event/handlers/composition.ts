@@ -21,6 +21,7 @@ function compositionend(host: CanvasEvent, evt: CompositionEvent) {
     'color: inherit'
   )
   host.isComposing = false
+  host.lastCompositionData = evt.data || null
   // 处理输入框关闭
   const draw = host.getDraw()
   // 不存在值：删除合成输入
@@ -37,19 +38,22 @@ function compositionend(host: CanvasEvent, evt: CompositionEvent) {
     if (isFirefox) {
       // 如果为0，火狐浏览器会在input事件之前执行导致重复输入
       setTimeout(() => {
-        if (host.compositionInfo) {
+        if (host.compositionInfo || draw.getControl().getIsRangeWithinControl()) {
           input(evt.data, host)
         }
       }, 1)
     } else {
-      if (host.compositionInfo) {
-        input(evt.data, host)
-      }
+      input(evt.data, host)
     }
   }
   // 移除代理输入框数据
   const cursor = draw.getCursor()
   cursor.clearAgentDomValue()
+  host.lastCompositionTime = performance.now()
+  host.hasJustComposed = true
+  setTimeout(() => {
+    host.hasJustComposed = false
+  }, 120)
   console.log(
     `[IME-Lifecycle] compositionend 完成，耗时: ${(performance.now() - tStart).toFixed(1)}ms`
   )

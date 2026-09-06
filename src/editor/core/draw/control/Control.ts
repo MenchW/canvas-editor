@@ -512,13 +512,24 @@ export class Control {
     if (!this.activeControl) return
     const isSubscribeControlChange = this.eventBus.isSubscribe('controlChange')
     if (!this.listener.controlChange && !isSubscribeControlChange) return
-    let control: IControl
+    let control: IControl | undefined
     const value = this.activeControlValue
     const activeElement = this.activeControl.getElement()
     if (value?.length) {
-      control = zipElementList(value)[0].control!
-    } else {
-      control = pickElementAttr(deepClone(activeElement)).control!
+      try {
+        const zipList = zipElementList(value)
+        control = zipList.find(el => el.control)?.control
+      } catch {
+        // ignore zip error
+      }
+    }
+    if (!control) {
+      control =
+        pickElementAttr(deepClone(activeElement)).control ||
+        deepClone((this.activeControl as any)?.getControl?.())
+    }
+    if (!control) return
+    if (!control.value) {
       control.value = []
     }
     const payload: IControlChangeResult = {
@@ -1131,25 +1142,46 @@ export class Control {
     const elementList = context.elementList || this.getElementList()
     const startElement = elementList[startIndex]
     const nextElement = elementList[startIndex + 1]
-    if (
-      startElement.controlComponent === ControlComponent.PLACEHOLDER ||
-      nextElement.controlComponent === ControlComponent.PLACEHOLDER
-    ) {
-      let isHasSubmitHistory = false
-      let index = startIndex
-      while (index < elementList.length) {
-        const curElement = elementList[index]
-        if (curElement.controlId !== startElement.controlId) break
-        if (curElement.controlComponent === ControlComponent.PLACEHOLDER) {
-          // 删除占位符时替换前一个历史记录
-          if (!isHasSubmitHistory) {
-            isHasSubmitHistory = true
-            this.draw.getHistoryManager().popUndo()
-            this.draw.submitHistory(startIndex)
-          }
-          elementList.splice(index, 1)
-        } else {
-          index++
+    const targetControlId =
+      startElement?.controlId || nextElement?.controlId
+    if (!targetControlId) return
+
+    let prefixIndex = -1
+    let placeholderCount = 0
+
+    for (let i = 0; i < elementList.length; i++) {
+      const el = elementList[i]
+      if (el?.controlId === targetControlId) {
+        if (el.controlComponent === ControlComponent.PREFIX) {
+          prefixIndex = i
+        }
+        if (el.controlComponent === ControlComponent.PLACEHOLDER) {
+          placeholderCount++
+        }
+      }
+    }
+
+    if (placeholderCount > 0) {
+      this.draw.getHistoryManager().popUndo()
+      this.draw.submitHistory(startIndex)
+
+      for (let i = elementList.length - 1; i >= 0; i--) {
+        const el = elementList[i]
+        if (
+          el?.controlId === targetControlId &&
+          el.controlComponent === ControlComponent.PLACEHOLDER
+        ) {
+          elementList.splice(i, 1)
+        }
+      }
+
+      const rangeManager = this.draw.getRange()
+      const currentRange = context.range || rangeManager.getRange()
+      if (prefixIndex !== -1) {
+        currentRange.startIndex = prefixIndex
+        currentRange.endIndex = prefixIndex
+        if (!context.range) {
+          rangeManager.setRange(prefixIndex, prefixIndex)
         }
       }
     }
@@ -1556,20 +1588,80 @@ export class Control {
     options: IControlRuleOption = {}
   ): number {
     const isPreviewEdit = this.draw.getMode() === EditorMode.PREVIEW_EDIT
-    // 1. 收集选区 [startIndex ... endIndex] 内触及的所有控件 controlId
-    const touchedControlIds = new Set<string>()
-    for (let i = startIndex; i <= endIndex; i++) {
-      const cId = elementList[i]?.controlId
-      if (cId) {
-        touchedControlIds.add(cId)
+
+    // 1. 删除前扫描：收集触及的 controlId 及其初始结构与是否有值
+    const isDeleteFromZero = startIndex === 0
+    const startAt = isDeleteFromZero ? 1 : startIndex + 1
+    const deleteCount = isDeleteFromZero ? endIndex : endIndex - startIndex
+    const deleteEndAt = startAt + deleteCount - 1
+
+    interface IControlPreInfo {
+      hadValueBefore: boolean
+      hasPrefixBefore: boolean
+      hasPostfixBefore: boolean
+      isPrefixSelected: boolean
+      isPostfixSelected: boolean
+      sampleElement: IElement | null
+    }
+
+    const controlPreInfoMap = new Map<string, IControlPreInfo>()
+
+    for (let i = 0; i < elementList.length; i++) {
+      const el = elementList[i]
+      const cId = el?.controlId
+      if (!cId) continue
+
+      // 仅关注选区范围 [startIndex ... endIndex] 触及的控件
+      const isTouched = i >= startIndex && i <= endIndex
+      if (!controlPreInfoMap.has(cId)) {
+        if (!isTouched) continue
+        controlPreInfoMap.set(cId, {
+          hadValueBefore: false,
+          hasPrefixBefore: false,
+          hasPostfixBefore: false,
+          isPrefixSelected: false,
+          isPostfixSelected: false,
+          sampleElement: el
+        })
+      }
+
+      const info = controlPreInfoMap.get(cId)!
+      if (
+        el.controlComponent === ControlComponent.VALUE ||
+        el.controlComponent === ControlComponent.CHECKBOX ||
+        el.controlComponent === ControlComponent.RADIO
+      ) {
+        if (el.value && el.value !== ZERO) {
+          info.hadValueBefore = true
+        } else if (
+          el.type === ElementType.IMAGE ||
+          el.controlComponent === ControlComponent.CHECKBOX ||
+          el.controlComponent === ControlComponent.RADIO
+        ) {
+          info.hadValueBefore = true
+        }
+      }
+      if (
+        el.controlComponent === ControlComponent.PREFIX ||
+        el.controlComponent === ControlComponent.PRE_TEXT
+      ) {
+        info.hasPrefixBefore = true
+        if (i >= startAt && i <= deleteEndAt) {
+          info.isPrefixSelected = true
+        }
+      }
+      if (
+        el.controlComponent === ControlComponent.POSTFIX ||
+        el.controlComponent === ControlComponent.POST_TEXT
+      ) {
+        info.hasPostfixBefore = true
+        if (i >= startAt && i <= deleteEndAt) {
+          info.isPostfixSelected = true
+        }
       }
     }
 
     // 2. 执行选区元素删除
-    const isDeleteFromZero = startIndex === 0
-    const startAt = isDeleteFromZero ? 1 : startIndex + 1
-    const deleteCount = isDeleteFromZero ? endIndex : endIndex - startIndex
-
     if (deleteCount > 0) {
       this.draw.deleteElementList(elementList, startAt, deleteCount, options)
     }
@@ -1578,14 +1670,16 @@ export class Control {
       elementList[0] = { value: ZERO }
     }
 
+    let curResultIndex = startIndex
+
     // 3. 对受影响的控件进行闭环安全清理与前后缀自愈
-    if (touchedControlIds.size > 0) {
-      touchedControlIds.forEach(controlId => {
+    if (controlPreInfoMap.size > 0) {
+      controlPreInfoMap.forEach((preInfo, controlId) => {
         const indices: number[] = []
         let hasValue = false
         let hasPrefix = false
         let hasPostfix = false
-        let sampleElement: IElement | null = null
+        let sampleElement = preInfo.sampleElement
 
         for (let i = 0; i < elementList.length; i++) {
           const el = elementList[i]
@@ -1597,7 +1691,15 @@ export class Control {
               el.controlComponent === ControlComponent.CHECKBOX ||
               el.controlComponent === ControlComponent.RADIO
             ) {
-              hasValue = true
+              if (el.value && el.value !== ZERO) {
+                hasValue = true
+              } else if (
+                el.type === ElementType.IMAGE ||
+                el.controlComponent === ControlComponent.CHECKBOX ||
+                el.controlComponent === ControlComponent.RADIO
+              ) {
+                hasValue = true
+              }
             }
             if (
               el.controlComponent === ControlComponent.PREFIX ||
@@ -1617,14 +1719,29 @@ export class Control {
         if (indices.length === 0) return
 
         if (!hasValue) {
-          // 该控件的内容已被全部删空
-          if (isPreviewEdit) {
-            // 无痕模式下：将其残留的前后缀/占位符全部彻底清除，不留任何痕迹
+          // 该控件已无任何实际内容
+          // 判定是否应彻底整块移除：
+          // 1) 无痕模式下必须彻底销毁
+          // 2) 删除前本来就是无内容的空白占位符（用户选了空白占位符删除，意图即销毁该占位符）
+          // 3) 选区破坏了前后缀闭环（!hasPrefix || !hasPostfix || preInfo.isPrefixSelected || preInfo.isPostfixSelected）
+          const shouldDestroyWholeControl =
+            isPreviewEdit ||
+            !preInfo.hadValueBefore ||
+            !hasPrefix ||
+            !hasPostfix ||
+            preInfo.isPrefixSelected ||
+            preInfo.isPostfixSelected
+
+          if (shouldDestroyWholeControl) {
             for (let k = indices.length - 1; k >= 0; k--) {
-              this.draw.deleteElementList(elementList, indices[k], 1, options)
+              const delIdx = indices[k]
+              this.draw.deleteElementList(elementList, delIdx, 1, options)
+              if (delIdx <= curResultIndex) {
+                curResultIndex = Math.max(0, curResultIndex - 1)
+              }
             }
           } else if (sampleElement?.control?.placeholder) {
-            // 普通模式下：若只剩前后缀，恢复占位符
+            // 普通编辑态下：仅在原先有值、且用户仅清空文本未破坏前后缀时，恢复占位符
             const firstIdx = indices[0]
             if (hasPrefix && hasPostfix) {
               this.addPlaceholder(firstIdx, { elementList })
@@ -1650,6 +1767,9 @@ export class Control {
               isPlaceholder: false
             }
             this.draw.spliceElementList(elementList, firstIdx, 0, [prefixNode])
+            if (firstIdx <= curResultIndex) {
+              curResultIndex++
+            }
           }
 
           if (!hasPostfix) {
@@ -1700,7 +1820,7 @@ export class Control {
       })
     }
 
-    return startIndex
+    return curResultIndex
   }
 
   private dispatchSetControlValue(

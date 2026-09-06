@@ -9,6 +9,37 @@ This guide provides essential information for agentic coding agents working on t
 3. **外部宿主与回显通信**：宿主系统（Parent Page）与编辑器的所有交互均通过标准的 SDK 协议（`EditorClient` / `postMessage`，如 `SET_CONTROL_VALUE`、`GET_CONTROL_VALUE` 等）进行数据下发与提取。
 4. **数据驱动理念**：根据数据源类型（标量、一维数组、对象数组、嵌套数组）自动决定渲染形态（单字段、多段分段列表、多段勾选框、动态循环表格、自动单元格合并及单元格嵌套多图）。
 
+## 严禁“拆东墙补西墙”：防退化开发准则与全局影响评估机制（核心铁律）
+
+富文本与结构化控件底层高度交织联动，任何看似微小的按键拦截、删除逻辑或换行处理，若缺乏全局视野，极易导致“修好 A 控件却改崩 B 控件、修好编辑态却搞崩无痕态、修好段落却搞坏表格”的恶性退化。所有参与本项目的 Agent 和开发者必须严格遵守以下准则：
+
+### 1. 修改前：全局场景影响评估矩阵（必查）
+在动笔修改任何按键事件（Backspace / Delete / Enter）、控件行为或选区测算前，必须自查以下 5 大核心场景：
+- **普通正文文本**：打字输入、普通回车换行、普通退格删除、跨行大选区删除、撤销重做（Undo/Redo）。
+- **普通有内容控件（Text/Date/Select）**：当控件内部已有用户填写的实际内容时，花括号外按退格键**绝对不可误删整块控件**，必须安全将光标落入内容末尾逐步删除；回车必须保持普通换行行为。
+- **列表与复合控件（List Text/Checkbox/Radio）**：在花括号后按退格时整块删除空或列表项控件；在非空项按回车时自动递增序号并克隆同类型未勾选控件；在连续空项按回车时安全退化退出列表。
+- **表格内上下文（In-Table Context）**：单元格内按回车是否导致单元格高度撑高或异常跨页；单元格内控件的退格是否会破坏单元格元素结构（TD 起始/结束符）。
+- **不同运行模式与视觉态**：`EDIT`（编辑态）、`CLEAN`（无痕/打印态，花括号不显示）、`READONLY`（只读态）、`FORM`（表单填写态）。
+
+### 2. 开发中：三层精准隔离与防御原则
+- **严禁粗暴一刀切**：绝对禁止直接在全局按键处理器根分支（如 `backspace.ts` 顶层、`enter.ts` 兜底）添加宽泛的 `return` 或拦截，必须使用最窄的条件判定（如 `controlComponent === ControlComponent.POSTFIX && isListControl`）。
+- **专用逻辑收敛封装**：特定控件专属的键盘或渲染行为，必须抽取为独立纯函数（如 `tryHandleListControlEnter`、`getNextPrefixNumber`），并配合单元测试独立验证其边界条件。
+- **选区与历史栈对称更新**：凡涉及批量插入、克隆控件或删除元素，必须严格确保 `range` 选区指向正确的落点，且不可丢失或污染编辑器的 Undo/Redo 历史快照。
+
+### 3. 交付前：闭环全量回归验证规范（必测）
+- **全量单元测试 100% 绿灯**：每次提交前必须在本地运行全量单测套件：
+  ```bash
+  npx vitest run
+  ```
+  保证全量 560+ 项测试完全通过，任何 1 项失败均视为不可接受的退化。
+- **新增场景专门用例覆盖**：针对本次改动的核心场景，必须在 `tests/` 对应模块中新增自动化测试用例（覆盖正向操作、反向退格、极值空项、递增边界）。
+- **静态类型与代码规范检查**：
+  ```bash
+  npm run lint && npm run type:check
+  ```
+  严禁引入任何 TypeScript 类型报错或 ESLint 警告。
+
+
 ## Project Overview
 
 Canvas Editor is a TypeScript-based rich text editor library that renders content using HTML5 Canvas/SVG. It's built as an ES module with comprehensive TypeScript support and follows modern development practices.

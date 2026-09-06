@@ -1,8 +1,8 @@
 /**
  * @file 宿主客户端 SDK 模块
- * @version 1.0.2
+ * @version 1.0.3
  * @author menchw
- * @updateTime 2026-09-02
+ * @updateTime 2026-09-05
  */
 
 import { connect, WindowMessenger } from 'penpal'
@@ -423,46 +423,128 @@ export class EditorClient implements IEditorClient {
   }
 
   /**
-   * 检查宿主业务数据与画布控件列表的字段对齐与假值情况
-   * 若无画布对象则通过 getTemplate 获取控件，缺省数据时自动通过 getData 获取
+   * 检查宿主业务数据与画布/模板控件列表的字段对齐与假值情况
+   * 支持手动传 template 和 data：
+   * - 若显式传入，则基于传入的 template 与 data 筛选出 missingControls 与 falsyControls；
+   * - 若缺省，则自动回退至 options.getTemplate / options.getData 获取；
+   * - 若只传其中一个，另一个自动回退至 getTemplate 或 getData；
+   * - 若最终仍缺少 template 或 data，则抛出明确的异常错误。
    */
   public async getMissingControlList(
-    data?: Record<string, any>
+    optionsOrTemplateOrData?: { template?: any; data?: any } | any,
+    customData?: Record<string, any>
   ): Promise<IControlDataAuditResult> {
-    const controls = await this.getControlList()
-    if (!controls || controls.length === 0) {
-      return { missingControls: [], falsyControls: [] }
+    let explicitTemplate: any = undefined
+    let explicitData: any = undefined
+
+    // 1. 参数解析与解构
+    if (optionsOrTemplateOrData && typeof optionsOrTemplateOrData === 'object') {
+      if ('template' in optionsOrTemplateOrData || 'data' in optionsOrTemplateOrData) {
+        // 对象入参模式：{ template?: any, data?: any }
+        explicitTemplate = optionsOrTemplateOrData.template
+        explicitData = optionsOrTemplateOrData.data
+      } else if (customData !== undefined) {
+        // 双参模式：(template, data)
+        explicitTemplate = optionsOrTemplateOrData
+        explicitData = customData
+      } else {
+        // 单参模式：根据结构智能区分是 template 还是 data
+        const isTemplateLike =
+          Array.isArray(optionsOrTemplateOrData) ||
+          optionsOrTemplateOrData.main !== undefined ||
+          optionsOrTemplateOrData.header !== undefined ||
+          optionsOrTemplateOrData.footer !== undefined ||
+          (optionsOrTemplateOrData.data &&
+            (optionsOrTemplateOrData.data.main !== undefined ||
+              optionsOrTemplateOrData.data.header !== undefined))
+        if (isTemplateLike) {
+          explicitTemplate = optionsOrTemplateOrData
+        } else if (Object.keys(optionsOrTemplateOrData).length > 0) {
+          explicitData = optionsOrTemplateOrData
+        }
+      }
+    } else if (customData !== undefined) {
+      explicitData = customData
     }
 
-    let targetData = data || this.lastFilledData
+    // 2. 解析与获取 controls（模板与控件列表）
+    let controls: IControl[] | null = null
 
-    // 若未传参且未缓存过数据，则尝试从 getData 拉取业务数据
-    if (!targetData && this.options.getData) {
+    if (explicitTemplate !== undefined && explicitTemplate !== null) {
+      controls = this.extractControlsFromTemplate(explicitTemplate)
+    } else if (this.options.getTemplate) {
+      // 未显式传 template，去 options.getTemplate 中查找
       try {
-        targetData =
-          typeof this.options.getData === 'function'
-            ? await this.options.getData()
-            : this.options.getData
-        if (
-          targetData &&
-          typeof targetData === 'object' &&
-          !Array.isArray(targetData)
-        ) {
-          this.lastFilledData = targetData
+        const t =
+          typeof this.options.getTemplate === 'function'
+            ? await this.options.getTemplate()
+            : this.options.getTemplate
+        if (t !== undefined && t !== null) {
+          controls = this.extractControlsFromTemplate(t)
         }
       } catch (err) {
-        console.error('[EditorClient SDK] getMissingControlList 从 getData 获取数据失败:', err)
+        console.error('[EditorClient SDK] getMissingControlList 从 getTemplate 获取模板失败:', err)
       }
     }
 
-    if (
-      !targetData ||
-      typeof targetData !== 'object' ||
-      Object.keys(targetData).length === 0
-    ) {
-      return { missingControls: [], falsyControls: [] }
+    // 若依然未获取到 controls，尝试降级读取画布或通过 getControlList 获取
+    if (controls === null) {
+      try {
+        const list = await this.getControlList()
+        if (Array.isArray(list) && (list.length > 0 || this.editorRpc)) {
+          controls = list
+        }
+      } catch {
+        // ignore
+      }
     }
 
+    if (controls === null) {
+      throw new Error(
+        '[EditorClient SDK] getMissingControlList 校验失败：缺少有效的 template 参数，且未配置或无法通过 getTemplate/画布 获取控件列表'
+      )
+    }
+
+    // 3. 解析与获取 targetData（业务数据）
+    let targetData: Record<string, any> | null = null
+    let dataSourceFound = false
+
+    if (explicitData !== undefined && explicitData !== null) {
+      if (typeof explicitData === 'object' && !Array.isArray(explicitData)) {
+        targetData = explicitData
+        dataSourceFound = true
+      }
+    } else {
+      // 未显式传 data，去 options.getData 中查找
+      if (this.options.getData) {
+        try {
+          const d =
+            typeof this.options.getData === 'function'
+              ? await this.options.getData()
+              : this.options.getData
+          if (d && typeof d === 'object' && !Array.isArray(d)) {
+            targetData = d
+            dataSourceFound = true
+            this.lastFilledData = d
+          }
+        } catch (err) {
+          console.error('[EditorClient SDK] getMissingControlList 从 getData 获取数据失败:', err)
+        }
+      }
+      // 若 getData 未配置或未获取到，降级尝试使用历史填充数据
+      if (!dataSourceFound && this.lastFilledData) {
+        targetData = this.lastFilledData
+        dataSourceFound = true
+      }
+    }
+
+    if (!dataSourceFound || targetData === null) {
+      throw new Error(
+        '[EditorClient SDK] getMissingControlList 校验失败：缺少有效的 data 参数，且未配置或无法通过 getData 获取业务数据'
+      )
+    }
+
+    // 4. 筛选 missingControls 和 falsyControls
     const missingControls: IControl[] = []
     const falsyControls: IControl[] = []
 
@@ -484,7 +566,9 @@ export class EditorClient implements IEditorClient {
 
     return {
       missingControls,
-      falsyControls
+      falsyControls,
+      missControls: missingControls,
+      falseControls: falsyControls
     }
   }
 
@@ -562,6 +646,19 @@ export class EditorClient implements IEditorClient {
   public async exportPdf(): Promise<void> {
     if (this.editorRpc) {
       await this.editorRpc.executeExportPdf()
+    }
+  }
+
+  /**
+   * 动态更新编辑器配置（如动态显示/隐藏顶部功能栏或底部状态栏）
+   */
+  public async setConfig(config: any): Promise<void> {
+    if (this.editorRpc) {
+      this.options.config = {
+        ...this.options.config,
+        ...config
+      }
+      await this.editorRpc.setCustomConfig(this.options.config)
     }
   }
 

@@ -121,6 +121,7 @@ import {
   isElementTraceDeleted,
   zipElementList,
   getAnchorElement,
+  getControlEndIndex,
   pickSurroundElementList
 } from '../../utils/element'
 import { mergeOption } from '../../utils/option'
@@ -420,6 +421,7 @@ export class CommandAdapt {
   public blur() {
     this.range.clearRange()
     this.draw.getCursor().recoveryCursor()
+    this.draw.getTableTool().dispose()
   }
 
   public hideCursor() {
@@ -1494,6 +1496,7 @@ export class CommandAdapt {
   public search(payload: string | null, options?: ISearchOption) {
     this.searchManager.setSearchKeyword(payload, options)
     this.draw.render({
+      isSetCursor: false,
       isSubmitHistory: false
     })
   }
@@ -2088,8 +2091,31 @@ export class CommandAdapt {
     }
     const cloneElementList = deepClone(payload)
     // 格式化上下文信息
-    const { startIndex } = this.range.getRange()
+    let { startIndex } = this.range.getRange()
     const elementList = this.draw.getElementList()
+    // 控件内部禁止嵌套叠加任何新控件或单选/复选框（除表格外）：
+    // 若插入控件类元素且光标处于已有控件内部，自动后移至当前控件末尾之后插入
+    const isControlLike = cloneElementList.some(
+      el =>
+        el.type === ElementType.CONTROL ||
+        el.type === ElementType.CHECKBOX ||
+        el.type === ElementType.RADIO ||
+        el.controlId
+    )
+    if (isControlLike && ~startIndex) {
+      const anchorElement = elementList[startIndex]
+      if (
+        anchorElement?.controlId &&
+        anchorElement.controlComponent !== ControlComponent.POSTFIX &&
+        anchorElement.controlComponent !== ControlComponent.POST_TEXT
+      ) {
+        const controlEndIndex = getControlEndIndex(elementList, startIndex)
+        if (~controlEndIndex) {
+          startIndex = controlEndIndex
+          this.range.setRange(startIndex, startIndex)
+        }
+      }
+    }
     formatElementContext(elementList, cloneElementList, startIndex, {
       ignoreContextKeys,
       isBreakWhenWrap: true,
@@ -2727,17 +2753,19 @@ export class CommandAdapt {
       startIndex = elementList.length ? elementList.length - 1 : 0
       this.range.setRange(startIndex, startIndex)
     }
-    // 仅允许 TEXT 与 IMAGE 控件作为外层嵌套其他控件，且允许在控件结尾处正常插入
+    // 控件内部禁止叠加嵌套任何新控件（除表格外）：
+    // 若光标处于已有控件内部，自动将插入点后移至当前控件末尾之后，使形态变为 {控件1}{控件2}
     const anchorElement = elementList[startIndex]
     if (
       anchorElement?.controlId &&
-      anchorElement.control?.type !== ControlType.TEXT &&
-      anchorElement.control?.type !== ControlType.IMAGE &&
       anchorElement.controlComponent !== ControlComponent.POSTFIX &&
-      anchorElement.controlComponent !== ControlComponent.POST_TEXT &&
-      cloneElement.type === ElementType.CONTROL
+      anchorElement.controlComponent !== ControlComponent.POST_TEXT
     ) {
-      return
+      const controlEndIndex = getControlEndIndex(elementList, startIndex)
+      if (~controlEndIndex) {
+        startIndex = controlEndIndex
+        this.range.setRange(startIndex, startIndex)
+      }
     }
     const copyElement =
       getAnchorElement(elementList, startIndex) ||

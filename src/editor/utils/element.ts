@@ -2206,11 +2206,64 @@ export function getOutermostOwner(
     }
     i--
   }
-  const outerCandidate = elementList[i - 1]?.controlId
-  if (outerCandidate && outerCandidate !== ownerId) {
-    return getOutermostOwner(elementList, i - 1)
+  const outerEl = elementList[i - 1]
+  if (
+    outerEl?.controlId &&
+    outerEl.controlId !== ownerId &&
+    outerEl.controlComponent !== ControlComponent.POSTFIX &&
+    outerEl.controlComponent !== ControlComponent.POST_TEXT
+  ) {
+    const outerId = outerEl.controlId
+    let hasOuterPostfixAfter = false
+    for (let j = index + 1; j < elementList.length; j++) {
+      if (elementList[j]?.controlId === outerId) {
+        hasOuterPostfixAfter = true
+        break
+      }
+    }
+    if (hasOuterPostfixAfter) {
+      return getOutermostOwner(elementList, i - 1)
+    }
   }
   return ownerId
+}
+
+/**
+ * 查找当前光标所在控件（或其所属最外层控件）的末尾元素索引（通常为 POSTFIX 所在位置）。
+ * 若不在控件内，返回 -1。
+ */
+export function getControlEndIndex(
+  elementList: IElement[],
+  index: number
+): number {
+  if (!elementList || index < 0 || index >= elementList.length) return -1
+  const ownerId =
+    getOutermostOwner(elementList, index) || elementList[index]?.controlId
+  if (!ownerId) return -1
+
+  let endIndex = index
+  for (let i = index; i < elementList.length; i++) {
+    const el = elementList[i]
+    if (el.controlId === ownerId) {
+      endIndex = i
+      if (
+        el.controlComponent === ControlComponent.POSTFIX ||
+        el.controlComponent === ControlComponent.POST_TEXT
+      ) {
+        break
+      }
+    } else if (endIndex > index) {
+      let hasLater = false
+      for (let j = i + 1; j < elementList.length; j++) {
+        if (elementList[j]?.controlId === ownerId) {
+          hasLater = true
+          break
+        }
+      }
+      if (!hasLater) break
+    }
+  }
+  return endIndex
 }
 
 // 深度遍历元素树（含表格单元格、控件/标题子列表）

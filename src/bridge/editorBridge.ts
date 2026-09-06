@@ -10,7 +10,15 @@ import {
   evaluateWhenCondition
 } from '../editor/utils/index'
 import { ZERO } from '../editor/dataset/constant/Common'
-import { applyDeclaredSameMerge } from '../editor/utils/dataEngine'
+import {
+  applyDeclaredSameMerge,
+  renderCompositeDetailTrs,
+  isImageField,
+  isImageValue,
+  isImageConceptName
+} from '../editor/utils/dataEngine'
+
+export { isImageField, isImageValue, isImageConceptName }
 
 /** 轻量模板行克隆（复用不变的单元格样式属性，仅克隆动态结构与元素数组，降低 GC 压力） */
 function cloneTrTemplate(tr: any): any {
@@ -60,7 +68,8 @@ export function expandLoopTables(
   elementList: any[],
   businessData: any,
   parentContext: any = null,
-  depth = 0
+  depth = 0,
+  isDesignMode = false
 ) {
   if (!Array.isArray(elementList) || depth > 20) return
 
@@ -68,7 +77,13 @@ export function expandLoopTables(
     if (!Array.isArray(tdList)) return
     tdList.forEach((td: any) => {
       if (Array.isArray(td.value)) {
-        expandLoopTables(td.value, businessData, context, depth + 1)
+        expandLoopTables(
+          td.value,
+          businessData,
+          context,
+          depth + 1,
+          isDesignMode
+        )
       }
     })
   }
@@ -79,7 +94,8 @@ export function expandLoopTables(
 
     // 关键保护：首次遇到表格时，备份其纯净的原始模板结构 rawTrList
     // 确保无论点击多少次回显按钮，每次都是基于原始模板进行展开计算，具备绝对幂等性
-    if (!el.rawTrList) {
+    // 若处于设计模式 (isDesignMode)，重新备份当前结构
+    if (!el.rawTrList || isDesignMode) {
       el.rawTrList = deepClone(el.trList)
     }
 
@@ -157,121 +173,16 @@ export function expandLoopTables(
               newTrList.push(clonedHeaderTr)
             })
 
-            // 2. 紧接着渲染当前 groupItem 的子明细行（智能支持 3 级树形嵌套与多明细行）
-            const secondLevelTr = detailTemplateTrs[0]
-            const thirdLevelTr = detailTemplateTrs[1]
-            const isThreeLevelNesting =
-              secondLevelTr &&
-              thirdLevelTr &&
-              secondLevelTr.loopConfig?.itemAlias &&
-              (thirdLevelTr.loopConfig?.sourcePath?.startsWith(
-                secondLevelTr.loopConfig.itemAlias + '.'
-              ) ||
-                thirdLevelTr.loopConfig?.datasetId?.startsWith(
-                  secondLevelTr.loopConfig.itemAlias + '.'
-                ) ||
-                thirdLevelTr.loopConfig?.sourcePath ===
-                  `${secondLevelTr.loopConfig.itemAlias}.children`)
-
-            if (isThreeLevelNesting) {
-              // 3 层树形嵌套：Project -> Content -> Item
-              const secondDatasetId = secondLevelTr.loopConfig?.datasetId
-              const secondData =
-                groupItem && typeof groupItem === 'object'
-                  ? (secondDatasetId ? groupItem[secondDatasetId] : null) ||
-                    groupItem.children ||
-                    groupItem.items ||
-                    groupItem.data ||
-                    groupItem.tableData
-                  : null
-              const secondRows =
-                Array.isArray(secondData) && secondData.length > 0
-                  ? secondData
-                  : [null]
-
-              secondRows.forEach((secondItem: any) => {
-                // 2.1 渲染二级分类行
-                if (
-                  !secondLevelTr.when ||
-                  !secondItem ||
-                  evaluateWhenCondition(secondLevelTr.when, secondItem)
-                ) {
-                  const clonedContentTr = cloneTrTemplate(secondLevelTr)
-                  remapControlIdsAndCollect(clonedContentTr, secondItem)
-                  walkTd(clonedContentTr.tdList, secondItem)
-                  newTrList.push(clonedContentTr)
-                }
-
-                // 2.2 渲染三级明细行
-                let thirdDatasetId = thirdLevelTr.loopConfig?.datasetId || ''
-                if (
-                  secondLevelTr.loopConfig?.itemAlias &&
-                  thirdDatasetId.startsWith(
-                    secondLevelTr.loopConfig.itemAlias + '.'
-                  )
-                ) {
-                  thirdDatasetId = thirdDatasetId.slice(
-                    secondLevelTr.loopConfig.itemAlias.length + 1
-                  )
-                }
-                const thirdData =
-                  secondItem && typeof secondItem === 'object'
-                    ? (thirdDatasetId ? secondItem[thirdDatasetId] : null) ||
-                      secondItem.children ||
-                      secondItem.items ||
-                      secondItem.data ||
-                      secondItem.tableData
-                    : null
-                const thirdRows =
-                  Array.isArray(thirdData) && thirdData.length > 0
-                    ? thirdData
-                    : [null]
-
-                thirdRows.forEach((thirdItem: any) => {
-                  if (
-                    thirdLevelTr.when &&
-                    thirdItem &&
-                    !evaluateWhenCondition(thirdLevelTr.when, thirdItem)
-                  ) {
-                    return
-                  }
-                  const clonedDetailTr = cloneTrTemplate(thirdLevelTr)
-                  remapControlIdsAndCollect(clonedDetailTr, thirdItem)
-                  walkTd(clonedDetailTr.tdList, thirdItem)
-                  newTrList.push(clonedDetailTr)
-                })
-              })
-            } else {
-              detailTemplateTrs.forEach((detailTr: any) => {
-                const subDatasetId = detailTr.loopConfig?.datasetId
-                const subData =
-                  groupItem && typeof groupItem === 'object'
-                    ? (subDatasetId ? groupItem[subDatasetId] : null) ||
-                      groupItem.children ||
-                      groupItem.items ||
-                      groupItem.data ||
-                      groupItem.tableData
-                    : null
-                const subRows = Array.isArray(subData)
-                  ? subData
-                  : groupItem
-                  ? []
-                  : [null]
-
-                subRows.forEach((subItem: any) => {
-                  if (
-                    detailTr.when &&
-                    subItem &&
-                    !evaluateWhenCondition(detailTr.when, subItem)
-                  ) {
-                    return
-                  }
-                  const clonedDetailTr = cloneTrTemplate(detailTr)
-                  remapControlIdsAndCollect(clonedDetailTr, subItem)
-                  walkTd(clonedDetailTr.tdList, subItem)
-                  newTrList.push(clonedDetailTr)
-                })
-              })
+            // 2. 紧接着通用递归渲染子明细行（通用支持任意深度 N 级树形嵌套与多明细行）
+            if (detailTemplateTrs.length > 0) {
+              const expandedDetailTrs = renderCompositeDetailTrs(
+                detailTemplateTrs,
+                groupItem,
+                loopConfig.itemAlias,
+                walkTd,
+                remapControlIdsAndCollect
+              )
+              newTrList.push(...expandedDetailTrs)
             }
           })
 
@@ -595,32 +506,10 @@ function remapControlIdsAndCollect(
               const placeholderColor =
                 token.control?.placeholderColor ?? '#9c9b9b'
 
-              // 1. 判断是否为图片（显式声明 type: image，字段名含 img/photo/pic，或者值本身为图片 URL / 对象）
-              const isImgField =
-                token.control?.type === 'image' ||
-                (token.control as any)?.type === 'image' ||
-                conceptId.toLowerCase().includes('img') ||
-                conceptId.toLowerCase().includes('image') ||
-                conceptId.toLowerCase().includes('photo') ||
-                conceptId.toLowerCase().includes('pic') ||
-                (typeof subVal === 'string' &&
-                  (subVal.startsWith('http://') ||
-                    subVal.startsWith('https://') ||
-                    subVal.startsWith('data:image/'))) ||
-                (typeof subVal === 'object' &&
-                  subVal !== null &&
-                  Boolean(subVal.url || subVal.src)) ||
-                (Array.isArray(subVal) &&
-                  subVal.some(
-                    (it: any) =>
-                      (typeof it === 'string' &&
-                        (it.startsWith('http') ||
-                          it.startsWith('data:image'))) ||
-                      it?.url ||
-                      it?.src
-                  ))
+              // 1. 精准判断是否为图片（显式声明 type: image，字段名匹配图片正则，或者值本身为有效图片 URL / 对象）
+              const isImg = isImageField(token.control, conceptId, subVal)
 
-              if (isImgField) {
+              if (isImg) {
                 // 多图 / 单图列表渲染
                 const rawUrls =
                   subVal !== undefined && subVal !== null && subVal !== ''
@@ -636,7 +525,7 @@ function remapControlIdsAndCollect(
                   )
                   .filter(
                     (v: string) =>
-                      v && (v.startsWith('http') || v.startsWith('data:image'))
+                      v && isImageValue(v)
                   )
 
                 if (validImages.length > 0) {
@@ -902,21 +791,7 @@ function remapControlIdsAndCollect(
       }
 
       // 判断是否为图片字段
-      const isImgField =
-        control?.type === 'image' ||
-        (control as any)?.type === 'image' ||
-        conceptId.toLowerCase().includes('img') ||
-        conceptId.toLowerCase().includes('image') ||
-        conceptId.toLowerCase().includes('photo') ||
-        conceptId.toLowerCase().includes('pic') ||
-        (Array.isArray(val) &&
-          val.some(
-            (it: any) =>
-              (typeof it === 'string' &&
-                (it.startsWith('http') || it.startsWith('data:image'))) ||
-              it?.url ||
-              it?.src
-          ))
+      const isImgField = isImageField(control, conceptId, val)
 
       const matchingIndices: number[] = []
       for (let k = 0; k < td.value.length; k++) {
@@ -937,8 +812,7 @@ function remapControlIdsAndCollect(
             typeof v === 'object' ? v.url || v.src || String(v) : String(v)
           )
           .filter(
-            (v: string) =>
-              v && (v.startsWith('http') || v.startsWith('data:image'))
+            (v: string) => v && isImageValue(v)
           )
 
         const newNodes: any[] = []
@@ -1478,7 +1352,10 @@ export class EditorBridge {
         const originalElementList = (
           this.instance.command as any
         ).getOriginalElementList()
-        expandLoopTables(originalElementList, data)
+        const isDesignMode = Boolean(
+          (this.instance.command as any).isDesignMode?.()
+        )
+        expandLoopTables(originalElementList, data, null, 0, isDesignMode)
 
         // 2. 批量向所有控件（文本、单选、多选、多图等）填充值并由 Control 体系多态展开
         const rootValues = toControlValueList(data)

@@ -520,7 +520,14 @@ export class RangeManager {
     // 选取元素列表
     const curElementList = this.getSelection() || [curElement]
     // 类型
-    const type = curElement.type || ElementType.TEXT
+    let type = curElement.type || ElementType.TEXT
+    if (curElementList.length) {
+      if (curElementList.every(el => el.type === ElementType.SUPERSCRIPT)) {
+        type = ElementType.SUPERSCRIPT
+      } else if (curElementList.every(el => el.type === ElementType.SUBSCRIPT)) {
+        type = ElementType.SUBSCRIPT
+      }
+    }
     // 富文本
     const font = curElement.font || this.options.defaultFont
     const size = curElement.size || this.options.defaultSize

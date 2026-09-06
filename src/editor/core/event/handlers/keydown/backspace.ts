@@ -342,7 +342,40 @@ export function backspace(evt: KeyboardEvent, host: CanvasEvent) {
   if (curTargetElement?.type === ElementType.IMAGE) {
     if ((curTargetElement as any)._isImageDeleting) {
       delete (curTargetElement as any)._isImageDeleting
-      if (curTargetElement?.controlId) {
+      const isList =
+        curTargetElement?.control?.listType === 'image' ||
+        Boolean(curTargetElement?.control?.listType) ||
+        (curTargetElement?.control?.type as any) === 'list'
+      if (curTargetElement?.controlId && isList) {
+        // 多图列表控件：退格仅删除当前选中的这一张图片
+        draw.deleteElementList(elementList, index, 1)
+        const newIdx = Math.max(0, index - 1)
+        const remainImages = elementList.filter(
+          el => el.controlId === cId && el.type === ElementType.IMAGE
+        )
+        const cleanImages = remainImages.map(img => {
+          const copy = { ...img }
+          delete copy.control
+          delete copy.controlComponent
+          delete copy.controlId
+          return copy
+        })
+        for (let i = 0; i < elementList.length; i++) {
+          if (elementList[i]?.controlId === cId && elementList[i].control) {
+            elementList[i].control!.value = cleanImages
+          }
+        }
+        if (remainImages.length === 0) {
+          if (isPreviewEdit) {
+            curIndex = control.removeControl(newIdx)
+          } else {
+            control.addPlaceholder(newIdx)
+            curIndex = newIdx
+          }
+        } else {
+          curIndex = newIdx
+        }
+      } else if (curTargetElement?.controlId) {
         curIndex = control.removeControl(index)
       } else {
         draw.deleteElementList(elementList, index, 1)
@@ -361,7 +394,42 @@ export function backspace(evt: KeyboardEvent, host: CanvasEvent) {
   ) {
     curIndex = control.removeControl(index)
   } else if (curTargetElement?.controlComponent === ControlComponent.POSTFIX) {
-    curIndex = Math.max(0, index - 1)
+    const isListControl = Boolean(
+      curTargetElement?.control?.listType ||
+        (curTargetElement?.control?.type as any) === 'list' ||
+        curTargetElement?.control?.type === ControlType.CHECKBOX ||
+        curTargetElement?.control?.type === ControlType.RADIO
+    )
+    if (isListControl) {
+      if (isPreviewEdit) {
+        // 无痕模式下花括号不可见，末尾退格不应整块销毁控件，而是安全将光标落入末尾内容项逐步删除
+        curIndex = Math.max(0, index - 1)
+      } else {
+        curIndex = control.removeControl(index)
+      }
+    } else {
+      // 检查普通控件内是否含有实际 VALUE 内容
+      const targetCId = curTargetElement.controlId
+      let hasValue = false
+      if (targetCId) {
+        for (let i = 0; i < elementList.length; i++) {
+          if (
+            elementList[i]?.controlId === targetCId &&
+            elementList[i]?.controlComponent === ControlComponent.VALUE
+          ) {
+            hasValue = true
+            break
+          }
+        }
+      }
+      if (!hasValue) {
+        // 未填写的空占位符控件：在花括号后退格直接整体删除
+        curIndex = control.removeControl(index)
+      } else {
+        // 已有内容的文本控件：将光标安全移入控件末尾，供用户逐字编辑，绝不误删整段文字
+        curIndex = Math.max(0, index - 1)
+      }
+    }
   } else if (cId && curTargetElement?.controlComponent === ControlComponent.VALUE) {
     // 控件内单字删除：仅删除当前选中的这 1 个字符
     draw.deleteElementList(elementList, index, 1)

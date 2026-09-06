@@ -268,12 +268,15 @@
     .info-bar {
       font-size: 11px;
       color: #64748b;
-      padding: 6px 16px;
+      padding: 8px 16px;
+      background: rgba(15, 23, 42, 0.8);
       border-top: 1px solid var(--border);
-      background: rgba(15, 23, 42, 0.6);
+      font-size: 11px;
+      color: var(--text-muted);
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-shrink: 0;
     }
   </style>
 </head>
@@ -316,6 +319,16 @@
 
     <!-- 右侧：SDK 实时方法输出结果 -->
     <div class="column">
+      <!-- 多入参调用模式切换栏 -->
+      <div class="mode-bar">
+        <span style="font-size: 12px; color: #94a3b8; font-weight: 600;">🛠️ 调用模式：</span>
+        <button class="mode-btn active" data-mode="data">① 单参: (data)</button>
+        <button class="mode-btn" data-mode="object">② 对象: { template, data }</button>
+        <button class="mode-btn" data-mode="double">③ 双参: (template, data)</button>
+        <button class="mode-btn" data-mode="none">④ 无参: () 缺省回退</button>
+        <button class="mode-btn" data-mode="error">⑤ 🛡️ 异常拦截测试</button>
+      </div>
+
       <!-- 统计指标 -->
       <div class="stats-bar">
         <div class="stat-card stat-total">
@@ -520,30 +533,122 @@
       console.log('[EditorClient 纯数据模式] getControlList 输出:', list)
     }
 
-    // 2. 执行数据审计
-    document.getElementById('btnAudit').onclick = async () => {
+    let currentMode = 'data'
+    const modeButtons = document.querySelectorAll('.mode-btn')
+
+    modeButtons.forEach(btn => {
+      btn.onclick = () => {
+        modeButtons.forEach(b => b.classList.remove('active'))
+        btn.classList.add('active')
+        currentMode = btn.getAttribute('data-mode')
+        runAudit(currentMode)
+      }
+    })
+
+    // 执行数据审计主函数
+    async function runAudit(mode = 'data') {
       const res = createClient()
       if (!res) return
       const t0 = performance.now()
 
-      const controls = await res.client.getControlList()
-      const auditResult = await res.client.getMissingControlList(res.dataJson)
+      let auditResult = null
+      let codeSnippet = ''
+      let errorOccurred = null
+
+      try {
+        switch (mode) {
+          case 'data':
+            // 模式 1：智能单参模式（传 data，template 自动从 getTemplate 回退）
+            codeSnippet = 'await client.getMissingControlList(businessData)'
+            auditResult = await res.client.getMissingControlList(res.dataJson)
+            break
+          case 'object':
+            // 模式 2：对象传参模式 { template, data }
+            codeSnippet = 'await client.getMissingControlList({ template, data: businessData })'
+            auditResult = await res.client.getMissingControlList({
+              template: res.templateJson,
+              data: res.dataJson
+            })
+            break
+          case 'double':
+            // 模式 3：双参模式 (template, data)
+            codeSnippet = 'await client.getMissingControlList(template, businessData)'
+            auditResult = await res.client.getMissingControlList(
+              res.templateJson,
+              res.dataJson
+            )
+            break
+          case 'none':
+            // 模式 4：无参缺省模式 ()，依赖 options.getTemplate / options.getData
+            codeSnippet = 'await client.getMissingControlList() // 自动依赖 getTemplate/getData'
+            auditResult = await res.client.getMissingControlList()
+            break
+          case 'error':
+            // 模式 5：异常防御测试（传入空对象缺少数据源，预期抛出友好错误）
+            codeSnippet = 'await client.getMissingControlList({}) // 触发缺少 data 校验'
+            // 临时创建一个既无 getData 也无传入 data 的客户端
+            const emptyClient = new EditorClient({
+              getTemplate: () => res.templateJson
+            })
+            auditResult = await emptyClient.getMissingControlList({})
+            break
+          default:
+            auditResult = await res.client.getMissingControlList(res.dataJson)
+        }
+      } catch (err) {
+        errorOccurred = err
+      }
+
       const cost = (performance.now() - t0).toFixed(1)
 
-      // const totalCount = controls.length
+      if (errorOccurred) {
+        statusTag.innerText = `执行拦截 (耗时 ${cost}ms)`
+        statusTag.style.background = 'rgba(239, 68, 68, 0.2)'
+        statusTag.style.color = '#f87171'
+        timeInfo.innerText = `执行耗时: ${cost} ms`
+
+        valTotal.innerText = '-'
+        valMissing.innerText = '-'
+        valFalsy.innerText = '-'
+        valPass.innerText = '-'
+
+        let html = `
+          <div class="code-banner">
+            <span>💻 调用语法: ${codeSnippet}</span>
+            <span style="color:#ef4444; font-weight: 600;">⚠️ 校验拦截</span>
+          </div>
+          <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 16px; margin-top: 10px;">
+            <div style="color: #ef4444; font-weight: 700; font-size: 14px; margin-bottom: 8px;">🛡️ SDK 防御性校验成功生效并拦截：</div>
+            <div style="color: #fca5a5; font-family: monospace; font-size: 12px; line-height: 1.6;">${errorOccurred.message}</div>
+            <div style="color: #94a3b8; font-size: 11px; margin-top: 10px;">说明：当既未显式传入 data 也未配置 getData 时，SDK 会抛出明确异常阻止静默失败。</div>
+          </div>
+        `
+        resultView.innerHTML = html
+        console.warn(`[EditorClient 模式: ${mode}] 预期异常拦截生效:`, errorOccurred)
+        return
+      }
+
+      const controls = await res.client.getControlList()
+      const totalCount = controls.length
       const missingCount = auditResult.missingControls.length
       const falsyCount = auditResult.falsyControls.length
-      // const passCount = Math.max(0, totalCount - missingCount - falsyCount)
+      const passCount = Math.max(0, totalCount - missingCount - falsyCount)
 
-      // valTotal.innerText = totalCount
-      // valMissing.innerText = missingCount
-      // valFalsy.innerText = falsyCount
-      // valPass.innerText = passCount
+      valTotal.innerText = totalCount
+      valMissing.innerText = missingCount
+      valFalsy.innerText = falsyCount
+      valPass.innerText = passCount
 
-      // statusTag.innerText = `审计完成 (耗时 ${cost}ms)`
-      // timeInfo.innerText = `执行耗时: ${cost} ms`
+      statusTag.innerText = `审计完成 [${mode}] (耗时 ${cost}ms)`
+      statusTag.style.background = 'rgba(16, 185, 129, 0.2)'
+      statusTag.style.color = '#34d399'
+      timeInfo.innerText = `执行耗时: ${cost} ms | 模式: ${mode}`
 
       let html = `
+        <div class="code-banner">
+          <span>💻 调用的 SDK 方法: ${codeSnippet}</span>
+          <span style="color:#10b981; font-weight: 600;">✅ 执行成功 (${cost}ms)</span>
+        </div>
         <div class="section-title" style="color: #f87171;">🚫 缺失字段清单 (${missingCount}) - 宿主数据未提供 Key</div>
       `
 
@@ -586,7 +691,12 @@
       html += `<div style="color: #64748b; font-size: 11px; margin-top: 16px; text-align: right;">💡 完整审计结果对象已打印在 F12 控制台</div>`
 
       resultView.innerHTML = html
-      console.log('[EditorClient 纯数据模式] getMissingControlList 审计结果:', auditResult)
+      console.log(`%c[EditorClient 模式: ${mode}] getMissingControlList 审计结果:`, 'color: #38bdf8; font-weight: bold;', auditResult)
+    }
+
+    // 2. 顶部主按钮执行当前选中模式的审计
+    document.getElementById('btnAudit').onclick = () => {
+      runAudit(currentMode)
     }
   </script>
 </body>

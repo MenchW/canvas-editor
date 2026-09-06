@@ -80,10 +80,6 @@ export class CheckboxControl implements IControlInstance {
     options: IControlRuleOption = {}
   ): number {
     const draw = this.control.getDraw()
-    const isPreviewEdit = draw.getMode() === EditorMode.PREVIEW_EDIT
-    if (!isPreviewEdit) {
-      return -1
-    }
     const elementList = context.elementList || this.control.getElementList()
     const range = context.range || this.control.getRange()
     const { startIndex, endIndex } = range
