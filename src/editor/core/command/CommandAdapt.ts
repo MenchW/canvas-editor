@@ -936,7 +936,11 @@ export class CommandAdapt {
   }
 
   public color(payload: string | null, options?: IRichtextOption) {
-    const { isIgnoreDisabledRule = false } = options || {}
+    const {
+      isIgnoreDisabledRule = false,
+      isSubmitHistory = true,
+      isSubmitHistoryDebounce = false
+    } = options || {}
     const isDisabled =
       !isIgnoreDisabledRule &&
       (this.draw.isReadonly() || this.draw.isDisabled())
@@ -951,11 +955,13 @@ export class CommandAdapt {
         }
       })
       this.draw.render({
+        isSubmitHistory,
+        isSubmitHistoryDebounce,
         isSetCursor: false,
         isCompute: false
       })
     } else {
-      let isSubmitHistory = true
+      let isSubmitHistoryState = true
       const { endIndex } = this.range.getRange()
       if (!~endIndex) return
       const elementList = this.draw.getElementList()
@@ -970,10 +976,11 @@ export class CommandAdapt {
           delete enterElement.color
         }
       } else {
-        isSubmitHistory = false
+        isSubmitHistoryState = false
       }
       this.draw.render({
-        isSubmitHistory,
+        isSubmitHistory: isSubmitHistory ? isSubmitHistoryState : false,
+        isSubmitHistoryDebounce,
         curIndex: endIndex,
         isCompute: false
       })
@@ -981,7 +988,11 @@ export class CommandAdapt {
   }
 
   public highlight(payload: string | null, options?: IRichtextOption) {
-    const { isIgnoreDisabledRule = false } = options || {}
+    const {
+      isIgnoreDisabledRule = false,
+      isSubmitHistory = true,
+      isSubmitHistoryDebounce = false
+    } = options || {}
     const isDisabled =
       !isIgnoreDisabledRule &&
       (this.draw.isReadonly() || this.draw.isDisabled())
@@ -996,11 +1007,13 @@ export class CommandAdapt {
         }
       })
       this.draw.render({
+        isSubmitHistory,
+        isSubmitHistoryDebounce,
         isSetCursor: false,
         isCompute: false
       })
     } else {
-      let isSubmitHistory = true
+      let isSubmitHistoryState = true
       const { endIndex } = this.range.getRange()
       if (!~endIndex) return
       const elementList = this.draw.getElementList()
@@ -1015,10 +1028,11 @@ export class CommandAdapt {
           delete enterElement.highlight
         }
       } else {
-        isSubmitHistory = false
+        isSubmitHistoryState = false
       }
       this.draw.render({
-        isSubmitHistory,
+        isSubmitHistory: isSubmitHistory ? isSubmitHistoryState : false,
+        isSubmitHistoryDebounce,
         curIndex: endIndex,
         isCompute: false
       })

@@ -439,27 +439,45 @@ window.onload = function () {
   }
 
   const colorControlDom = document.querySelector<HTMLInputElement>('#color')!
-  colorControlDom.oninput = function () {
-    instance.command.executeColor(colorControlDom.value)
-  }
   const colorDom = document.querySelector<HTMLDivElement>('.menu-item__color')!
   const colorSpanDom = colorDom.querySelector('span')!
+  colorControlDom.oninput = function () {
+    instance.command.executeColor(colorControlDom.value, {
+      isSubmitHistory: false
+    })
+    colorSpanDom.style.backgroundColor = colorControlDom.value
+  }
+  colorControlDom.onchange = function () {
+    instance.command.executeColor(colorControlDom.value, {
+      isSubmitHistory: true,
+      isSubmitHistoryDebounce: false
+    })
+    colorSpanDom.style.backgroundColor = colorControlDom.value
+  }
   colorDom.onclick = function () {
-    console.log('color')
     colorControlDom.click()
   }
 
   const highlightControlDom =
     document.querySelector<HTMLInputElement>('#highlight')!
-  highlightControlDom.oninput = function () {
-    instance.command.executeHighlight(highlightControlDom.value)
-  }
   const highlightDom = document.querySelector<HTMLDivElement>(
     '.menu-item__highlight'
   )!
   const highlightSpanDom = highlightDom.querySelector('span')!
+  highlightControlDom.oninput = function () {
+    instance.command.executeHighlight(highlightControlDom.value, {
+      isSubmitHistory: false
+    })
+    highlightSpanDom.style.backgroundColor = highlightControlDom.value
+  }
+  highlightControlDom.onchange = function () {
+    instance.command.executeHighlight(highlightControlDom.value, {
+      isSubmitHistory: true,
+      isSubmitHistoryDebounce: false
+    })
+    highlightSpanDom.style.backgroundColor = highlightControlDom.value
+  }
   highlightDom.onclick = function () {
-    console.log('highlight')
     highlightControlDom?.click()
   }
 
@@ -1584,8 +1602,8 @@ window.onload = function () {
       appendCatalog(catalogMainDom, catalog)
     }
   }
-  // 窄屏 / 笔记本视口下默认折叠目录；若配置关闭 catalog 则初始强制不展开
-  let isCatalogShow = activeFeatureConfig.catalog && window.innerWidth > 1440
+  // 目录侧边栏默认打开；若配置显式关闭 catalog 则初始强制不展开
+  let isCatalogShow = Boolean(activeFeatureConfig.catalog)
   const catalogDom = document.querySelector<HTMLElement>('.catalog')!
   if (catalogDom) {
     catalogDom.classList.toggle('hidden', !isCatalogShow)
@@ -1616,6 +1634,9 @@ window.onload = function () {
   }
   if (catalogHeaderCloseDom) {
     catalogHeaderCloseDom.onclick = switchCatalog
+  }
+  if (isCatalogShow) {
+    updateCatalog()
   }
 
   const pageModeDom = document.querySelector<HTMLDivElement>('.page-mode')!

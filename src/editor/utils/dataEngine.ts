@@ -408,7 +408,8 @@ export function expandLoopTables(
     }
 
     const newTrList: any[] = []
-    const trList = deepClone(el.rawTrList)
+    // 直接只读遍历原始模板行，实际注入生成的新行由 cloneTrTemplate 负责轻量克隆，免除整表全量重复深克隆
+    const trList = el.rawTrList
 
     for (let r = 0; r < trList.length; r++) {
       const tr = trList[r]
@@ -1480,4 +1481,30 @@ export function applyGenericDataEngine(
   walkMerge(elementList)
 
   return { rootValues }
+}
+
+/**
+  * 对象数据转控件设值列表（递归提取各层级键值对路径与数据）
+  */
+export function toControlValueList(
+  data: Record<string, any>,
+  prefix = '',
+  depth = 0
+): any[] {
+  if (!data || typeof data !== 'object' || depth > 10) return []
+  const result: any[] = []
+  Object.keys(data).forEach(key => {
+    const val = data[key]
+    const fullPath = prefix ? `${prefix}.${key}` : key
+    if (val === null || val === undefined) {
+      result.push({ conceptId: fullPath, value: '' })
+    } else if (Array.isArray(val)) {
+      result.push({ conceptId: fullPath, value: val })
+    } else if (typeof val === 'object') {
+      result.push(...toControlValueList(val, fullPath, depth + 1))
+    } else {
+      result.push({ conceptId: fullPath, value: String(val) })
+    }
+  })
+  return result
 }

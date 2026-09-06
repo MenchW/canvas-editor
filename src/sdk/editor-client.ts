@@ -1,8 +1,8 @@
 /**
  * @file 宿主客户端 SDK 模块
- * @version 1.0.3
+ * @version 1.0.4
  * @author menchw
- * @updateTime 2026-09-05
+ * @updateTime 2026-09-06
  */
 
 import { connect, WindowMessenger } from 'penpal'
@@ -650,13 +650,27 @@ export class EditorClient implements IEditorClient {
   }
 
   /**
-   * 动态更新编辑器配置（如动态显示/隐藏顶部功能栏或底部状态栏）
+   * 动态更新编辑器配置（如动态显示/隐藏顶部功能栏、底部状态栏或目录）
+   * 采用细粒度深层安全合并，防止部分字段更新时覆盖已有 features 配置
    */
   public async setConfig(config: any): Promise<void> {
     if (this.editorRpc) {
+      const prevConfig = this.options.config || ({} as any)
+      const prevFeatures =
+        prevConfig.features && typeof prevConfig.features === 'object'
+          ? prevConfig.features
+          : {}
+      const nextFeatures =
+        config?.features && typeof config.features === 'object'
+          ? { ...prevFeatures, ...config.features }
+          : config?.features !== undefined
+            ? config.features
+            : prevConfig.features
+
       this.options.config = {
-        ...this.options.config,
-        ...config
+        ...prevConfig,
+        ...config,
+        ...(nextFeatures !== undefined ? { features: nextFeatures } : {})
       }
       await this.editorRpc.setCustomConfig(this.options.config)
     }
@@ -689,10 +703,11 @@ export class EditorClient implements IEditorClient {
   }
 
   /**
-   * 销毁跨窗口 RPC 通信连接
+   * 销毁跨窗口 RPC 通信连接与全局事件监听
    */
   public destroy(): void {
     this.connection?.destroy()
+    this.eventListeners.clear()
   }
 
   /**

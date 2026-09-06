@@ -370,7 +370,16 @@ export class Draw {
   // 还原打印数据
   public clearPrintData() {
     if (this.printModeData) {
-      this.setEditorData(this.printModeData)
+      // 防御：若快照为空文档但当前已有有效正文（如异步 setValue 注入），绝不可用空数据覆写清空画布
+      const isBackupEmpty =
+        (!this.printModeData.main ||
+          this.printModeData.main.length === 0 ||
+          (this.printModeData.main.length === 1 &&
+            this.printModeData.main[0].value === '\n')) &&
+        this.elementList.length > 1
+      if (!isBackupEmpty) {
+        this.setEditorData(this.printModeData)
+      }
       this.printModeData = null
     }
   }
@@ -1453,6 +1462,8 @@ export class Draw {
       main,
       footer
     })
+    // 异步设值注入新正本，旧打印快照失效清空，避免模式切换时被旧快照冲掉，并保留纯视觉态花括号
+    this.printModeData = null
     // 渲染&计算&清空历史记录
     this.historyManager.recovery()
     const curIndex = isSetCursor
@@ -1714,8 +1725,8 @@ export class Draw {
           element.control?.hide ||
           (element.area?.hide && !this.isAreaHideDisabled()) ||
           this.traceParticle.isTraceHidden(element) ||
-          // PREVIEW_EDIT 无痕编辑：所有控件前后缀与占位符彻底不占视觉空间 (width=0)，但真实值(VALUE)必须正常排版
-          (this.mode === EditorMode.PREVIEW_EDIT &&
+          // PREVIEW_EDIT 无痕编辑 / PRINT 打印模式：所有控件前后缀与占位符彻底不占视觉空间 (width=0)，但真实值(VALUE)必须正常排版
+          ((this.mode === EditorMode.PREVIEW_EDIT || this.isPrintMode()) &&
             (element.controlComponent === ControlComponent.PREFIX ||
               element.controlComponent === ControlComponent.POSTFIX ||
               element.controlComponent === ControlComponent.PLACEHOLDER ||
@@ -1896,7 +1907,7 @@ export class Draw {
         }
       }
       const isPreviewEditAuxiliary =
-        this.mode === EditorMode.PREVIEW_EDIT &&
+        (this.mode === EditorMode.PREVIEW_EDIT || this.isPrintMode()) &&
         (element.controlComponent === ControlComponent.PREFIX ||
           element.controlComponent === ControlComponent.POSTFIX ||
           element.controlComponent === ControlComponent.PLACEHOLDER)
@@ -2069,7 +2080,7 @@ export class Draw {
           textDirection === TdTextDirection.VERTICAL &&
           preElement?.value !== ZERO &&
           !(
-            this.mode === EditorMode.PREVIEW_EDIT &&
+            (this.mode === EditorMode.PREVIEW_EDIT || this.isPrintMode()) &&
             (preElement?.controlComponent === ControlComponent.PREFIX ||
               element.controlComponent === ControlComponent.POSTFIX)
           ))
@@ -2586,8 +2597,8 @@ export class Draw {
             element.control?.hide ||
             (element.area?.hide && !this.isAreaHideDisabled()) ||
             this.traceParticle.isTraceHidden(element) ||
-            // PREVIEW_EDIT 无痕编辑：所有控件前后缀与占位符彻底隐藏不绘制，但真实值(VALUE)正常绘制
-            (this.mode === EditorMode.PREVIEW_EDIT &&
+            // PREVIEW_EDIT 无痕编辑 / PRINT 打印模式：所有控件前后缀与占位符彻底隐藏不绘制，但真实值(VALUE)正常绘制
+            ((this.mode === EditorMode.PREVIEW_EDIT || this.isPrintMode()) &&
               (element.controlComponent === ControlComponent.PREFIX ||
                 element.controlComponent === ControlComponent.POSTFIX ||
                 element.controlComponent === ControlComponent.PLACEHOLDER ||
@@ -3331,18 +3342,20 @@ export class Draw {
       tCursor,
       tHistory
     }
-    console.log(
-      `%c[Render Perf]%c total=${total.toFixed(1)}ms | ` +
-      `row=${tRow.toFixed(1)}ms | ` +
-      `split=${tSplit.toFixed(1)}ms | ` +
-      `page=${tPage.toFixed(1)}ms | ` +
-      `pos=${tPos.toFixed(1)}ms | ` +
-      `draw=${tDraw.toFixed(1)}ms | ` +
-      `cursor=${tCursor.toFixed(1)}ms | ` +
-      `history=${tHistory.toFixed(1)}ms`,
-      total > 20 ? 'color: #f44336; font-weight: bold' : 'color: #00bcd4; font-weight: bold',
-      'color: inherit'
-    )
+    if (total > 20 || (window as any).__DEBUG_PERF__) {
+      console.log(
+        `%c[Render Perf]%c total=${total.toFixed(1)}ms | ` +
+        `row=${tRow.toFixed(1)}ms | ` +
+        `split=${tSplit.toFixed(1)}ms | ` +
+        `page=${tPage.toFixed(1)}ms | ` +
+        `pos=${tPos.toFixed(1)}ms | ` +
+        `draw=${tDraw.toFixed(1)}ms | ` +
+        `cursor=${tCursor.toFixed(1)}ms | ` +
+        `history=${tHistory.toFixed(1)}ms`,
+        total > 20 ? 'color: #f44336; font-weight: bold' : 'color: #00bcd4; font-weight: bold',
+        'color: inherit'
+      )
+    }
     // 信息变动回调
     nextTick(() => {
       // 选区样式
@@ -3374,8 +3387,8 @@ export class Draw {
           this.eventBus.emit('pageSizeChange', this.pageRowList.length)
         }
       }
-      // 文档内容改变
-      if ((isSubmitHistory || isSourceHistory) && !isInit) {
+      // 文档内容改变（仅在发生内容/排版重算时触发，纯样式变色跳过以杜绝大文档/长表格全量 Worker 目录重构假死）
+      if ((isSubmitHistory || isSourceHistory) && !isInit && isCompute) {
         if (this.listener.contentChange) {
           this.listener.contentChange()
         }
@@ -3533,24 +3546,8 @@ export class Draw {
         this.previewer.clearResizer()
       }
     } else if (this.previewer.getIsResizerVisible()) {
-      // 当前非直接命中有效图片元素时，若尺寸调整器仍残留显示，主动销毁
-      const curPreviewEl = this.previewer.getCurElement()
-      const allElements = this.getOriginalElementList()
-      let isStillExist = false
-      if (curPreviewEl) {
-        isStillExist = allElements.some(el => {
-          if (el === curPreviewEl) return true
-          if (el.type === ElementType.TABLE && el.trList) {
-            return el.trList.some(tr =>
-              tr.tdList.some(td => td.value && td.value.includes(curPreviewEl))
-            )
-          }
-          return false
-        })
-      }
-      if (!isStillExist || !positionContext.isDirectHit) {
-        this.previewer.clearResizer()
-      }
+      // 当前非直接命中有效图片元素时，若尺寸调整器仍残留显示，直接销毁，避免全文档深搜
+      this.previewer.clearResizer()
     }
     this.cursor.drawCursor({
       isShow: isShowCursor
@@ -3605,33 +3602,7 @@ export class Draw {
     const pageNo = this.pageNo
     const oldPositionContext = deepClone(positionContext)
     const zone = this.zone.getZone()
-    const countImages = (list: IElement[]) => {
-      let count = 0
-      for (const el of list) {
-        if (el.type === ElementType.IMAGE) count++
-        if (el.type === ElementType.TABLE && el.trList) {
-          for (const tr of el.trList) {
-            for (const td of tr.tdList) {
-              if (td.value) count += countImages(td.value)
-            }
-          }
-        }
-      }
-      return count
-    }
-    const snapImgCount = countImages(this.elementList)
-    console.log(
-      `%c[History Snapshot Created]%c tdId=${positionContext.tdId || 'main'} | curIndex=${curIndex} | totalImages=${snapImgCount}`,
-      'color: #2196f3; font-weight: bold',
-      'color: inherit'
-    )
     this.historyManager.execute(() => {
-      const restoreImgCount = countImages(oldElementList)
-      console.log(
-        `%c[History Restoring]%c restoreTdId=${oldPositionContext.tdId || 'main'} | curIndex=${curIndex} | restoreImages=${restoreImgCount}`,
-        'color: #ff9800; font-weight: bold',
-        'color: inherit'
-      )
       this.zone.setZone(zone)
       this.setPageNo(pageNo)
       this.position.setPositionContext(deepClone(oldPositionContext))

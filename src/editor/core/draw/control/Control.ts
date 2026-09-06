@@ -200,7 +200,8 @@ export class Control {
         element.controlComponent !== ControlComponent.PREFIX &&
         element.controlComponent !== ControlComponent.POSTFIX &&
         (!filterEmptyControl ||
-          element.controlComponent !== ControlComponent.PLACEHOLDER)
+          (element.controlComponent !== ControlComponent.PLACEHOLDER &&
+            !element.isPlaceholder))
       )
     })
   }

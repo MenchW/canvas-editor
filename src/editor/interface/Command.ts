@@ -1,3 +1,5 @@
 export interface IRichtextOption {
-  isIgnoreDisabledRule: boolean
+  isIgnoreDisabledRule?: boolean
+  isSubmitHistory?: boolean
+  isSubmitHistoryDebounce?: boolean
 }

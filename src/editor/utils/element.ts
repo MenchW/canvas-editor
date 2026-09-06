@@ -2012,22 +2012,28 @@ export function getSlimCloneElementList(elementList: IElement[]): IElement[] {
       copy.trList = copy.trList.map((tr: any) => ({
         ...tr,
         tdList: tr.tdList.map((td: any) => {
-          const tdCopy: any = { ...td }
-          delete tdCopy.positionList
-          delete tdCopy._posRowList
-          delete tdCopy._posStartX
-          delete tdCopy._posStartY
-          delete tdCopy._posPageNo
-          delete tdCopy._posRowIndex
-          delete tdCopy._posColIndex
-          delete tdCopy.rowList
-          delete tdCopy._lastFingerprint
-          delete tdCopy._lastMode
-          delete tdCopy._lastWidth
-          delete tdCopy._lastScale
-          delete tdCopy._lastTextDir
-          delete tdCopy._isUnzipped
-
+          const tdCopy: any = {}
+          for (const key in td) {
+            if (
+              key !== 'positionList' &&
+              key !== '_posRowList' &&
+              key !== '_posStartX' &&
+              key !== '_posStartY' &&
+              key !== '_posPageNo' &&
+              key !== '_posRowIndex' &&
+              key !== '_posColIndex' &&
+              key !== 'rowList' &&
+              key !== '_lastFingerprint' &&
+              key !== '_lastMode' &&
+              key !== '_lastWidth' &&
+              key !== '_lastScale' &&
+              key !== '_lastTextDir' &&
+              key !== '_isUnzipped' &&
+              key !== 'value'
+            ) {
+              tdCopy[key] = td[key]
+            }
+          }
           const clonedValue =
             td.value && td.value.length ? getSlimCloneElementList(td.value) : []
           tdCopy.value = clonedValue

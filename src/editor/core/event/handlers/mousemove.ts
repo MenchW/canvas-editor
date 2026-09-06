@@ -80,12 +80,24 @@ export function mousemove(evt: MouseEvent, host: CanvasEvent) {
   const endIndex = isTable ? tdValueIndex! : index
   // 判断是否是表格跨行/列
   const rangeManager = draw.getRange()
+  const curRange = rangeManager.getRange()
   if (
     isTable &&
     startIsTable &&
     startTableId === tableId &&
     (tdIndex !== startTdIndex || trIndex !== startTrIndex)
   ) {
+    // 脏检查：若表格跨行列选区范围无变化，直接跳过重复渲染
+    if (
+      curRange.isCrossRowCol &&
+      curRange.tableId === tableId &&
+      curRange.startTdIndex === startTdIndex &&
+      curRange.endTdIndex === tdIndex &&
+      curRange.startTrIndex === startTrIndex &&
+      curRange.endTrIndex === trIndex
+    ) {
+      return
+    }
     rangeManager.setRange(
       endIndex,
       endIndex,
@@ -115,6 +127,14 @@ export function mousemove(evt: MouseEvent, host: CanvasEvent) {
       ;[start, end] = [end, start]
     }
     if (start === end) return
+    // 脏检查：若普通文本选区无变化，直接跳过重复渲染
+    if (
+      !curRange.isCrossRowCol &&
+      curRange.startIndex === start &&
+      curRange.endIndex === end
+    ) {
+      return
+    }
     // 背景文本禁止选区
     const elementList = draw.getElementList()
     const startElement = elementList[start + 1]
@@ -128,10 +148,12 @@ export function mousemove(evt: MouseEvent, host: CanvasEvent) {
     }
     rangeManager.setRange(start, end)
   }
-  // 绘制
-  draw.render({
-    isSubmitHistory: false,
-    isSetCursor: false,
-    isCompute: false
+  // 选区变更合帧渲染（避免每秒数百次高频 mousemove 导致渲染管线堆积和掉帧）
+  host.requestSelectionRender(() => {
+    draw.render({
+      isSubmitHistory: false,
+      isSetCursor: false,
+      isCompute: false
+    })
   })
 }

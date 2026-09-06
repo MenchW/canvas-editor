@@ -153,4 +153,55 @@ describe('控件占位符与无痕编辑单次退格穿透测试', () => {
     expect(insertedWrap.value).toBe(ZERO)
     destroy()
   })
+
+  it('模式在 EDIT、PRINT、CLEAN 之间反复切换时，文档数据绝对不丢失，画布不被清空', () => {
+    const { editor, destroy } = createTestEditor()
+    editor.command.executeInsertControl({
+      type: ElementType.CONTROL,
+      value: '',
+      control: {
+        conceptId: 'patient.name',
+        type: ControlType.TEXT,
+        placeholder: '姓名',
+        value: [{ value: '张三' }]
+      }
+    })
+
+    const originalElements = (editor.command as any).getOriginalElementList()
+    expect(originalElements.length).toBeGreaterThan(0)
+    const originalText = originalElements.map((el: any) => el.value).join('')
+    expect(originalText).toContain('张三')
+
+    // 切换至 PRINT 模式
+    editor.command.executeMode(EditorMode.PRINT)
+    const printElements = (editor.command as any).getOriginalElementList()
+    expect(printElements.length).toBeGreaterThan(0)
+    const printText = printElements.map((el: any) => el.value).join('')
+    expect(printText).toContain('张三')
+
+    // 切换至 CLEAN 模式
+    editor.command.executeMode(EditorMode.CLEAN)
+    const cleanElements = (editor.command as any).getOriginalElementList()
+    expect(cleanElements.length).toBeGreaterThan(0)
+    const cleanText = cleanElements.map((el: any) => el.value).join('')
+    expect(cleanText).toContain('张三')
+
+    // 切换回 EDIT 模式
+    editor.command.executeMode(EditorMode.EDIT)
+    const editElements = (editor.command as any).getOriginalElementList()
+    expect(editElements.length).toBeGreaterThan(0)
+    const editText = editElements.map((el: any) => el.value).join('')
+    expect(editText).toContain('张三')
+    // 确认花括号在 EDIT 模式下的数据层依然完整存在
+    const hasPrefix = editElements.some(
+      (el: any) => el.controlComponent === ControlComponent.PREFIX
+    )
+    const hasPostfix = editElements.some(
+      (el: any) => el.controlComponent === ControlComponent.POSTFIX
+    )
+    expect(hasPrefix).toBe(true)
+    expect(hasPostfix).toBe(true)
+
+    destroy()
+  })
 })

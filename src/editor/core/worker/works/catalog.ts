@@ -70,9 +70,7 @@ function isTextLikeElement(element: IElement): boolean {
 }
 
 export function getCatalog(payload: IGetCatalogPayload): ICatalog | null {
-  const { elementList, positionList, mode } = payload
-  const isHideControlAffix =
-    mode === EditorMode.PREVIEW_EDIT || mode === EditorMode.CLEAN
+  const { elementList, positionList } = payload
   // 筛选标题
   const titleElementList: ICatalogElement[] = []
   let t = 0
@@ -115,20 +113,19 @@ export function getCatalog(payload: IGetCatalogPayload): ICatalog | null {
       titleElement.value = valueList
         .filter(el => {
           if (!isTextLikeElement(el)) return false
-          if (isHideControlAffix) {
-            if (
-              el.controlComponent === ControlComponent.PREFIX ||
-              el.controlComponent === ControlComponent.POSTFIX
-            ) {
-              return false
-            }
-            if (
-              hasRealContent &&
-              (el.controlComponent === ControlComponent.PLACEHOLDER ||
-                el.isPlaceholder)
-            ) {
-              return false
-            }
+          // 目录导航中，无论任何模式，均彻底过滤控件前后缀花括号（【】/ {}）
+          if (
+            el.controlComponent === ControlComponent.PREFIX ||
+            el.controlComponent === ControlComponent.POSTFIX
+          ) {
+            return false
+          }
+          if (
+            hasRealContent &&
+            (el.controlComponent === ControlComponent.PLACEHOLDER ||
+              el.isPlaceholder)
+          ) {
+            return false
           }
           return true
         })

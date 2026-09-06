@@ -51,6 +51,8 @@ export class CanvasEvent {
   private pageList: HTMLCanvasElement[]
   private range: RangeManager
   private position: Position
+  private selectionRenderId: number | null = null
+  private pendingSelectionRender: (() => void) | null = null
 
   constructor(draw: Draw) {
     this.draw = draw
@@ -204,7 +206,29 @@ export class CanvasEvent {
   }
 
   public mouseleave(evt: MouseEvent) {
+    this.flushSelectionRender()
     mouseleave(evt, this)
+  }
+
+  public requestSelectionRender(renderFn: () => void) {
+    this.pendingSelectionRender = renderFn
+    if (this.selectionRenderId !== null) return
+    this.selectionRenderId = requestAnimationFrame(() => {
+      this.selectionRenderId = null
+      const fn = this.pendingSelectionRender
+      this.pendingSelectionRender = null
+      fn?.()
+    })
+  }
+
+  public flushSelectionRender() {
+    if (this.selectionRenderId !== null) {
+      cancelAnimationFrame(this.selectionRenderId)
+      this.selectionRenderId = null
+    }
+    const fn = this.pendingSelectionRender
+    this.pendingSelectionRender = null
+    fn?.()
   }
 
   public keydown(evt: KeyboardEvent) {
