@@ -332,6 +332,30 @@ export class EditorBridge {
         }
         walkMerge(originalElementList)
 
+        const walkSyncTdId = (list: any[]) => {
+          if (!Array.isArray(list)) return
+          list.forEach(item => {
+            if (item.type === 'table' && Array.isArray(item.trList)) {
+              item.trList.forEach((tr: any) => {
+                if (Array.isArray(tr.tdList)) {
+                  tr.tdList.forEach((td: any) => {
+                    if (Array.isArray(td.value)) {
+                      td.value.forEach((valEl: any) => {
+                        valEl.tdId = td.id
+                        valEl.trId = tr.id
+                        valEl.tableId = item.id
+                      })
+                      walkSyncTdId(td.value)
+                    }
+                  })
+                }
+              })
+            }
+            if (item.valueList) walkSyncTdId(item.valueList)
+          })
+        }
+        walkSyncTdId(originalElementList)
+
         this.instance.command.executeForceUpdate()
       }
     } catch (err: any) {

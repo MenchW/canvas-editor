@@ -2843,7 +2843,8 @@ export class Draw {
           // 表格需限定上下文
           if (
             (!positionContext.isTable && !element.tdId) ||
-            positionContext.tdId === element.tdId
+            positionContext.tdId === element.tdId ||
+            (positionContext.isTable && isDrawRange)
           ) {
             // 从行尾开始-绘制最小宽度
             if (startIndex === index) {

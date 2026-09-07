@@ -208,16 +208,30 @@ export function applyDeclaredSameMerge(trListOrTable: any): void {
 /** 轻量模板行克隆（复用不变的单元格样式属性，仅克隆动态结构与元素数组，降低 GC 压力） */
 export function cloneTrTemplate(tr: any): any {
   if (!tr) return tr
+  const clonedTrId = getUUID()
   const clonedTdList = Array.isArray(tr.tdList)
-    ? tr.tdList.map((td: any) => ({
-        ...td,
-        id: getUUID(),
-        value: Array.isArray(td.value) ? deepClone(td.value) : td.value
-      }))
+    ? tr.tdList.map((td: any) => {
+        const clonedTdId = getUUID()
+        const clonedValue = Array.isArray(td.value) ? deepClone(td.value) : td.value
+        if (Array.isArray(clonedValue)) {
+          clonedValue.forEach((el: any) => {
+            el.tdId = clonedTdId
+            el.trId = clonedTrId
+          })
+        }
+        const clonedTd = {
+          ...td,
+          id: clonedTdId,
+          value: clonedValue
+        }
+        delete (clonedTd as any)._isUnzipped
+        delete (clonedTd as any)._lastFingerprint
+        return clonedTd
+      })
     : []
   const clonedTr = {
     ...tr,
-    id: getUUID(),
+    id: clonedTrId,
     tdList: clonedTdList
   }
   delete clonedTr.loopConfig
@@ -531,6 +545,20 @@ export function expandLoopTables(
         }
       }
     }
+
+    newTrList.forEach(tr => {
+      if (Array.isArray(tr.tdList)) {
+        tr.tdList.forEach((td: any) => {
+          if (Array.isArray(td.value)) {
+            td.value.forEach((valEl: any) => {
+              valEl.tdId = td.id
+              valEl.trId = tr.id
+              valEl.tableId = el.id
+            })
+          }
+        })
+      }
+    })
 
     el.trList = newTrList
   }

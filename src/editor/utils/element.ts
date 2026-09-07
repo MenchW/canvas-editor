@@ -284,6 +284,14 @@ export function formatElementList(
             const td = tr.tdList[d]
             const tdId = td.id || getUUID()
             td.id = tdId
+            if (Array.isArray(td.value)) {
+              for (let v = 0; v < td.value.length; v++) {
+                const value = td.value[v]
+                value.tdId = tdId
+                value.trId = trId
+                value.tableId = tableId
+              }
+            }
             formatElementList(td.value, {
               ...options,
               isHandleFirstElement: true,

@@ -1,5 +1,8 @@
 import { ZERO } from '../../../../dataset/constant/Common'
-import { CONTROL_STYLE_ATTR } from '../../../../dataset/constant/Element'
+import {
+  CONTROL_STYLE_ATTR,
+  TABLE_CONTEXT_ATTR
+} from '../../../../dataset/constant/Element'
 import { ControlComponent, ControlType } from '../../../../dataset/enum/Control'
 import { EditorMode } from '../../../../dataset/enum/Editor'
 import { ElementType } from '../../../../dataset/enum/Element'
@@ -101,6 +104,7 @@ export class CheckboxControl implements IControlInstance {
     const anchorElement = pickObject(startElement, [
       'control',
       'controlId',
+      ...TABLE_CONTEXT_ATTR,
       ...CONTROL_STYLE_ATTR
     ])
 

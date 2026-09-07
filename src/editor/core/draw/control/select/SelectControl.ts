@@ -5,6 +5,7 @@ import {
 import {
   CONTROL_STYLE_ATTR,
   EDITOR_ELEMENT_STYLE_ATTR,
+  TABLE_CONTEXT_ATTR,
   TEXTLIKE_ELEMENT_TYPE
 } from '../../../../dataset/constant/Element'
 import { ControlComponent } from '../../../../dataset/enum/Control'
@@ -178,6 +179,7 @@ export class SelectControl implements IControlInstance {
         ? pickObject(startElement, [
             'control',
             'controlId',
+            ...TABLE_CONTEXT_ATTR,
             ...CONTROL_STYLE_ATTR
           ])
         : omitObject(startElement, ['type'])

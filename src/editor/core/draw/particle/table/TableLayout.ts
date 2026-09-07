@@ -144,25 +144,34 @@ export class TableLayout {
           continue
         }
 
-        if (curValue?.length && !(td as any)._isUnzipped) {
-          const hasLongText = curValue.some(
-            el =>
-              el.type !== ElementType.IMAGE &&
-              el.type !== ElementType.LATEX &&
-              el.type !== ElementType.SEPARATOR &&
-              el.type !== ElementType.TABLE &&
-              el.value &&
-              el.value.length > 1
-          )
-          if (hasLongText) {
-            td.value = unzipElementList(curValue)
-            td.value.forEach(el => {
+        if (curValue?.length) {
+          if (!(td as any)._isUnzipped) {
+            const hasLongText = curValue.some(
+              el =>
+                el.type !== ElementType.IMAGE &&
+                el.type !== ElementType.LATEX &&
+                el.type !== ElementType.SEPARATOR &&
+                el.type !== ElementType.TABLE &&
+                el.value &&
+                el.value.length > 1
+            )
+            if (hasLongText) {
+              td.value = unzipElementList(curValue)
+            }
+            ;(td as any)._isUnzipped = true
+          }
+          for (let v = 0; v < td.value.length; v++) {
+            const el = td.value[v]
+            if (
+              el.tdId !== td.id ||
+              el.trId !== tr.id ||
+              el.tableId !== element.id
+            ) {
               el.tdId = td.id
               el.trId = tr.id
               el.tableId = element.id
-            })
+            }
           }
-          ;(td as any)._isUnzipped = true
         }
 
         const targetInnerWidth = (td.width! - tdPaddingWidth) * scale
